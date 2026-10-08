@@ -36,17 +36,9 @@ export const partitionFindings = (findings, allowlist) => Object.freeze({
   staleAllowlist: allowlist.filter(a => !findings.some(f => f.path === a.path && f.patternId === a.patternId))
 });
 
-// Text-like files only; binaries are reported separately by callers.
-export const SCANNABLE_EXTENSIONS = Object.freeze([
-  ".mjs", ".js", ".cjs", ".ts", ".json", ".yml", ".yaml", ".md", ".html", ".css",
-  ".txt", ".sh", ".fs", ".fsx", ".fsproj", ".xml", ".toml", ".env", ".ini", ".cfg", ""
-]);
-
-export const isScannablePath = path => {
-  const base = path.split("/").pop();
-  const dot = base.lastIndexOf(".");
-  const ext = dot <= 0 ? "" : base.slice(dot).toLowerCase();
-  return SCANNABLE_EXTENSIONS.includes(ext);
-};
+// Every file is scanned unless its CONTENT is binary (a NUL byte in the first 8 KiB).
+// Deciding by content rather than extension means new or unusual text formats
+// (.jsonl governance events, .ps1/.cmd launchers, .props, .config) are never skipped silently.
+export const isBinaryContent = bytes => bytes.subarray(0, 8192).includes(0);
 
 export const EXCLUDED_DIRS = Object.freeze([".git", "node_modules", ".aws-sam"]);

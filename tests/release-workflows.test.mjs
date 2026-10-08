@@ -2,10 +2,15 @@
 // Text-level structural checks on owned workflows; no YAML dependency is added.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 
 const read = p => readFileSync(new URL("../" + p, import.meta.url), "utf8");
-const OWNED = [".github/workflows/pages.yml", ".github/workflows/test.yml", ".github/workflows/p0-service.yml"];
+// praxis-validation.yml is Praxis-generated and fingerprint-verified by Praxis; it must not be
+// edited here, so it is the ONLY workflow excluded. Every other workflow (including any added
+// later) is covered automatically.
+const PRAXIS_GENERATED = Object.freeze(["praxis-validation.yml"]);
+const ALL_WORKFLOWS = readdirSync(new URL("../.github/workflows/", import.meta.url)).filter(f => /\.ya?ml$/.test(f)).sort();
+const OWNED = Object.freeze(ALL_WORKFLOWS.filter(f => !PRAXIS_GENERATED.includes(f)).map(f => `.github/workflows/${f}`));
 
 // Split a workflow into its top-level job blocks: { name -> text }.
 const jobsOf = text => {
@@ -16,6 +21,13 @@ const jobsOf = text => {
 // Remove full-line YAML comments so documentation text cannot satisfy or trip checks.
 const stripComments = text => text.split("\n").filter(l => !/^\s*#/.test(l)).join("\n");
 const usesLines =text => [...text.matchAll(/^\s*-?\s*uses:\s*(\S+)(.*)$/gm)].map(m => ({ ref: m[1], comment: m[2].trim() }));
+
+test("workflow coverage: every non-Praxis workflow is checked, including governance and browser", () => {
+  for (const f of ["pages.yml", "test.yml", "p0-service.yml", "conditor-plan.yml", "conditor-install-preview.yml", "conditor-governance.yml", "browser.yml"]) {
+    assert.ok(OWNED.includes(`.github/workflows/${f}`), `${f} must be covered`);
+  }
+  assert.ok(!OWNED.some(f => f.endsWith("praxis-validation.yml")));
+});
 
 test("all third-party actions in owned workflows are pinned to full commit SHAs with a tag comment", () => {
   for (const file of OWNED) {
@@ -57,6 +69,40 @@ test("pages.yml: write/OIDC permissions exist only on the deploy job; nothing hi
   assert.doesNotMatch(text, /enablement:\s*true/, "enabling Pages is an operator action");
   assert.doesNotMatch(text, /secrets\./, "no secrets in the Pages workflow");
   assert.match(text, /path: \.\/site\s*$/m, "upload only the site/ tree");
+});
+
+test("no workflow other than the Pages deploy job requests write scopes", () => {
+  for (const file of OWNED) {
+    const text = stripComments(read(file));
+    const writes = [...text.matchAll(/^\s+([a-z-]+):\s*write\s*$/gm)].map(m => m[1]);
+    if (file.endsWith("pages.yml")) {
+      assert.deepEqual([...new Set(writes)].sort(), ["id-token", "pages"], file);
+    } else {
+      assert.deepEqual(writes, [], `${file} must be read-only`);
+    }
+    assert.match(text, /^permissions:/m, `${file} must declare top-level permissions`);
+    assert.doesNotMatch(text, /permissions:\s*write-all|permissions:\s*read-all/, file);
+  }
+});
+
+test("test.yml also runs adversarial tests and builds/runs the F# domain tests on a pinned .NET 8", () => {
+  const jobs = jobsOf(stripComments(read(".github/workflows/test.yml")));
+  assert.deepEqual(Object.keys(jobs).sort(), ["domain-fsharp", "test"]);
+  assert.match(jobs.test, /run: npm ci/);
+  assert.match(jobs.test, /npm run test:adversarial/);
+  assert.match(jobs["domain-fsharp"], /actions\/setup-dotnet@[0-9a-f]{40} # v4/);
+  assert.match(jobs["domain-fsharp"], /dotnet-version: '8\.0\.x'/);
+  assert.match(jobs["domain-fsharp"], /dotnet build domain\/Vitium\.Domain\.Tests/);
+  assert.match(jobs["domain-fsharp"], /dotnet run --project domain\/Vitium\.Domain\.Tests/);
+});
+
+test("p0-service.yml installs locked deps, runs integration tests and syntax-checks service adapters", () => {
+  const text = stripComments(read(".github/workflows/p0-service.yml"));
+  const order = ["run: npm ci", "run: npm test", "run: npm run test:integration", "node --check", "sam build"].map(s => text.indexOf(s));
+  assert.ok(order.every(i => i >= 0), JSON.stringify(order));
+  assert.deepEqual([...order].sort((a, b) => a - b), order, "steps must run in this order");
+  assert.match(text, /service\/adapters\/\*\.mjs/);
+  assert.doesNotMatch(text, /npm install\b/);
 });
 
 test("test.yml runs on pull_request and push, read-only, with the repository credential scan", () => {

@@ -28,6 +28,9 @@ Every row is **OPEN** unless its evidence column contains a recorded, witnessed 
 | D-21 | Per-client abuse control (WAF/CloudFront) | UNASSIGNED | Architecture decision (handoff H-02) | Decision record plus a staging burst test | VIT-AC-005 | VIT-OQ-003 |
 | D-22 | `github-pages` environment protection | UNASSIGNED | Repo Settings → Environments → `github-pages` → deployment branches: `main` only; optional required reviewer | Screenshot or `gh api repos/kemiller2002/vitium/environments/github-pages` | VIT-AC-014 | — |
 | D-23 | Continuous site monitoring and alert route | UNASSIGNED | Scheduled `verify-public-site.mjs` workflow once an alert destination exists | Workflow and alert route recorded | VIT-AC-014 | VIT-OQ-016 |
+| D-24 | Staging hostname for browser E2E (H-01) | UNASSIGNED | Choose `<label>.vitium.echelonfoundry.com`; serve a staging copy of `site/` there; Turnstile widget for that hostname; deploy with `IntakeOrigin`/`ChallengeHostname` overrides (STAGING-READINESS.md S6) | Hostname recorded; `dig` shows its record; staging E1–E4 pass with a token issued for it | VIT-AC-003, VIT-AC-006 | VIT-OQ-003 |
+
+Intake transport contract referenced by these decisions: body cap 24 KiB (24,576 bytes, `service/limits.mjs`), and staging origin parameters `IntakeOrigin`/`ChallengeHostname` constrained to `vitium.echelonfoundry.com` or one subdomain label (forced to canonical values in production by template `Rules`).
 
 Order of operations for the public site: D-01 → D-02 → D-03 → D-04 → D-05 → D-22 → D-06.
-Order for private intake: D-07/D-08/D-09 → D-10/D-11 → D-13/D-14/D-15/D-16/D-17 → D-18 → D-19 → D-21 → D-20.
+Order for private intake: D-07/D-08/D-09 → D-24 → D-10/D-11 → D-13/D-14/D-15/D-16/D-17 → D-18 → D-19 → D-21 → D-20.
