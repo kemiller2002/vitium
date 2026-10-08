@@ -63,9 +63,9 @@ test("issue link points to the public intake repo with populated content", () =>
 
 test("too-large encoded links are rejected, not silently shortened", () => {
   const r = normalizeReport(valid({
-    actual: "🪲".repeat(1000),
+    actual: "🪲".repeat(550),
     expected: "✔".repeat(1000),
-    steps: "🐛".repeat(800)
+    steps: "🐛".repeat(430)
   }));
   assert.throws(() => buildIssueUrl(r), /too long/);
 });
