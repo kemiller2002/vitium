@@ -9,6 +9,10 @@ export const impacts = Object.freeze([
   "Minor inconvenience or display problem", "Not sure"
 ]);
 
+// A guardrail for obvious credential disclosures, not a claim of comprehensive DLP.
+const credentialPattern = /(?:-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9_]{15,}|sk-[A-Za-z0-9_-]{18,}|(?:password|api[_ -]?key)\s*[:=]\s*\S{4,})/i;
+export const containsCredential = text => credentialPattern.test(text);
+
 export class IntakeError extends Error {
   constructor(code, status, message) {
     super(message);
@@ -55,8 +59,7 @@ export function normalizeReport(raw) {
     pageUrl = url.origin + url.pathname;
   }
   const text = [title, actual, expected, steps].join("\n");
-  // A guardrail for obvious credential disclosures, not a claim of comprehensive DLP.
-  if (/(?:-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9_]{15,}|sk-[A-Za-z0-9_-]{18,}|(?:password|api[_ -]?key)\s*[:=]\s*\S{4,})/i.test(text)) {
+  if (containsCredential(text)) {
     refuse("This report appears to contain a credential. Remove it before sending.");
   }
   return Object.freeze({schemaVersion:"1.0",product,impact,title,actual,expected,steps,pageUrl});
