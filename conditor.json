@@ -1,0 +1,31 @@
+{
+  "$schema": "https://raw.githubusercontent.com/kemiller2002/conditor/main/schemas/conditor.schema.json",
+  "schemaVersion": 1,
+  "name": "vitium",
+  "components": [
+    {
+      "id": "praxis",
+      "version": "3.7.2",
+      "required": true
+    },
+    {
+      "id": "ordo",
+      "version": "1.5.0",
+      "required": true
+    },
+    {
+      "id": "visual-engineering",
+      "version": "1.0.1",
+      "required": true
+    },
+    {
+      "id": "communication-engineering",
+      "version": "1.0.0",
+      "required": true
+    }
+  ],
+  "requirements": [],
+  "execution": {
+    "enabled": false
+  }
+}
