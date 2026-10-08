@@ -289,6 +289,55 @@ The findings VF-025 to VF-028 come from the verification agent's round-3 review
     `... && author && sameActor(author, command.actor)) {` in `checkAttempt`. V04 still
     resolves.
 
+### Round 4: legacy entry point containment (2026-10-08; VF-034 stays OPEN)
+
+29. **The conflict.** `service/triage.mjs` `transition`/`tryTransition` is the legacy call
+    shape. It has provenance `unrecorded` and no trusted context. It does **not** enforce
+    author independence (section 25) or the human-verifier rule (section 28). Kevin's
+    user-authored authority tests (`tests/triage.test.mjs`, `tests/state-contract.test.mjs`,
+    which may not be edited) drive exactly this shape: a single `operator-1` submits a
+    candidate and then records its passing verification. Enforcing either rule on this path
+    would fail those tests, and enforcing them is what VF-034 asks for. The two
+    requirements cannot both hold, so the decision is escalated to Kevin. The finding stays
+    open (its todo marker is kept).
+
+    **Containment until he decides** (this is not a weakening; every strict-path guard is
+    unchanged):
+    - **Unreachable from production code.**
+      `tests/domain-legacy-containment.test.mjs` parses the imports of every module under
+      `service/`, `service/machine/`, `service/adapters/` and `site/` (except `triage.mjs`
+      itself). It fails if any module reaches `transition`/`tryTransition`: a named or
+      aliased import, a namespace import, a re-export, a dynamic import, or a computed
+      dynamic import. A self-test checks that the scanner catches each of these forms. In
+      mutation runs, an added import in `service/intake.mjs`, `service/machine/outbox.mjs`
+      or `site/state.mjs` made the test fail. `triage-cli.mjs` imports only `table` from
+      `triage.mjs` and uses the strict API with a trusted context.
+    - **Marked.** Both exports are annotated `@deprecated candidate-model-only`. Every
+      event they emit carries `legacyUnguarded: true`, whatever the command shape (legacy,
+      mixed or typed). The strict API never sets it.
+    - **Not a verified basis.** The strict path refuses `resolved → closed` with
+      `unverified_resolution` while the latest resolution event is `legacyUnguarded`. The way
+      out is to reopen, then rework or re-submit, and then verify independently on the
+      strict path. After that, closing is allowed, and the legacy events stay in history,
+      still marked. Kevin's tests pass with this guard in place because they never close
+      through the strict path. I did not also block reopen: reopening withdraws the
+      resolution, so blocking it would only trap the record. Table version is 1.3.1.
+
+    **Options for Kevin:**
+    - **(a) Amend the authority tests to name distinct actors** (for example `dev-1`
+      submits and `qa-1` verifies) and give the verifier a trusted human context (or a new
+      `provenance` field). The legacy path would then enforce author independence and the
+      human-verifier rule like the strict path. The `unrecorded` exemption in
+      `checkAttempt` and the `legacyUnguarded` marker could then be removed.
+    - **(b) Retire the legacy shape entirely.** Delete `transition`/`tryTransition` (and
+      `fromLegacy`). Port the two authority test files to the strict API
+      (`evaluateTransition` with `{ context }`, typed `evidence`, `fields`). Remove the
+      `unrecorded` provenance from the lifecycle. This is the smaller long-term surface.
+
+    Either option closes VF-034. Until one is chosen, the legacy path is a candidate-model
+    convenience that production code cannot reach, and nothing it records can be closed as
+    independently verified.
+
 ## Alternatives considered
 
 - **Keep the graph in code (status quo).** Rejected: JS, F# and any UI would drift
