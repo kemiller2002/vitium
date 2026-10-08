@@ -206,9 +206,12 @@ test.describe("VIT-AC-004 / VIT-UX-007 validation", () => {
     await page.locator("[data-testid=review-button]").click();
     await expect(page.locator("#review")).toBeHidden();
     await expect(page.locator("#title")).toHaveValue("Partially typed summary");
-    // Baseline: native validation focused the first invalid control. After the VF-001 fix the
-    // focused element is the error summary, which the stricter VF-001 test below requires.
-    expect(["product", "feedback"], "focus moves to the error summary or the first invalid control").toContain(await activeId(page));
+    // Fix round 2 adjudication: VIT-AC-001 ("actionable error focus") and VF-001 require focus
+    // on the error summary; the baseline "first invalid control" expectation is superseded.
+    // Both tests now demand the same, stricter behaviour (no contradiction remains).
+    expect(await activeId(page), "focus moves to the error summary").toBe("feedback");
+    await expect(page.locator("#feedback")).toBeVisible();
+    await expect(page.locator("#feedback a[href='#product']")).toHaveCount(1);
   });
 
   test("empty submit focuses an error summary whose entries link to aria-describedby field errors", async ({ page }) => {
@@ -311,7 +314,7 @@ test.describe("VIT-AC-004 / VIT-AC-008 / VIT-AC-015 hostile input", () => {
   }
 
   test("credential-looking text is refused or redacted before the public GitHub link is built", async ({ page }) => {
-    test.fail(true, "VF-004: legacy client accepts ghp_/sk-/password=/PRIVATE KEY text and places it in the public GitHub issue URL; the service refuses the same text (VIT-AC-008, VIT-AC-015, VIT-NFR-004)");
+    // VF-004 closed by 9e5ac50 (site/credential-guard.mjs); marker removed in fix round 2, assertion unchanged.
     const token = CANARY.githubClassic;
     await fillValid(page, { actualLines: ["My token is " + token] });
     await page.locator("[data-testid=review-button]").click();

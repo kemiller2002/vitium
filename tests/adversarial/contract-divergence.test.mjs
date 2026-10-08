@@ -54,29 +54,49 @@ test("VIT-DOM-004: product names that differ only by case/whitespace/homoglyph a
   }
 });
 
-test("VIT-AC-003 / VIT-API-001: the request the browser would send is accepted by the service runtime", { todo: "finding VF-005" }, () => {
+test("VIT-AC-003 / VIT-API-001: the request the browser would send is accepted by the service runtime", () => {
   const body = clientWireBody(formInput);
   const result = serviceNormalize(body);
   assert.ok(result.ok, "service refused the client's own payload: " + JSON.stringify(result.error));
 });
 
-test("VIT-DOM-003 / VIT-AC-010: the request the browser would send validates against intake-request.schema.json", { todo: "finding VF-005" }, () => {
+test("VIT-DOM-003 / VIT-AC-010: the request the browser would send validates against intake-request.schema.json", () => {
   const body = clientWireBody(formInput);
   const result = validateRequest(body);
   assert.ok(result.ok, "schema refused the client's payload: " + JSON.stringify(result.error));
 });
 
+// VF-011 (fix round 2 adjudication): the original single-input test asserted that the
+// site ACCEPTS a URL whose sanitised form is 3,960 characters. The site now refuses it
+// with an actionable message, which VIT-UX-007 permits; the required property is the
+// implication below, checked over a corpus that includes the original input. It also
+// checks the service bounds what it STORES, not only what it receives.
+const URL_CORPUS = Object.freeze([
+  ["spaces percent-encoded (original VF-011 input)", "https://example.com/" + " x".repeat(985)],
+  ["2-byte characters percent-encoded", "https://example.com/" + "\u00e9".repeat(990)],
+  ["4-byte characters percent-encoded", "https://example.com/" + "\u{1F41B}".repeat(400)],
+  ["literal percent escapes", "https://example.com/" + "%41".repeat(600)],
+  ["ascii at the limit", "https://example.com/" + "a".repeat(1980)],
+  ["long query stripped", "https://example.com/a?" + "q".repeat(1970)]
+]);
+
 test("VIT-API-002 / VIT-UX-007: a page URL accepted by the site is accepted by the service", { todo: "finding VF-011" }, () => {
-  // 1,990 raw characters pass the site's pre-sanitisation 2,000 check, but inner
-  // spaces are percent-encoded during sanitisation and the result exceeds the service limit.
-  const pageUrl = "https://example.com/" + " x".repeat(985);
-  assert.ok(pageUrl.length <= 2000);
-  const draft = site.normalizeReport({ ...formInput, pageUrl });
-  assert.ok(draft.pageUrl.length <= 2000, "site produced a " + draft.pageUrl.length + "-char sanitised URL that the server must refuse");
-  assert.ok(serviceNormalize({ ...draft, schemaVersion: "1.0", privacyAcknowledged: true }).ok);
+  const siteNormalize = attempt(site.normalizeReport);
+  for (const [name, pageUrl] of URL_CORPUS) {
+    const draft = siteNormalize({ ...formInput, pageUrl });
+    if (draft.ok) {
+      assert.ok(draft.value.pageUrl.length <= 2000, name + ": site produced a " + draft.value.pageUrl.length + "-char sanitised URL");
+      const server = serviceNormalize({ ...draft.value, schemaVersion: "1.0", privacyAcknowledged: true });
+      assert.ok(server.ok, name + ": service refused what the site accepted: " + server.error?.message);
+    }
+    const direct = serviceNormalize({ schemaVersion: "1.0", ...formInput, pageUrl });
+    if (direct.ok) {
+      assert.ok(direct.value.pageUrl.length <= 2000, name + ": service STORES a " + direct.value.pageUrl.length + "-char page URL (limit 2000 measured before sanitising)");
+    }
+  }
 });
 
-test("VIT-AC-008 / VIT-NFR-004: site and service agree on refusing credential-looking text", { todo: "finding VF-004" }, () => {
+test("VIT-AC-008 / VIT-NFR-004: site and service agree on refusing credential-looking text", () => {
   for (const secret of [CANARY.openAiStyle, CANARY.passwordAssignment, CANARY.githubClassicShort]) {
     const server = serviceNormalize({ schemaVersion: "1.0", ...formInput, actual: secret });
     assert.equal(server.ok, false, "precondition: service refuses " + secret.slice(0, 6));
@@ -87,12 +107,12 @@ test("VIT-AC-008 / VIT-NFR-004: site and service agree on refusing credential-lo
   }
 });
 
-test("VIT-DOM-003 / VIT-LCY-004: every defect state used by triage.mjs is representable in defect.schema.json", { todo: "finding VF-012" }, () => {
+test("VIT-DOM-003 / VIT-LCY-004: every defect state used by triage.mjs is representable in defect.schema.json", () => {
   const schemaStates = defectSchema.properties.state.enum;
   assert.deepEqual(defectStates.filter(s => !schemaStates.includes(s)), []);
 });
 
-test("VIT-DOM-003 / VIT-DOM-006: intake impact labels have a declared mapping to defect.schema.json impact codes", { todo: "finding VF-012" }, () => {
+test("VIT-DOM-003 / VIT-DOM-006: intake impact labels have a declared mapping to defect.schema.json impact codes", () => {
   const codes = defectSchema.properties.impact.enum;
   const unmapped = domain.impacts.filter(label => !codes.includes(label));
   // A mapping module (or a shared enum) must exist; today the two vocabularies are disjoint.
