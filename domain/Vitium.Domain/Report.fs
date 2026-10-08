@@ -153,7 +153,10 @@ module Report =
             | true, uri when uri.Scheme <> Uri.UriSchemeHttp && uri.Scheme <> Uri.UriSchemeHttps -> Error ReportError.NonHttpPageUrl
             // Drop credentials (user-info), query and fragment: they may contain secrets.
             // Same result as JS `url.origin + url.pathname`. Authority excludes user-info.
-            | true, uri -> Ok(uri.Scheme + "://" + uri.Authority + uri.AbsolutePath)
+            | true, uri ->
+                // VF-011: the limit applies to the stored (sanitised, percent-encoded) form too.
+                let sanitised = uri.Scheme + "://" + uri.Authority + uri.AbsolutePath
+                if sanitised.Length > limit rules "pageUrl" 2000 then Error ReportError.InvalidPageUrl else Ok sanitised
 
     /// Deterministic normalisation. Pure: same rules, registry and input, same output.
     /// v1 transport accepts exact display names only; aliases and padded names are refused

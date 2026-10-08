@@ -28,6 +28,17 @@ type FieldRule =
     | OneOf of values: string list
     | Matches of pattern: string
 
+/// Verification-cycle role of an edge (VIT-LCY-010/011, VIT-VER-009).
+[<RequireQualifiedAccess>]
+type AttemptRule =
+    /// in-progress -> awaiting-verification: a new attempt with a candidate revision.
+    | Submission
+    /// awaiting-verification -> in-progress | resolved: names the latest submission; the
+    /// outcome is implied by the target. `Independent` = the author may not record it.
+    | Result of outcome: string * independent: bool
+    /// reopened -> in-progress: a new work attempt.
+    | Rework
+
 type TransitionRule =
     { From: string
       To: string
@@ -36,7 +47,10 @@ type TransitionRule =
       RequiredFields: string list
       OptionalFields: string list
       /// At least one evidence item of one of these kinds is required; empty = none.
-      EvidenceAnyOf: string list }
+      EvidenceAnyOf: string list
+      Attempt: AttemptRule option
+      /// Table-supplied refusal messages keyed by error code (missing_field, missing_evidence).
+      Messages: Map<string, string> }
 
 type MachineDefinition =
     { States: string list
@@ -52,6 +66,20 @@ type PromotionRule =
 
 type FactRule = { Roles: string list; EvidenceAnyOf: string list }
 
+/// A non-transition event definition (verification-inconclusive, escalation).
+type EventRule =
+    { State: string option
+      Roles: string list
+      Provenances: Provenance list option
+      RequiredFields: string list
+      EvidenceAnyOf: string list }
+
+/// Provisional policy values (all marked provisional in the table; DOM-001 s.18-22).
+type Policy =
+    { MaxAutonomousFailedAttempts: int
+      IndependenceRequired: bool
+      IndependenceAppliesTo: string list }
+
 /// The parsed, validated transition table (schemas/lifecycle/transitions.v1.json).
 /// Only constructible through `Table.parse`, which fails closed.
 [<NoComparison>]
@@ -66,7 +94,9 @@ type Table =
           ObservationMachine: MachineDefinition
           DefectMachine: MachineDefinition
           PromotionRule: PromotionRule
-          FactRules: Map<string, FactRule> }
+          FactRules: Map<string, FactRule>
+          PolicyValues: Policy
+          EventRules: Map<string, EventRule> }
 
     member this.Version = this.TableVersion
     member this.Roles = this.RoleList
@@ -76,6 +106,8 @@ type Table =
     member this.ReasonMaxLength = this.ReasonLimit
     member this.Promotion = this.PromotionRule
     member this.Facts = this.FactRules
+    member this.Policy = this.PolicyValues
+    member this.Events = this.EventRules
 
     member this.Definition machine =
         match machine with
@@ -115,6 +147,32 @@ module Table =
             let! optional = JsonRead.propWith "optionalFields" JsonRead.strings e
             let! evidence = JsonRead.propWith "evidenceAnyOf" JsonRead.strings e
 
+            let! attempt =
+                match JsonRead.tryProp "attempt" e with
+                | None -> Ok None
+                | Some a ->
+                    match JsonRead.tryProp "kind" a |> Option.map JsonRead.str with
+                    | Some(Ok "submission") -> Ok(Some AttemptRule.Submission)
+                    | Some(Ok "rework") -> Ok(Some AttemptRule.Rework)
+                    | Some(Ok "result") ->
+                        let independent =
+                            match JsonRead.tryProp "independent" a with
+                            | Some v -> v.ValueKind = JsonValueKind.True
+                            | None -> false
+
+                        match JsonRead.tryProp "outcome" a |> Option.map JsonRead.str with
+                        | Some(Ok("passed" | "failed" as o)) -> Ok(Some(AttemptRule.Result(o, independent)))
+                        | _ -> Error "invalid attempt outcome"
+                    | _ -> Error "invalid attempt kind"
+
+            let! messages =
+                match JsonRead.tryProp "messages" e with
+                | None -> Ok Map.empty
+                | Some m ->
+                    JsonRead.objectEntries m
+                    |> Result.bind (JsonRead.traverse (fun (k, v) -> JsonRead.str v |> Result.map (fun t -> k, t)))
+                    |> Result.map Map.ofList
+
             return
                 { From = from
                   To = ``to``
@@ -122,7 +180,9 @@ module Table =
                   RoleRationale = rationale
                   RequiredFields = required
                   OptionalFields = optional
-                  EvidenceAnyOf = evidence }
+                  EvidenceAnyOf = evidence
+                  Attempt = attempt
+                  Messages = messages }
         }
 
     let private machine (e: JsonElement) =
@@ -237,6 +297,38 @@ module Table =
                         return k, { Roles = r; EvidenceAnyOf = ev }
                     })
 
+            let! policy = JsonRead.prop "policy" root
+            let! budgetNode = JsonRead.prop "maxAutonomousFailedAttempts" policy
+            let! budget = JsonRead.propWith "value" JsonRead.int budgetNode
+            let! provisional = JsonRead.propWith "provisional" JsonRead.bool budgetNode
+            do! check (budget >= 1 && provisional) "policy.maxAutonomousFailedAttempts must be a positive integer marked provisional"
+            let! independence = JsonRead.prop "independentVerification" policy
+            let! independenceRequired = JsonRead.propWith "required" JsonRead.bool independence
+            let! appliesTo = JsonRead.propWith "appliesTo" JsonRead.strings independence
+            let! events = JsonRead.prop "events" root
+
+            let eventRule name =
+                result {
+                    let! e = JsonRead.prop name events
+                    let! state = JsonRead.optPropWith "state" JsonRead.str e
+                    let! eventRoles = JsonRead.propWith "roles" JsonRead.strings e
+                    do! check (eventRoles |> List.forall (fun r -> List.contains r roles)) ("event " + name + " has unknown roles")
+                    let! provs = JsonRead.optPropWith "provenances" JsonRead.strings e
+                    let! required = JsonRead.optPropWith "requiredFields" JsonRead.strings e
+                    let! evidence = JsonRead.optPropWith "evidenceAnyOf" JsonRead.strings e
+
+                    return
+                        name,
+                        { State = state
+                          Roles = eventRoles
+                          Provenances = provs |> Option.map (List.choose Provenance.ofWire)
+                          RequiredFields = Option.defaultValue [] required
+                          EvidenceAnyOf = Option.defaultValue [] evidence }
+                }
+
+            let! inconclusive = eventRule "verification-inconclusive"
+            let! escalation = eventRule "escalation"
+
             return
                 { TableVersion = tableVersion
                   RoleList = roles
@@ -250,7 +342,12 @@ module Table =
                     { FromState = fromState
                       ToState = toState
                       Roles = promotionRoles }
-                  FactRules = Map.ofList factRules }
+                  FactRules = Map.ofList factRules
+                  PolicyValues =
+                    { MaxAutonomousFailedAttempts = budget
+                      IndependenceRequired = independenceRequired
+                      IndependenceAppliesTo = appliesTo }
+                  EventRules = Map.ofList [ inconclusive; escalation ] }
         }
 
     /// Parse and validate a transition table document. Fails closed.
