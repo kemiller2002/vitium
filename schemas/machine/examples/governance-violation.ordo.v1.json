@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "1.0",
+  "eventId": "a2aae170-0345-4c52-8739-e006df87644e",
+  "eventType": "governance.violation",
+  "source": {
+    "system": "ordo",
+    "repository": "kemiller2002/summa",
+    "installationId": "example-ordo-binding",
+    "version": "example-binding-version"
+  },
+  "subject": {
+    "workItemId": null,
+    "commit": "f6a987d3c71ad2f4ced1711528e296a42c51d9f4",
+    "runId": "ordo-check-77",
+    "checkId": "transition-integrity",
+    "environment": "ci"
+  },
+  "finding": {
+    "category": "governance-violation",
+    "summary": "Illegal transition attempted outside the qualified policy",
+    "expected": "Only table-declared transitions are applied",
+    "observed": "Transition without required evidence was requested",
+    "classification": "untriaged",
+    "confidence": "observed"
+  },
+  "evidence": [
+    {
+      "kind": "attestation",
+      "uri": "https://github.com/kemiller2002/summa/actions/runs/125",
+      "sha256": "0b19b47f9f6fbdb5df875e5b0586caadec6bb230a545f3578ebcd161e4bed798"
+    }
+  ],
+  "correlation": {
+    "defectId": null,
+    "verificationAttemptId": null,
+    "causationEventId": null
+  },
+  "observedAt": "2026-10-08T12:30:00Z"
+}

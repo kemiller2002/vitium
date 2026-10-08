@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "1.0",
+  "eventId": "d6063b47-38b7-4ebb-910e-d78ba0ef83d3",
+  "eventType": "observation.detected",
+  "source": {
+    "system": "tutela",
+    "repository": "kemiller2002/summa",
+    "installationId": "example-tutela-binding",
+    "version": "example-binding-version"
+  },
+  "subject": {
+    "workItemId": null,
+    "commit": "f6a987d3c71ad2f4ced1711528e296a42c51d9f4",
+    "runId": "tutela-scan-9",
+    "checkId": "rule-dependency-policy",
+    "environment": "ci"
+  },
+  "finding": {
+    "category": "security-rule",
+    "summary": "Security rule failed for a dependency policy",
+    "expected": "All dependencies satisfy the pinned policy",
+    "observed": "One dependency is outside the policy",
+    "classification": "untriaged",
+    "confidence": "observed"
+  },
+  "evidence": [
+    {
+      "kind": "diagnostic-reference",
+      "uri": "https://github.com/kemiller2002/summa/actions/runs/126",
+      "sha256": "4d593360ef94d42dce41b5443fb745a5b5aac088f96e8e6c7b8c4e0a371437f8"
+    }
+  ],
+  "correlation": {
+    "defectId": null,
+    "verificationAttemptId": null,
+    "causationEventId": null
+  },
+  "observedAt": "2026-10-08T12:10:00Z"
+}
