@@ -14,14 +14,26 @@ export const errorCodes = Object.freeze([
   "invalid_provenance", "stale_revision", "forbidden_transition", "unauthorized_role",
   "missing_reason", "reason_too_long", "invalid_timestamp", "unexpected_field", "missing_field",
   "invalid_field", "invalid_evidence", "missing_evidence", "self_reference", "invalid_defect_id",
-  "unknown_fact"
+  "unknown_fact", "inconsistent_history"
 ]);
 
 const isObject = v => v !== null && typeof v === "object" && !Array.isArray(v);
 const isText = v => typeof v === "string" && v.trim().length > 0;
 const unique = list => new Set(list).size === list.length;
-// Same ISO-8601 prefix check as the legacy triage model; F# uses the identical pattern.
-const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
+// A real ISO-8601 instant (VF-017): full date-time with seconds and an explicit offset,
+// and every component in range (no Feb 30, no hour 24, no trailing text). The F# core
+// uses the identical pattern and range rules (Identity.fs Patterns.instant / isInstant).
+export const INSTANT = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,9})?(?:Z|[+-](\d{2}):(\d{2}))$/;
+export function isInstant(text) {
+  const m = typeof text === "string" ? INSTANT.exec(text) : null;
+  if (!m) return false;
+  const [year, month, day, hour, minute, second] = m.slice(1, 7).map(Number);
+  const offH = m[7] === undefined ? 0 : Number(m[7]);
+  const offM = m[8] === undefined ? 0 : Number(m[8]);
+  const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
+  return month >= 1 && month <= 12 && day >= 1 && day <= days && hour <= 23 && minute <= 59 && second <= 59 && offH <= 23 && offM <= 59;
+}
 // Actor ids: Arca's ActorId alphabet (A-Z a-z 0-9 . _ : / -) widened to the IAM ARN
 // alphabet (+ = , @) and 256 chars, because the provisional operator CLI uses the caller's
 // IAM ARN. No whitespace or control characters. Same pattern in domain/Vitium.Domain.
@@ -34,6 +46,18 @@ const deepFreeze = value => {
   }
   return value;
 };
+
+// History is append-only and owned by the record, never by the caller (VF-016):
+// - it must be an array whose count of non-creation events (sequence !== 0) equals the
+//   revision, so a caller cannot erase events by supplying a truncated history;
+// - events are deep-copied and frozen, so a caller cannot rewrite past events through an
+//   alias to an array or object it still holds.
+function ownHistory(record) {
+  const history = record.history === undefined && record.revision === 0 ? [] : record.history;
+  if (!Array.isArray(history) || !history.every(isObject)) return fail("inconsistent_history", "Record history is missing or malformed.");
+  if (history.filter(e => e.sequence !== 0).length !== record.revision) return fail("inconsistent_history", "Record history does not match its revision.");
+  return ok(Object.freeze(history.map(e => deepFreeze(structuredClone(e)))));
+}
 
 /** Validate the structural integrity of a transition table. Fails closed. */
 export function loadTable(raw) {
@@ -136,12 +160,14 @@ export function evaluateTransition(table, record, command, options = {}) {
   if (!Number.isSafeInteger(record.revision) || record.revision < 0 || record.revision !== command.expectedRevision) {
     return fail("stale_revision", "Stale or invalid revision.");
   }
+  const owned = ownHistory(record);
+  if (!owned.ok) return owned;
   const rule = findTransition(table, record.kind, record.state, command.to);
   if (!rule) return fail("forbidden_transition", "Transition not permitted.", { from: record.state, to: command.to ?? null });
   if (!rule.roles.includes(command.role)) return fail("unauthorized_role", rule.roleRationale || "The actor is not authorized.");
   if (!isText(command.reason)) return fail("missing_reason", "A bounded reason is required.");
   if (command.reason.length > table.reasonMaxLength) return fail("reason_too_long", "A bounded reason is required.");
-  if (typeof command.occurredAt !== "string" || !TIMESTAMP.test(command.occurredAt)) return fail("invalid_timestamp", "Timestamp required.");
+  if (typeof command.occurredAt !== "string" || !isInstant(command.occurredAt)) return fail("invalid_timestamp", "Timestamp required.");
   const fields = command.fields ?? {};
   if (!isObject(fields)) return fail("invalid_field", "Fields must be an object.");
   const declared = [...rule.requiredFields, ...rule.optionalFields];
@@ -162,7 +188,7 @@ export function evaluateTransition(table, record, command, options = {}) {
   if (selfRef) return fail("self_reference", "A defect cannot be a " + selfRef + " of itself.");
 
   const cleanFields = Object.fromEntries(supplied.map(([k, v]) => [k, v.trim()]));
-  const history = Array.isArray(record.history) ? record.history : [];
+  const history = owned.value;
   const priorClosure = command.to === "reopened" ? lastDisposition(table, record.kind, history) : null;
   const event = deepFreeze({
     type: "transition", machine: record.kind, from: record.state, to: command.to,
@@ -206,11 +232,13 @@ export function promoteObservation(table, observation, command) {
   const actor = checkActor(table, command, {});
   if (!actor.ok) return actor;
   if (!Number.isSafeInteger(observation.revision) || observation.revision !== command.expectedRevision) return fail("stale_revision", "Stale or invalid revision.");
+  const owned = ownHistory(observation);
+  if (!owned.ok) return owned;
   if (observation.state !== p.fromState) return fail("forbidden_transition", "Only a classified observation can be promoted.");
   if (!p.roles.includes(command.role)) return fail("unauthorized_role", "The actor is not authorized.");
   if (!isText(command.reason)) return fail("missing_reason", "A bounded reason is required.");
   if (command.reason.length > table.reasonMaxLength) return fail("reason_too_long", "A bounded reason is required.");
-  if (typeof command.occurredAt !== "string" || !TIMESTAMP.test(command.occurredAt)) return fail("invalid_timestamp", "Timestamp required.");
+  if (typeof command.occurredAt !== "string" || !isInstant(command.occurredAt)) return fail("invalid_timestamp", "Timestamp required.");
   if (typeof command.defectId !== "string" || !new RegExp(p.defectIdPattern).test(command.defectId)) return fail("invalid_defect_id", "A new defect identity is required.");
   if ((observation.links?.defectIds || []).includes(command.defectId)) return fail("invalid_defect_id", "Observation already linked to this defect.");
   const base = { actor: command.actor, provenance: actor.value, role: command.role, reason: command.reason.trim(), occurredAt: command.occurredAt };
@@ -219,7 +247,7 @@ export function promoteObservation(table, observation, command) {
   const nextObservation = Object.freeze({
     ...observation, revision: observation.revision + 1,
     links: Object.freeze({ ...(observation.links || {}), defectIds: Object.freeze([...(observation.links?.defectIds || []), command.defectId]) }),
-    history: Object.freeze([...(observation.history || []), linkEvent])
+    history: Object.freeze([...owned.value, linkEvent])
   });
   const defect = deepFreeze({
     kind: p.toMachine, id: command.defectId, state: p.toState, revision: 0,
@@ -238,13 +266,15 @@ export function recordFact(table, record, command) {
   const actor = checkActor(table, command, {});
   if (!actor.ok) return actor;
   if (!Number.isSafeInteger(record.revision) || record.revision !== command.expectedRevision) return fail("stale_revision", "Stale or invalid revision.");
+  const owned = ownHistory(record);
+  if (!owned.ok) return owned;
   if (!rule.roles.includes(command.role)) return fail("unauthorized_role", "The actor is not authorized.");
-  if (typeof command.occurredAt !== "string" || !TIMESTAMP.test(command.occurredAt)) return fail("invalid_timestamp", "Timestamp required.");
+  if (typeof command.occurredAt !== "string" || !isInstant(command.occurredAt)) return fail("invalid_timestamp", "Timestamp required.");
   const evidence = checkEvidence(table, command.evidence);
   if (!evidence.ok) return evidence;
   if (rule.evidenceAnyOf.length && !evidence.value.some(e => rule.evidenceAnyOf.includes(e.kind))) {
     return fail("missing_evidence", table.evidenceKinds[rule.evidenceAnyOf[0]].label + " evidence is required.");
   }
   const event = deepFreeze({ type: "fact", machine: record.kind, fact: command.fact, state: record.state, actor: command.actor, provenance: actor.value, role: command.role, evidence: evidence.value, occurredAt: command.occurredAt, sequence: record.revision + 1 });
-  return ok(Object.freeze({ record: Object.freeze({ ...record, revision: record.revision + 1, history: Object.freeze([...(record.history || []), event]) }), event }));
+  return ok(Object.freeze({ record: Object.freeze({ ...record, revision: record.revision + 1, history: Object.freeze([...owned.value, event]) }), event }));
 }

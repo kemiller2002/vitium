@@ -36,6 +36,12 @@ function fromLegacy(record, command) {
   for (const name of ["classification", "duplicateOf", "supersededBy", "severity", "priority", "confidence", "productId", "owner", "workItemRef"]) {
     if (command[name] !== undefined && command[name] !== null && command[name] !== "") fields[name] = command[name];
   }
+  // The legacy API only ever read `classification` on the edge into "classified" and
+  // ignored it elsewhere (service/triage-cli.mjs always passes --classification through).
+  // Translate it the same way; the strict API still refuses undeclared fields.
+  if ("classification" in fields && !(rule?.requiredFields.includes("classification") || rule?.optionalFields.includes("classification"))) {
+    delete fields.classification;
+  }
   const evidence = typeof command.evidenceId === "string" && command.evidenceId.trim()
     ? [{ kind: rule?.evidenceAnyOf[0] ?? "supporting", ref: command.evidenceId }]
     : [];
