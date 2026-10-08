@@ -9,7 +9,7 @@
     {
       "path": ".echelon/toolchain.json",
       "ownership": "shared",
-      "sha256": "1fbf16a05f73f571bd94383413b43bdb41464091c60dc857e2647721d955340a"
+      "sha256": "87218ac8894061233aad2f68d2599d5a6088d3aadd6acc1fda2a6065bf82fe7e"
     },
     {
       "path": ".editorconfig",
@@ -34,12 +34,12 @@
     {
       "path": ".gitignore",
       "ownership": "user-owned",
-      "sha256": "c54943daf26c21b7bce4a13ac0af2403f2382c95ae34bdc5538ecb031e37aeb4"
+      "sha256": "4dd6f278d1b6349a842185f8d10364da440823f6d26dfb56926826a626efc150"
     },
     {
       "path": "AGENTS.md",
       "ownership": "shared",
-      "sha256": "73b8a7a58af75c5e9807436e78b76931abb0564ad0f196c69ac46af1959a312b"
+      "sha256": "9fed3a43da4aefb667bacd30285d02682fcdc14930886616e979e62409a98912"
     },
     {
       "path": "BOOTSTRAP.md",
