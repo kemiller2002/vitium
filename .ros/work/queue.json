@@ -164,6 +164,29 @@
       },
       "source": "mission",
       "sourceReference": "VIT-P0-2026-10-08"
+    },
+    {
+      "id": "VIT-P0-MACH-001",
+      "title": "Machine-observation contract: authenticated envelope, principal port, idempotency, outbox policy",
+      "description": "VIT-INT-013 (P0) + INT-014..017 groundwork; VIT-AC-032/035/036; issue #14",
+      "tags": [
+        "vit-p0"
+      ],
+      "priority": "high",
+      "status": "ready",
+      "attachments": [],
+      "createdAt": "2026-10-08T21:34:57.000Z",
+      "updatedAt": "2026-10-08T21:34:57.000Z",
+      "createdBy": "principal-integrator",
+      "createdByActor": {
+        "kind": "agent",
+        "id": "principal-integrator",
+        "provider": "anthropic",
+        "model": "unknown",
+        "runtime": "claude-code"
+      },
+      "source": "mission",
+      "sourceReference": "VIT-P0-2026-10-08"
     }
   ]
 }
