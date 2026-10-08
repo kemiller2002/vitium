@@ -47,7 +47,7 @@ type VitiumClient(httpClient: HttpClient, tokenProvider: IAccessTokenProvider) =
     let makeError code message status retryable =
         Error { Code = code; Message = message; StatusCode = status; Retryable = retryable }
 
-    let send<'T> (route: string) (eventId: Guid) (payload: 'T) (ct: CancellationToken) =
+    let send (route: string) (eventId: Guid) (payload: obj) (ct: CancellationToken) =
         task {
             if eventId = Guid.Empty then
                 return makeError "invalid_event_id" "A stable event ID is required." 0 false
@@ -62,7 +62,7 @@ type VitiumClient(httpClient: HttpClient, tokenProvider: IAccessTokenProvider) =
                         request.Headers.Authorization <- AuthenticationHeaderValue("Bearer", token)
                         request.Headers.Add("Idempotency-Key", eventId.ToString("D"))
                         request.Content <- new StringContent(
-                            JsonSerializer.Serialize(payload, jsonOptions),
+                            JsonSerializer.Serialize(payload, payload.GetType(), jsonOptions),
                             Encoding.UTF8,
                             "application/json"
                         )
@@ -105,7 +105,7 @@ type VitiumClient(httpClient: HttpClient, tokenProvider: IAccessTokenProvider) =
             elif observation.SchemaVersion <> "1.0" then
                 Task.FromResult(makeError "unsupported_schema" "Unsupported observation contract." 0 false)
             else
-                send "/api/v1/observations" observation.EventId observation cancellationToken
+                send "/api/v1/observations" observation.EventId (box observation) cancellationToken
 
         member _.SubmitVerificationAsync(verification, cancellationToken) =
             if isNull (box verification) then
@@ -113,4 +113,4 @@ type VitiumClient(httpClient: HttpClient, tokenProvider: IAccessTokenProvider) =
             elif verification.SchemaVersion <> "1.0" then
                 Task.FromResult(makeError "unsupported_schema" "Unsupported verification contract." 0 false)
             else
-                send "/api/v1/verification-results" verification.EventId verification cancellationToken
+                send "/api/v1/verification-results" verification.EventId (box verification) cancellationToken
