@@ -96,8 +96,12 @@ test("test.yml also runs adversarial tests and builds/runs the F# domain tests o
   assert.match(jobs.test, /npm run test:adversarial/);
   assert.match(jobs["domain-fsharp"], /actions\/setup-dotnet@[0-9a-f]{40} # v4/);
   assert.match(jobs["domain-fsharp"], /dotnet-version: '8\.0\.x'/);
-  assert.match(jobs["domain-fsharp"], /dotnet build domain\/Vitium\.Domain\.Tests/);
-  assert.match(jobs["domain-fsharp"], /dotnet run --project domain\/Vitium\.Domain\.Tests/);
+  // Commands run from domain/ so domain/global.json pins the SDK the core targets.
+  assert.match(jobs["domain-fsharp"], /working-directory: domain\s*\n\s*run: dotnet build Vitium\.Domain\.Tests/);
+  assert.match(jobs["domain-fsharp"], /working-directory: domain\s*\n\s*run: dotnet run --project Vitium\.Domain\.Tests/);
+  const pin = JSON.parse(read("domain/global.json"));
+  assert.match(pin.sdk.version, /^8\./, "domain/global.json must pin SDK 8");
+  assert.equal(pin.sdk.allowPrerelease, false);
 });
 
 test("p0-service.yml installs locked deps, runs integration tests and syntax-checks service adapters", () => {

@@ -39,7 +39,12 @@ jobs:
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           dotnet-version: '8.0.x'
+      # Run from domain/ so domain/global.json pins SDK 8 (the project targets net8.0);
+      # without it the runner's newest SDK is selected and its compiler applies
+      # different nullness rules than the SDK the core is verified against.
       - name: Build domain tests
-        run: dotnet build domain/Vitium.Domain.Tests --configuration Release
+        working-directory: domain
+        run: dotnet build Vitium.Domain.Tests --configuration Release
       - name: Run domain tests
-        run: dotnet run --project domain/Vitium.Domain.Tests --configuration Release --no-build
+        working-directory: domain
+        run: dotnet run --project Vitium.Domain.Tests --configuration Release --no-build
