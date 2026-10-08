@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://echelonfoundry.com/schemas/vitium/defect/v1",
+  "title": "Vitium defect record",
+  "description": "Internal, versioned lifecycle record; user-submitted drafts map into a subset of these fields.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "source",
+    "product",
+    "title",
+    "impact",
+    "observed",
+    "expected",
+    "state",
+    "createdAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^VIT-[0-9]{4,}$"
+    },
+    "source": {
+      "enum": [
+        "public-github",
+        "public-api",
+        "manual",
+        "ci",
+        "agent",
+        "dokimos"
+      ]
+    },
+    "product": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "impact": {
+      "enum": [
+        "cannot-use",
+        "workaround",
+        "minor",
+        "unknown"
+      ]
+    },
+    "observed": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1200
+    },
+    "expected": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1200
+    },
+    "steps": {
+      "type": "string",
+      "maxLength": 900
+    },
+    "pageUrl": {
+      "type": "string",
+      "format": "uri",
+      "maxLength": 2000
+    },
+    "state": {
+      "enum": [
+        "new",
+        "triaged",
+        "reproducing",
+        "confirmed",
+        "in-progress",
+        "awaiting-verification",
+        "resolved",
+        "closed",
+        "duplicate",
+        "not-reproducible"
+      ]
+    },
+    "severity": {
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low",
+        "unassessed"
+      ]
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "githubIssueUrl": {
+      "type": "string",
+      "format": "uri"
+    },
+    "reportReference": {
+      "type": "string",
+      "maxLength": 128
+    },
+    "dedupeKey": {
+      "type": "string",
+      "maxLength": 256
+    },
+    "evidenceUrls": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "format": "uri"
+      }
+    },
+    "linkedIssueUrls": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "format": "uri"
+      }
+    },
+    "rootCause": {
+      "type": "string"
+    },
+    "verification": {
+      "type": "string"
+    }
+  }
+}
