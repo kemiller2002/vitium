@@ -73,14 +73,16 @@ function transactShim() {
 }
 
 const commands = {GetItemCommand, QueryCommand, UpdateItemCommand, TransactWriteItemsCommand};
-const DEV = "arn:aws:iam::000000000000:user/developer";
-const QA = "arn:aws:iam::000000000000:user/verifier";
+// VF-035: humans are assumed-role sessions of allow-listed roles; anything else is an agent.
+const DEV = "arn:aws:sts::000000000000:assumed-role/TriageOperator/developer";
+const QA = "arn:aws:sts::000000000000:assumed-role/VerifierOperator/verifier";
+const HUMAN_ROLES = "arn:aws:iam::000000000000:role/vitium/TriageOperator,arn:aws:iam::000000000000:role/VerifierOperator";
 let clock = 0;
 const now = () => new Date(Date.UTC(2026, 9, 8, 14, 0, clock++)).toISOString();
 const freshId = () => "DEF-" + String(9000000000000000 + (++idSeq));
 async function cli(argv, {actor = DEV, db = transactShim(), newDefectId = freshId} = {}) {
   const out = [], err = [];
-  const code = await runTriage({argv, table:TABLE, db, commands, identity:async () => actor, now, newDefectId,
+  const code = await runTriage({argv, table:TABLE, db, commands, identity:async () => actor, now, newDefectId, humanOperatorRoles:HUMAN_ROLES,
     out:t => out.push(t), err:t => err.push(t)});
   return {code, out:out.join(""), err:err.join("")};
 }

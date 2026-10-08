@@ -39,6 +39,17 @@ The read-only `lookup` must run before the challenge, otherwise a lost-response 
 5. **Receipt is not a capability.** `VIT-` plus 128 random bits from `crypto.randomUUID()`, uppercase hex. It can be shown to the reporter safely. The API has no read route, so the receipt grants nothing. Every non-`POST /api/v1/reports` request gets the same 404 body whether or not a reference exists (T-07). A status capability (VIT-API-010, P1) must be a **separate** high-entropy, revocable secret stored only as a hash. It is deferred to #12.
 6. **Typed failures (VIT-API-005):** `service/errors.mjs` maps every failure to `{code, category, retryable, message}`, with category one of validation, abuse, throttled, temporary, permanent, unavailable. A challenge-provider *misconfiguration* (bad secret) is `unavailable`/503, not a reporter failure (D-02).
 
+### Operator actor kind (VF-035, mission section 7 gate 4): role allow-list, fail closed
+
+`service/triage-cli.mjs` used to label every IAM caller `authenticated-human`. That let an agent workload running under an assumed role escape the autonomous repair budget (VIT-VER-011) and the human-verifier rule (DOM-001 section 28). Decision:
+
+- **Source of truth:** the STS `GetCallerIdentity` ARN only. A caller is `authenticated-human` **only** when that ARN is an assumed-role session (`arn:<partition>:sts::<account>:assumed-role/<RoleName>/<session>`) whose (partition, account, exact role name) matches an entry in `VITIUM_HUMAN_OPERATOR_ROLE_ARNS`. That variable is a comma-separated list of IAM role ARNs (`arn:aws:iam::<account>:role/[path/]<RoleName>`). Assumed-role ARNs drop the IAM path, and role names are unique per account, so the path is ignored in matching. Names are matched case-sensitively, exactly as STS returns them.
+- **Fail closed:** in every other case the caller is `agent`. That includes an unset or empty list (there are **no default entries**), IAM users, root, federated users, other accounts or partitions, unlisted or look-alike role names, and malformed ARNs. An agent may submit, fail or mark inconclusive within the budget. It cannot record a passing result (`human_verifier_required`), cannot record an escalation, and is refused with `escalation_required` once the budget is exhausted. A malformed allow-list entry (including `*`) refuses the whole command (exit 2) before any AWS call, so a typo can never widen access.
+- **Never trusted:** CLI flags and command-body values. Unknown flags such as `--provenance=` are ignored, and the domain refuses a body provenance that disagrees with the trusted context.
+- **Why not a session tag:** the instruction allowed a required session tag such as `vitium:actor-kind=human` as an alternative. I chose the role allow-list because `GetCallerIdentity` does not return session tags, so the CLI cannot verify one. Operators may still *additionally* require `aws:PrincipalTag/vitium:actor-kind = human` in the human role's trust or permissions policy as defence in depth.
+- **Residual:** anyone who can assume an allow-listed role *is* treated as a human. The role trust policy is therefore the real control: it should require SSO with MFA and must not be assumable by CI or agent workloads. Owner decision: OPERATOR-DECISIONS row proposed in the intake round-5 handoff.
+- **Tests:** `tests/intake-operator-identity.test.mjs` OI-01..OI-06. The adversarial round-4 test for VF-035 now passes without its todo marker.
+
 ## Throttling: what is and is not enforced (honest limits)
 
 | Control | Where | Scope | Limit |
