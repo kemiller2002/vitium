@@ -32,3 +32,11 @@ Date: 2026-10-08
 ## Immediate next action
 
 Execute and verify Conditor installation from the manifest, follow the scaffold migration plan in `docs/GOVERNANCE.md`, configure `vitium.echelonfoundry.com` per `DEPLOYMENT.md`, and pass all tests before calling the site live. For reporting without GitHub accounts, implement issue #1 first.
+
+
+## Observed automation evidence (2026-10-08)
+
+- [Vitium quality gates run 37758370262](https://github.com/kemiller2002/vitium/actions/runs/37758370262) completed successfully at commit `a8cf7364f2265c680c70f02c24c8a8728f7ccfcc`.
+- [Vitium public site run 37758370436](https://github.com/kemiller2002/vitium/actions/runs/37758370436) **failed**: Node test step completed **13 tests, 13 passed, 0 failed**, but `actions/configure-pages@v5` returned `Get Pages site failed ... Not Found`. The logs explicitly instruct enabling Pages for GitHub Actions in repository settings. Upload and deploy were skipped.
+- Do not call the site deployed or the HTTPS custom hostname live based on passing Node tests. Real browser, DNS, TLS and deployment remain **unverified**.
+- GitHub Actions lacks sufficient special token privileges to bootstrap Pages via `enablement:true` with its default `GITHUB_TOKEN`. Operator must enable Pages first; do not add a secret merely to hide the settings requirement.
