@@ -98,7 +98,7 @@ test("D-05 time-based (v1) idempotency keys are refused; only random v4 keys are
 // hyphenated words ending in "sk" ("task-", "desk-", "disk-") followed by 18+ characters are
 // refused as credentials. Marked todo so it is reported without failing `npm test`;
 // remove {todo} once report-domain.mjs adds \b (the intake redactor already has it).
-test("D-06 hyphenated words containing 'sk-' are not mistaken for API keys",{todo:"handoff: report-domain.mjs credential regex lacks \\b"},async()=>{
+test("D-06 hyphenated words containing 'sk-' are not mistaken for API keys",async()=>{
   const {store,handle}=fixture();
   const reply=await handle(event(valid({title:"The task-management-dashboard-widget is blank"})));
   assert.equal(reply.statusCode,201);

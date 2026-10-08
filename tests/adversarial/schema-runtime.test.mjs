@@ -61,7 +61,7 @@ const DIVERGENT_CASES = Object.freeze([
 ]);
 
 for (const [name, payload, finding] of DIVERGENT_CASES) {
-  test("VIT-DOM-003: schema and runtime agree (" + name + ")", { todo: "finding " + finding }, () => {
+  test("VIT-DOM-003: schema and runtime agree (" + name + ")", () => {
     const v = verdict(payload);
     assert.equal(v.schema, v.runtime, "schema=" + v.schema + " runtime=" + v.runtime);
   });
