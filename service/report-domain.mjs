@@ -1,5 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 
+// Display names of the canonical registry schemas/products.v1.json (VIT-DOM-004).
+// Constants because the Lambda candidate packages only service/; registry resolution
+// (ids, aliases) lives in product-registry.mjs and tests/domain-registry.test.mjs
+// fails if this list, site/submission.mjs and the registry diverge.
 export const products = Object.freeze([
   "Arca", "Chrona", "Dokimos", "Fides", "Folio", "Forma",
   "Forma Studio", "HelixNote", "Ordo", "Praxis", "Signal", "Summa", "Other / not sure"

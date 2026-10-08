@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "1.0",
+  "id": "VIT-0007",
+  "source": "public-github",
+  "product": "HelixNote",
+  "title": "Export drops footnotes",
+  "impact": "workaround",
+  "observed": "Footnotes are missing from the exported PDF.",
+  "expected": "Footnotes appear in the export.",
+  "steps": "Write a note with a footnote.\nExport to PDF.",
+  "pageUrl": "https://example.com/notes/42",
+  "state": "duplicate",
+  "severity": "unassessed",
+  "createdAt": "2026-09-30T08:00:00Z",
+  "updatedAt": "2026-10-01T09:30:00Z",
+  "githubIssueUrl": "https://github.com/kemiller2002/vitium/issues/77",
+  "reportReference": "VIT-00112233445566778899AABBCCDDEEFF",
+  "dedupeKey": "helixnote:export:footnotes",
+  "evidenceUrls": ["https://example.com/evidence/footnote.png"],
+  "linkedIssueUrls": ["https://github.com/kemiller2002/helixnote/issues/12"],
+  "rootCause": "Shared with VIT-0003",
+  "verification": "Not yet verified"
+}

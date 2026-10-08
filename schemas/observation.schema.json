@@ -113,5 +113,5 @@
       "type": "string"
     }
   },
-  "description": "Domain representation; DynamoDB adapter encodes report/history as JSON strings and stores index attributes only while pending review."
+  "description": "Domain representation; DynamoDB adapter encodes report/history as JSON strings and stores index attributes only while pending review. Superseded for new domain work by observation.v2.schema.json; explicit migration: service/domain-records.mjs migrateObservationV1 (original retained)."
 }
