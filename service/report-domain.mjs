@@ -32,6 +32,10 @@ function field(value, name, max, mandatory = false) {
 }
 export function normalizeReport(raw) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) refuse("Report must be an object.");
+  const allowed = new Set(["schemaVersion","product","impact","title","actual","expected","steps","pageUrl","privacyAcknowledged","challengeToken"]);
+  for (const key of Object.keys(raw)) {
+    if (!allowed.has(key)) refuse("Unexpected report field.");
+  }
   if (raw.schemaVersion !== "1.0") refuse("Unsupported report version.");
   if (raw.privacyAcknowledged !== true) refuse("Please confirm that sensitive details were removed.");
   const product = field(raw.product,"application",100,true);
