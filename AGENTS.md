@@ -1,5 +1,15 @@
 # Vitium agent operating rules
 
+## Authority and bootstrap
+
+1. Follow explicit user decisions, applicable safety constraints, installed Conditor/Praxis/Ordo governance, canonical project requirements and accepted decision records, in that order.
+2. Read `docs/GOVERNANCE.md` and `conditor.json` before substantial changes. Conditor owns lifecycle installation, verification and upgrades. Never forge its lock, installation receipts, provenance or tool-generated files.
+3. The canonical public domain is **https://vitium.echelonfoundry.com/**. Do not substitute the old github.io address in UI or canonical metadata.
+4. After a verified Conditor install, execute work through the generated Praxis/Ordo protocols, with real identities, work items, evidence, durable checkpoints and verification. Until then, mark governance as incomplete rather than simulating success.
+5. Never claim a deployment, a CI check, an installation, a browser test or a DNS validation passed without witnessing it.
+
+## Initial application rules
+
 1. Read `PROJECT-CHARTER.md`, `context/CURRENT-STATE.md`, `docs/REPORTING.md`, and `schemas/defect.schema.json` before editing.
 2. Keep requirements, current state, and implemented behavior aligned. Do not claim the direct intake API or Fides/Arca integration is finished when it isn't.
 3. Use **Forma** for presentation and native semantic elements for inputs; do not fork shared CSS. Interaction is Vitium-owned until the Limen integration is implemented.
