@@ -1,0 +1,12 @@
+# Local .NET builds and package artifacts
+**/bin/
+**/obj/
+artifacts/
+
+# AWS SAM locally generated output
+.aws-sam/
+
+# Editor and OS state
+.vs/
+.idea/
+.DS_Store
