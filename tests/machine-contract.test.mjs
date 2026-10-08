@@ -36,6 +36,15 @@ export function buildCase(c) {
   if (c.repeat) setPath(value, c.repeat.path, c.repeat.char.repeat(c.repeat.count));
   if (c.evidenceCount) value.evidence = Array.from({ length: c.evidenceCount }, (_, i) => ({ ...value.evidence[0], sha256: hex64(i + 1) }));
   if (c.duplicateEvidence) value.evidence = [value.evidence[0], { ...value.evidence[0] }];
+  if (c.ownKey) {
+    const target = c.ownKey.at ? c.ownKey.at.split(".").reduce((o, k) => o[k], value) : value;
+    Object.defineProperty(target, c.ownKey.key, { value: c.ownKey.value, enumerable: true, writable: true, configurable: true });
+    // The same object must come out of a JSON round-trip (what the HTTP boundary produces).
+    const reparsed = JSON.parse(JSON.stringify(value));
+    const t2 = c.ownKey.at ? c.ownKey.at.split(".").reduce((o, k) => o[k], reparsed) : reparsed;
+    if (!Object.hasOwn(t2, c.ownKey.key)) throw new Error("case builder did not create an own key: " + c.name);
+    return reparsed;
+  }
   return value;
 }
 
@@ -100,7 +109,8 @@ test("every example fixture is valid under both the schema and the runtime", () 
 });
 
 test("shared cases: schema (ajv) and runtime verdicts match the recorded expectation", () => {
-  assert.ok(cases.length >= 60, "case corpus shrank");
+  assert.ok(cases.length >= 135, "case corpus shrank");
+  assert.equal(cases.filter(c => c.ownKey).length, 60, "inherited-name keys at every object level (VF-029)");
   assert.ok(cases.filter(c => !c.expect.ok).length >= 50);
   for (const c of cases) {
     const value = buildCase(c);

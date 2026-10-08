@@ -24,7 +24,8 @@ const catalog = Object.freeze({
   repository_not_in_scope:   { category: "auth",       status: 403, retryable: false, message: "The workload is not authorized for this repository." },
   environment_not_in_scope:  { category: "auth",       status: 403, retryable: false, message: "The workload is not authorized for this environment." },
   event_type_not_in_scope:   { category: "auth",       status: 403, retryable: false, message: "The workload is not authorized for this event type." },
-  event_conflict:            { category: "conflict",   status: 409, retryable: false, message: "This eventId was already used for different content." },
+  spoofed_echo_marker:       { category: "auth",       status: 403, retryable: false, message: "Only Vitium itself may send events carrying a Vitium origin marker." },
+  event_conflict:           { category: "conflict",   status: 409, retryable: false, message: "This eventId was already used for different content." },
   stale_event:               { category: "conflict",   status: 409, retryable: false, message: "A newer event for this verification attempt is already recorded." },
   attempt_conflict:          { category: "conflict",   status: 409, retryable: false, message: "This verification attempt already has a recorded result." },
   causation_unknown:         { category: "ordering",   status: 409, retryable: true,  message: "The causing event has not been recorded yet; retry later." },
@@ -37,7 +38,7 @@ export const MACHINE_ERROR_CODES = Object.freeze(Object.keys(catalog));
 
 /** Typed failure. Unknown codes collapse to storage_unavailable (fail closed, retryable). */
 export function machineFailure(code, path) {
-  const known = code in catalog ? code : "storage_unavailable";
+  const known = typeof code === "string" && Object.hasOwn(catalog, code) ? code : "storage_unavailable";
   const entry = catalog[known];
   return Object.freeze({
     code: known, category: entry.category, status: entry.status, retryable: entry.retryable, message: entry.message,

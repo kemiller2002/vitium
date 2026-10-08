@@ -110,13 +110,20 @@ const nullable = check => (v, path) => v === null ? null : check(v, path);
 const instant = (v, path) => typeof v === "string" && isInstant(v) ? null : err("invalid_envelope", "Expected an ISO-8601 instant with offset.", path);
 const integer = (min, max) => (v, path) => Number.isSafeInteger(v) && v >= min && v <= max ? null : err("invalid_envelope", "Integer out of bounds.", path);
 
-function obj(shape, required) {
+// Shapes are Maps and every membership test is an OWN-property test (VF-029): `key in obj`
+// is true for inherited names such as constructor, toString or __proto__, which would let
+// them pass the closed-envelope check while the JSON Schema refuses them.
+function obj(shapeLiteral, required) {
+  const shape = new Map(Object.entries(shapeLiteral));
   return (v, path) => {
     if (!isObject(v)) return err("invalid_envelope", "Expected an object.", path);
-    for (const key of Object.keys(v)) if (!(key in shape)) return err("invalid_envelope", "Unexpected field.", path + "." + key);
-    for (const key of required) if (!(key in v)) return err("invalid_envelope", "Missing required field.", path + "." + key);
-    for (const [key, check] of Object.entries(shape)) {
-      if (!(key in v)) continue;
+    // Reflect.ownKeys also sees an own "__proto__" key created by JSON.parse, and symbols.
+    for (const key of Reflect.ownKeys(v)) {
+      if (typeof key !== "string" || !shape.has(key)) return err("invalid_envelope", "Unexpected field.", path + "." + String(key));
+    }
+    for (const key of required) if (!Object.hasOwn(v, key)) return err("invalid_envelope", "Missing required field.", path + "." + key);
+    for (const [key, check] of shape) {
+      if (!Object.hasOwn(v, key)) continue;
       const e = check(v[key], path + "." + key);
       if (e) return e;
     }
@@ -203,7 +210,8 @@ export function validateEnvelope(raw) {
 /** Walk any JSON value for keys that name a credential (case/punctuation-insensitive). */
 export function findCredentialField(value, path = "$", depth = 0) {
   if (depth > 8 || value === null || typeof value !== "object") return null;
-  for (const [key, child] of Object.entries(value)) {
+  for (const key of Object.keys(value)) {
+    const child = value[key];
     const norm = key.toLowerCase().replace(/[^a-z]/g, "");
     if (CREDENTIAL_FIELD_NAMES.includes(norm)) return path + "." + key;
     const found = findCredentialField(child, path + (Array.isArray(value) ? "[" + key + "]" : "." + key), depth + 1);

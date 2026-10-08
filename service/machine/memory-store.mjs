@@ -21,7 +21,7 @@ export function makeMemoryStore({ faults = {} } = {}) {
       const f = injected("put");
       if (f) return f;
       const existing = items.get(record.pk);
-      if (existing) return ok({ created: false, existing: { eventId: existing.eventId, canonicalHash: existing.canonicalHash, observationId: existing.observationId, receivedAt: existing.receivedAt } });
+      if (existing) return ok({ created: false, existing: { eventId: existing.eventId, principalId: existing.principal.principalId, canonicalHash: existing.canonicalHash, observationId: existing.observationId, receivedAt: existing.receivedAt } });
       if (record.attemptKey && attempts.has(record.attemptKey)) {
         const holder = items.get(attempts.get(record.attemptKey));
         return ok({ created: false, attemptTaken: { eventId: holder.eventId, eventType: holder.eventType, observedAt: holder.observedAt } });

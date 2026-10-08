@@ -3,18 +3,22 @@
 // result independent of Vitium availability and sees delivery errors.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULT_POLICY, enqueue, nextDelivery, classifyDelivery, reportWithDelivery, orderByCausation, checkPolicy } from "../service/machine/outbox.mjs";
+import { DEFAULT_POLICY, enqueue, nextDelivery, classifyDelivery, isAckFor, reportWithDelivery, orderByCausation, checkPolicy } from "../service/machine/outbox.mjs";
 import { example } from "./machine-fixtures.mjs";
 
 const T0 = "2026-10-08T12:00:00.000Z";
 const at = ms => new Date(Date.parse(T0) + ms).toISOString();
 const policy = { ...DEFAULT_POLICY, baseDelayMs: 1000, maxDelayMs: 8000, maxAttempts: 5, expiresAfterMs: 3600000 };
 const fresh = () => enqueue(example("observation-detected.ci.v1.json"), T0);
+const EID = example("observation-detected.ci.v1.json").eventId;
+// A genuine machine ack for the fixture event (shape produced by observation-core ackFor).
+const ack = (over = {}) => ({ schemaVersion: "1.0", eventId: EID, principalId: "wl:ci:summa", observationId: "OBS-" + "1".repeat(32), receivedAt: T0, status: "recorded", replayed: false, ...over });
+const OK201 = Object.freeze({ kind: "response", status: 201, body: ack() });
 const step = (e, now, outcome, jitter) => { const r = nextDelivery(e, now, policy, outcome, jitter); assert.ok(r.ok, JSON.stringify(r)); return r.value; };
 
 test("classification of delivery outcomes", () => {
-  assert.equal(classifyDelivery({ kind: "response", status: 201 }), "delivered");
-  assert.equal(classifyDelivery({ kind: "response", status: 200 }), "delivered");
+  assert.equal(classifyDelivery(OK201, { eventId: EID }), "delivered");
+  assert.equal(classifyDelivery({ kind: "response", status: 200, body: ack({ replayed: true }) }, { eventId: EID, principalId: "wl:ci:summa" }), "delivered");
   for (const s of [429, 500, 502, 503, 504, 408]) assert.equal(classifyDelivery({ kind: "response", status: s }), "retry", String(s));
   assert.equal(classifyDelivery({ kind: "timeout" }), "retry");
   assert.equal(classifyDelivery({ kind: "network-error" }), "retry");
@@ -23,6 +27,34 @@ test("classification of delivery outcomes", () => {
   assert.equal(classifyDelivery({ kind: "response", status: 401, body: { code: "principal_expired" } }), "reauthenticate");
   for (const s of [400, 401, 403, 413]) assert.equal(classifyDelivery({ kind: "response", status: s }), "permanent", String(s));
   assert.equal(classifyDelivery(undefined), "retry");
+});
+
+test("VF-033: a 2xx is delivered only with an ack for THIS eventId (and principal); otherwise a retryable protocol error", () => {
+  const bad = [
+    "<html>captive portal</html>", undefined, null, {}, [],
+    ack({ eventId: "11111111-1111-4111-8111-111111111111" }),
+    ack({ status: "received" }),
+    ack({ schemaVersion: "2.0" }),
+    ack({ observationId: undefined }),
+    ack({ principalId: undefined }),
+    ack({ replayed: "yes" })
+  ];
+  for (const body of bad) {
+    assert.equal(isAckFor(body, { eventId: EID }), false, JSON.stringify(body));
+    const e = step(fresh(), T0, { kind: "response", status: 200, body });
+    assert.equal(e.status, "pending", JSON.stringify(body));
+    assert.deepEqual(e.lastError, { kind: "protocol-error", status: 200, code: "ack_mismatch" });
+  }
+  // Principal-scoped: an entry that knows its principal refuses another principal's ack.
+  const scoped = enqueue(example("observation-detected.ci.v1.json"), T0, "wl:ci:summa");
+  assert.equal(step(scoped, T0, { kind: "response", status: 201, body: ack({ principalId: "wl:ci:other" }) }).status, "pending");
+  assert.equal(step(scoped, T0, OK201).status, "delivered");
+  // Repeated unacknowledged 2xx exhausts into dead-letter, never "delivered".
+  let e = fresh();
+  for (let i = 0; i < policy.maxAttempts; i++) e = step(e, at(i * 10000), { kind: "response", status: 204 });
+  assert.equal(e.status, "dead-letter");
+  assert.equal(e.deadLetterReason, "retry-exhausted");
+  assert.equal(reportWithDelivery(Object.freeze({ status: "passed" }), [e]).delivery.delivered, 0);
 });
 
 test("bounded exponential backoff, capped at maxDelayMs", () => {
@@ -58,7 +90,7 @@ test("retry exhaustion dead-letters with the last error (never silently dropped)
   assert.equal(e.attempts, policy.maxAttempts);
   assert.equal(e.lastError.status, 503);
   assert.equal(e.nextAttemptAt, null);
-  assert.equal(step(e, at(10 ** 7), { kind: "response", status: 201 }).status, "dead-letter", "terminal");
+  assert.equal(step(e, at(10 ** 7), OK201).status, "dead-letter", "terminal");
 });
 
 test("expiry dead-letters even without a new attempt", () => {
@@ -80,7 +112,7 @@ test("permanent refusals dead-letter immediately; expired credential asks for re
 });
 
 test("delivered entries are terminal", () => {
-  const d = step(fresh(), T0, { kind: "response", status: 201 });
+  const d = step(fresh(), T0, OK201);
   assert.equal(d.status, "delivered");
   assert.equal(d.deliveredAt, T0);
   assert.equal(step(d, at(5), { kind: "response", status: 500 }).status, "delivered");
@@ -111,7 +143,7 @@ test("item 4: the producer's build result is returned untouched whatever happens
   const mandatory = reportWithDelivery(green, [e], { reportingMandatory: true });
   assert.equal(mandatory.buildResult.status, "passed");
   assert.deepEqual(mandatory.gates, [{ gate: "vitium-reporting", passed: false }]);
-  assert.deepEqual(reportWithDelivery(green, [step(fresh(), T0, { kind: "response", status: 201 })], { reportingMandatory: true }).gates, [{ gate: "vitium-reporting", passed: true }]);
+  assert.deepEqual(reportWithDelivery(green, [step(fresh(), T0, OK201)], { reportingMandatory: true }).gates, [{ gate: "vitium-reporting", passed: true }]);
 });
 
 test("delivery order respects causation; cycles are withheld for repair", () => {

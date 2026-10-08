@@ -123,7 +123,7 @@ test("VIT-AC-035: producer outage is bounded: 429/5xx retry with backoff, exhaus
 
 // ---- findings ---------------------------------------------------------------------------
 
-test("VIT-INT-013: inherited-name keys (constructor, toString, __proto__, valueOf) are refused like any unexpected field, and never stored", { todo: "finding VF-029" }, async () => {
+test("VIT-INT-013: inherited-name keys (constructor, toString, __proto__, valueOf) are refused like any unexpected field, and never stored", async () => {
   const p = await principal("ci");
   for (const key of ["constructor", "toString", "valueOf", "hasOwnProperty", "__proto__"]) {
     const text = JSON.stringify(detected()).replace("{", `{"${key}":{"note":"${CANARY.githubClassic}"},`);
@@ -137,7 +137,7 @@ test("VIT-INT-013: inherited-name keys (constructor, toString, __proto__, valueO
   assert.equal(validateEnvelope(JSON.parse(nested)).ok, false, "nested finding.constructor accepted");
 });
 
-test("VIT-INT-015: a non-Vitium producer cannot suppress its own legitimate event by setting a vitium origin marker", { todo: "finding VF-030" }, async () => {
+test("VIT-INT-015: a non-Vitium producer cannot suppress its own legitimate event by setting a vitium origin marker", async () => {
   const p = await principal("ci");
   const { intake, store } = harness();
   const e = detected(); e.correlation.originMarker = "vitium/spoof";
@@ -146,7 +146,7 @@ test("VIT-INT-015: a non-Vitium producer cannot suppress its own legitimate even
     "an authenticated CI event was silently dropped (no record, no conflict) because the body claimed a Vitium origin");
 });
 
-test("VIT-AC-035: an eventId replayed by a DIFFERENT principal is not acknowledged as that principal's delivery", { todo: "finding VF-031" }, async () => {
+test("VIT-AC-035: an eventId replayed by a DIFFERENT principal is not acknowledged as that principal's delivery", async () => {
   const { intake } = harness();
   const e = detected();
   await intake.submit({ principal: await principal("ci"), body: JSON.stringify(e) });
@@ -154,7 +154,7 @@ test("VIT-AC-035: an eventId replayed by a DIFFERENT principal is not acknowledg
   assert.ok(!(other.ok && other.value.ack?.replayed === true), "principal wl:ci:summa-2 received a replay ack for wl:ci:summa's event");
 });
 
-test("VIT-VER-010 / VIT-AC-036: after an inconclusive machine result the same attempt can still record a pass or failure", { todo: "finding VF-032" }, async () => {
+test("VIT-VER-010 / VIT-AC-036: after an inconclusive machine result the same attempt can still record a pass or failure", async () => {
   const pd = await principal("dokimos");
   const pass = fresh(ex("verification-passed.dokimos.v1.json"));
   const key = pass.correlation.defectId + "#" + pass.correlation.verificationAttemptId;
@@ -166,7 +166,7 @@ test("VIT-VER-010 / VIT-AC-036: after an inconclusive machine result the same at
   assert.equal(rerun.ok, true, "re-run refused: " + rerun.error?.code + " (lifecycle allows it, DOM-001 §19)");
 });
 
-test("VIT-AC-035: the outbox only marks an entry delivered when the response acknowledges THAT eventId", { todo: "finding VF-033" }, () => {
+test("VIT-AC-035: the outbox only marks an entry delivered when the response acknowledges THAT eventId", () => {
   const e = enqueue({ eventId: "e1" }, NOW);
   for (const body of ["<html>captive portal</html>", { eventId: "OTHER", status: "recorded" }, {}]) {
     const r = nextDelivery(e, NOW, DEFAULT_POLICY, { kind: "response", status: 200, body });
@@ -175,7 +175,7 @@ test("VIT-AC-035: the outbox only marks an entry delivered when the response ack
 });
 
 
-test("VIT-INT-013: runtime validator and JSON Schema agree on inherited-name keys (schema/runtime parity)", { todo: "finding VF-029" }, () => {
+test("VIT-INT-013: runtime validator and JSON Schema agree on inherited-name keys (schema/runtime parity)", () => {
   const require = createRequire(import.meta.url);
   const Ajv = require("ajv/dist/2020.js"); const formats = require("ajv-formats");
   const ajv = new Ajv({ strict: false, allErrors: true }); formats(ajv);
