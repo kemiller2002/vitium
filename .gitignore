@@ -39,3 +39,14 @@ logs/*
 # Refresh it with: npx @echelon-foundry/visual-engineering upgrade
 !.visual-engineering/
 # END echelon:visual-engineering
+
+# Local .NET builds and package artifacts
+**/bin/
+**/obj/
+artifacts/
+
+# AWS SAM locally generated output
+.aws-sam/
+
+# Editor state
+.vs/

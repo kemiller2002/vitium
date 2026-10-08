@@ -1,0 +1,54 @@
+name: Vitium NuGet build and pack
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/Vitium.*/**'
+      - 'tests/Vitium.Client.Smoke/**'
+      - '.github/workflows/nuget-ci.yml'
+  pull_request:
+    paths:
+      - 'src/Vitium.*/**'
+      - 'tests/Vitium.Client.Smoke/**'
+      - '.github/workflows/nuget-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build NuGet contracts and transport client
+        run: |
+          dotnet build src/Vitium.Contracts/Vitium.Contracts.fsproj -c Release --nologo
+          dotnet build src/Vitium.Client/Vitium.Client.fsproj -c Release --nologo
+      - name: Exercise typed package consumer and negative transport cases
+        run: dotnet run --project tests/Vitium.Client.Smoke/Vitium.Client.Smoke.fsproj -c Release
+      - name: Create preview packages without publishing
+        run: |
+          dotnet pack src/Vitium.Contracts/Vitium.Contracts.fsproj -c Release --no-build -o artifacts/nuget
+          dotnet pack src/Vitium.Client/Vitium.Client.fsproj -c Release --no-build -o artifacts/nuget
+          test -f artifacts/nuget/EchelonFoundry.Vitium.Contracts.0.1.0-preview.1.nupkg
+          test -f artifacts/nuget/EchelonFoundry.Vitium.Client.0.1.0-preview.1.nupkg
+      - name: Verify packages install into an unrelated F# consumer
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet new console -lang F# -f net10.0 -o "$RUNNER_TEMP/vitium-package-consumer"
+          dotnet add "$RUNNER_TEMP/vitium-package-consumer/vitium-package-consumer.fsproj" package EchelonFoundry.Vitium.Client \
+            --version 0.1.0-preview.1 --source "$GITHUB_WORKSPACE/artifacts/nuget"
+          printf '%s\n' 'open EchelonFoundry.Vitium.Client' 'open EchelonFoundry.Vitium.Contracts' 'printfn "%s" typeof<VitiumClient>.FullName' > "$RUNNER_TEMP/vitium-package-consumer/Program.fs"
+          dotnet run --project "$RUNNER_TEMP/vitium-package-consumer/vitium-package-consumer.fsproj" -c Release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vitium-nuget-preview
+          path: artifacts/nuget/*.nupkg
+          retention-days: 7
