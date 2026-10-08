@@ -54,6 +54,11 @@ jobs:
             sidecar="$(dirname "$executable")/$repo-bin"
             if [ -f "$sidecar" ]; then
               install -m 755 "$sidecar" "$RUNNER_TEMP/bin/$repo-bin"
+              # The Ordo release's legacy launcher can target an unbuilt npm
+              # dist/MANIFEST. Use its verified native sidecar for lifecycle.
+              if [ "$repo" = "ordo" ]; then
+                install -m 755 "$sidecar" "$RUNNER_TEMP/bin/ordo"
+              fi
             fi
           done
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
