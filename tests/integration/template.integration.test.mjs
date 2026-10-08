@@ -15,7 +15,7 @@ const R = template.Resources;
 
 test("Y-01 template parses and declares only the expected resources", () => {
   assert.equal(template.Transform, "AWS::Serverless-2016-10-31");
-  assert.deepEqual(Object.keys(R).sort(), ["IntakeApi", "IntakeFunction", "IntakeFunctionLogGroup", "ReportsTable"]);
+  assert.deepEqual(Object.keys(R).sort(), ["ApiAccessLogGroup", "IntakeApi", "IntakeFunction", "IntakeFunctionLogGroup", "ReportsTable"]);
 });
 
 test("Y-02 table: retained, PITR, encrypted, deletion-protected, private queue index keys-only", () => {
@@ -24,7 +24,17 @@ test("Y-02 table: retained, PITR, encrypted, deletion-protected, private queue i
   assert.equal(t.UpdateReplacePolicy, "Retain");
   assert.equal(t.Properties.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled, true);
   assert.equal(t.Properties.SSESpecification.SSEEnabled, true);
-  assert.equal(t.Properties.DeletionProtectionEnabled, true);
+  assert.deepEqual(t.Properties.DeletionProtectionEnabled, {"Fn::Ref":"TableDeletionProtection"});
+  assert.equal(template.Parameters.TableDeletionProtection.Default, "true");
+  // H-09: production cannot disable deletion protection or widen the origin (CFN Rules).
+  const rule = template.Rules.ProductionUsesCanonicalOrigin;
+  assert.deepEqual(rule.RuleCondition, {"Fn::Equals":[{"Fn::Ref":"EnvironmentName"}, "production"]});
+  const asserts = rule.Assertions.map(a => JSON.stringify(a.Assert));
+  for (const expected of [
+    [{"Fn::Ref":"IntakeOrigin"}, "https://vitium.echelonfoundry.com"],
+    [{"Fn::Ref":"ChallengeHostname"}, "vitium.echelonfoundry.com"],
+    [{"Fn::Ref":"TableDeletionProtection"}, "true"]
+  ]) assert.ok(asserts.includes(JSON.stringify({"Fn::Equals":expected})), JSON.stringify(expected));
   assert.equal(t.Properties.GlobalSecondaryIndexes[0].Projection.ProjectionType, "KEYS_ONLY");
 });
 
@@ -53,7 +63,15 @@ test("Y-04 one public route: POST /api/v1/reports; no read routes; CORS pinned t
   const api = R.IntakeApi.Properties;
   assert.deepEqual(api.DefinitionBody.paths, {});
   assert.deepEqual(api.CorsConfiguration.AllowOrigins, [{"Fn::Ref":"IntakeOrigin"}]);
-  assert.deepEqual(template.Parameters.IntakeOrigin.AllowedValues, ["https://vitium.echelonfoundry.com"]);
+  assert.equal(template.Parameters.IntakeOrigin.Default, "https://vitium.echelonfoundry.com");
+  const originPattern = new RegExp(template.Parameters.IntakeOrigin.AllowedPattern);
+  assert.ok(originPattern.test("https://staging.vitium.echelonfoundry.com"));
+  for (const bad of ["*", "https://evil.example", "http://vitium.echelonfoundry.com", "https://vitium.echelonfoundry.com.evil.example", "https://a.b.vitium.echelonfoundry.com"]) {
+    assert.ok(!originPattern.test(bad), bad);
+  }
+  assert.equal(template.Parameters.ChallengeHostname.Default, "vitium.echelonfoundry.com");
+  assert.deepEqual(R.IntakeFunction.Properties.Environment.Variables.CHALLENGE_HOSTNAME, {"Fn::Ref":"ChallengeHostname"});
+  assert.deepEqual(R.IntakeFunction.Properties.Environment.Variables.ENVIRONMENT_NAME, {"Fn::Ref":"EnvironmentName"});
   assert.equal(api.CorsConfiguration.AllowCredentials, false);
   assert.ok(!api.CorsConfiguration.AllowMethods.includes("GET"));
   assert.ok(api.DefaultRouteSettings.ThrottlingRateLimit > 0 && api.DefaultRouteSettings.ThrottlingBurstLimit > 0);
@@ -67,11 +85,18 @@ test("Y-05 secret is parameterised by ARN only; no inline secret values anywhere
   assert.ok(!Object.keys(vars).some(k => /SECRET$|KEY$|TOKEN$|PASSWORD/.test(k) && k !== "TURNSTILE_SECRET_ARN"));
 });
 
-test("Y-06 log group is the function's group, has retention, and the function uses it", () => {
-  const fnName = R.IntakeFunction.Properties.FunctionName["Fn::Sub"];
+test("Y-06 log groups have retention, are stack-scoped, and the function writes to its declared group", () => {
+  assert.equal(R.IntakeFunction.Properties.FunctionName, undefined, "fixed FunctionName collides across stacks");
   const group = R.IntakeFunctionLogGroup.Properties;
-  assert.equal(group.LogGroupName["Fn::Sub"], "/aws/lambda/" + fnName);
+  assert.match(group.LogGroupName["Fn::Sub"], /\$\{AWS::StackName\}/);
   assert.ok(Number.isInteger(group.RetentionInDays) && group.RetentionInDays > 0);
   assert.deepEqual(R.IntakeFunction.Properties.LoggingConfig.LogGroup, {"Fn::Ref":"IntakeFunctionLogGroup"});
-  assert.ok(R.IntakeFunction.Properties.ReservedConcurrentExecutions > 0);
+  const access = R.IntakeApi.Properties.AccessLogSettings;
+  assert.deepEqual(access.DestinationArn, {"Fn::GetAtt":"ApiAccessLogGroup.Arn"});
+  assert.doesNotMatch(access.Format, /sourceIp|userAgent|identity/, "no IP/UA in access logs until retention is decided");
+  assert.ok(R.ApiAccessLogGroup.Properties.RetentionInDays > 0);
+  assert.equal(template.Parameters.ReservedConcurrency.Default, 4);
+  assert.deepEqual(R.IntakeFunction.Properties.ReservedConcurrentExecutions,
+    {"Fn::If":["ReserveConcurrency", {"Fn::Ref":"ReservedConcurrency"}, {"Fn::Ref":"AWS::NoValue"}]});
+  assert.equal(R.IntakeFunction.Metadata.BuildMethod, "makefile");
 });

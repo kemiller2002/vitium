@@ -11,6 +11,14 @@ import { intakeFailure, failureBody } from "./errors.mjs";
 
 const CANONICAL_ORIGIN = "https://vitium.echelonfoundry.com";
 const CHALLENGE_HOST = "vitium.echelonfoundry.com";
+// H-01: a staging stack may use one dedicated https subdomain of the canonical site host.
+const STAGING_HOST = /^[a-z0-9-]+\.vitium\.echelonfoundry\.com$/;
+
+/** Pure: is (origin, host) acceptable for this environment? Anything but staging is canonical-only. */
+export function originAllowed({environment, origin, host}) {
+  if (origin === CANONICAL_ORIGIN && host === CHALLENGE_HOST) return true;
+  return environment === "staging" && typeof host === "string" && STAGING_HOST.test(host) && origin === "https://" + host;
+}
 
 /** Pure: environment -> Result<config>. Exact-match values; no defaults for secrets. */
 export function readConfig(env) {
@@ -20,7 +28,7 @@ export function readConfig(env) {
   };
   const complete = typeof config.tableName === "string" && config.tableName &&
     typeof config.secretArn === "string" && /^arn:aws[a-zA-Z-]*:secretsmanager:/.test(config.secretArn) &&
-    config.allowedOrigin === CANONICAL_ORIGIN && config.expectedHostname === CHALLENGE_HOST;
+    originAllowed({environment: env.ENVIRONMENT_NAME, origin: config.allowedOrigin, host: config.expectedHostname});
   return complete ? {ok:true, value:Object.freeze(config)} : {ok:false, error:"configuration_incomplete"};
 }
 

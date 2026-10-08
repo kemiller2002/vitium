@@ -11,10 +11,51 @@ Parameters:
     Type: String
     Default: staging
     AllowedValues: [staging, production]
+  # H-01: staging may use a dedicated https subdomain of vitium.echelonfoundry.com (no
+  # wildcard, no other domain). Production is pinned to the canonical values by Rules below.
+  # No staging hostname has been chosen; the defaults are the production values.
   IntakeOrigin:
     Type: String
     Default: https://vitium.echelonfoundry.com
-    AllowedValues: [https://vitium.echelonfoundry.com]
+    AllowedPattern: '^https://([a-z0-9-]+\.)?vitium\.echelonfoundry\.com$'
+  ChallengeHostname:
+    Type: String
+    Default: vitium.echelonfoundry.com
+    AllowedPattern: '^([a-z0-9-]+\.)?vitium\.echelonfoundry\.com$'
+    Description: Hostname Turnstile must report for a valid token; must be the host of IntakeOrigin.
+  # H-09: deletion protection is on unless an operator explicitly turns it off for a
+  # disposable staging table. Production cannot turn it off (Rules).
+  TableDeletionProtection:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+  # H-03: accounts with the default concurrency quota of 10 cannot reserve any (AWS keeps
+  # 10 unreserved). 0 means "do not reserve" for such accounts; the API throttle still applies.
+  ReservedConcurrency:
+    Type: Number
+    Default: 4
+    MinValue: 0
+    MaxValue: 20
+  # H-14: optional IAM permissions boundary for the function role (ops proposal).
+  PermissionsBoundaryArn:
+    Type: String
+    Default: ''
+    AllowedPattern: '^$|^arn:aws[a-zA-Z-]*:iam::[0-9]{12}:policy/.+$'
+
+Rules:
+  ProductionUsesCanonicalOrigin:
+    RuleCondition: !Equals [!Ref EnvironmentName, production]
+    Assertions:
+      - Assert: !Equals [!Ref IntakeOrigin, https://vitium.echelonfoundry.com]
+        AssertDescription: Production intake must accept only the canonical site origin.
+      - Assert: !Equals [!Ref ChallengeHostname, vitium.echelonfoundry.com]
+        AssertDescription: Production challenge hostname must be the canonical site host.
+      - Assert: !Equals [!Ref TableDeletionProtection, 'true']
+        AssertDescription: Production table must keep deletion protection.
+
+Conditions:
+  ReserveConcurrency: !Not [!Equals [!Ref ReservedConcurrency, 0]]
+  HasPermissionsBoundary: !Not [!Equals [!Ref PermissionsBoundaryArn, '']]
 
 Resources:
   ReportsTable:
@@ -23,7 +64,7 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       BillingMode: PAY_PER_REQUEST
-      DeletionProtectionEnabled: true
+      DeletionProtectionEnabled: !Ref TableDeletionProtection
       AttributeDefinitions:
         - AttributeName: pk
           AttributeType: S
@@ -83,12 +124,22 @@ Resources:
       DefaultRouteSettings:
         ThrottlingRateLimit: 2
         ThrottlingBurstLimit: 4
+      # H-05: access log without source IP, user agent or path parameters (IP retention is
+      # undecided, VIT-OQ-009). Request bodies are never in access logs.
+      AccessLogSettings:
+        DestinationArn: !GetAtt ApiAccessLogGroup.Arn
+        Format: '{"requestId":"$context.requestId","routeKey":"$context.routeKey","status":"$context.status","responseLength":"$context.responseLength","integrationError":"$context.integrationErrorMessage"}'
 
   IntakeFunction:
     Type: AWS::Serverless::Function
     Properties:
       Description: Accepts private observations only after Cloudflare Turnstile verification.
-      FunctionName: !Sub 'vitium-intake-${EnvironmentName}'
+      # No fixed FunctionName: a generated name (<stack>-IntakeFunction-<suffix>) cannot
+      # collide between two stacks in one account/region and keeps the ops execution-role
+      # prefix scope (stack vitium-intake-staging -> vitium-intake-staging-*).
+      # H-04: build with the Makefile in service/, which copies an explicit allowlist of the
+      # public intake modules. Operator tooling (triage-cli.mjs, triage.mjs, lifecycle.mjs)
+      # and anything importing ../schemas is not shipped in the public Lambda artifact.
       CodeUri: ../../service/
       Handler: aws-handler.handler
       Runtime: nodejs22.x
@@ -96,9 +147,10 @@ Resources:
       MemorySize: 256
       Timeout: 15
       # Bounds concurrent work (and therefore DynamoDB write rate and cost) independent of
-      # the API throttle. Request bodies are capped at 16 KiB in service/http.mjs before
+      # the API throttle. Request bodies are capped at 24 KiB (service/limits.mjs) before
       # parsing; API Gateway HTTP APIs have a fixed 10 MB payload limit that cannot be lowered.
-      ReservedConcurrentExecutions: 4
+      ReservedConcurrentExecutions: !If [ReserveConcurrency, !Ref ReservedConcurrency, !Ref AWS::NoValue]
+      PermissionsBoundary: !If [HasPermissionsBoundary, !Ref PermissionsBoundaryArn, !Ref AWS::NoValue]
       LoggingConfig:
         LogGroup: !Ref IntakeFunctionLogGroup
         LogFormat: Text
@@ -107,7 +159,8 @@ Resources:
           REPORTS_TABLE_NAME: !Ref ReportsTable
           TURNSTILE_SECRET_ARN: !Ref TurnstileSecretArn
           ALLOWED_ORIGIN: !Ref IntakeOrigin
-          CHALLENGE_HOSTNAME: vitium.echelonfoundry.com
+          CHALLENGE_HOSTNAME: !Ref ChallengeHostname
+          ENVIRONMENT_NAME: !Ref EnvironmentName
       # Least privilege: conditional create + projected single-key replay read only.
       # No Query/Scan/Update/Delete, no index access, no ReturnValues. The fine-grained
       # condition keys below are written per AWS IAM docs but have NOT been exercised
@@ -150,6 +203,8 @@ Resources:
             Path: /api/v1/reports
             Method: POST
             PayloadFormatVersion: '2.0'
+    Metadata:
+      BuildMethod: makefile
 
   IntakeFunctionLogGroup:
     Type: AWS::Logs::LogGroup
@@ -159,7 +214,15 @@ Resources:
       # Fixed name so the group exists (with retention) before the first invocation.
       # 7 days is PROVISIONAL pending VIT-OQ-009. Log lines are allow-listed metadata only
       # (service/adapters/safe-log.mjs): no report text, tokens, keys or IP addresses.
-      LogGroupName: !Sub '/aws/lambda/vitium-intake-${EnvironmentName}'
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-intake'
+      RetentionInDays: 7
+
+  ApiAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      LogGroupName: !Sub '/aws/apigateway/${AWS::StackName}-access'
       RetentionInDays: 7
 
 Outputs:
