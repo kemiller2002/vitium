@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://echelonfoundry.com/schemas/vitium/intake-request/1.0",
+  "title": "Vitium public intake request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "product",
+    "impact",
+    "title",
+    "actual",
+    "expected",
+    "privacyAcknowledged",
+    "challengeToken"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "product": {
+      "type": "string",
+      "enum": [
+        "Arca",
+        "Chrona",
+        "Dokimos",
+        "Fides",
+        "Folio",
+        "Forma",
+        "Forma Studio",
+        "HelixNote",
+        "Ordo",
+        "Praxis",
+        "Signal",
+        "Summa",
+        "Other / not sure"
+      ]
+    },
+    "impact": {
+      "type": "string",
+      "enum": [
+        "Cannot use the feature",
+        "Can use it with a workaround",
+        "Minor inconvenience or display problem",
+        "Not sure"
+      ]
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "actual": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1200
+    },
+    "expected": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1200
+    },
+    "steps": {
+      "type": "string",
+      "maxLength": 900
+    },
+    "pageUrl": {
+      "type": "string",
+      "format": "uri",
+      "maxLength": 2000,
+      "description": "Server removes credentials, query strings and fragments."
+    },
+    "privacyAcknowledged": {
+      "const": true
+    },
+    "challengeToken": {
+      "type": "string",
+      "minLength": 12,
+      "maxLength": 4096,
+      "writeOnly": true
+    }
+  },
+  "description": "Anonymous intake transport; challengeToken must never be persisted, logged or included in a receipt. Idempotency-Key UUID belongs in the HTTP header."
+}
