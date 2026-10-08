@@ -27,6 +27,10 @@ export function makeIntake({store, verifyChallenge, now = () => new Date().toISO
         visibility: "private",
         kind: "observation",
         status: "received",
+        state: "received",
+        revision: 0,
+        history: [],
+        reviewQueuePk: "QUEUE#pending",
         receivedAt: now()
       };
       let result;
