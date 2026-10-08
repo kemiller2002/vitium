@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import * as site from "../../site/submission.mjs";
 import * as domain from "../../service/report-domain.mjs";
 import { defectStates } from "../../service/triage.mjs";
+import { CANARY } from "../verification/canaries.mjs";
 import { readRepo, readJson, schemaValidator, selectOptions, attempt, CHALLENGE } from "../verification/contracts.mjs";
 
 const html = readRepo("site/index.html");
@@ -76,7 +77,7 @@ test("VIT-API-002 / VIT-UX-007: a page URL accepted by the site is accepted by t
 });
 
 test("VIT-AC-008 / VIT-NFR-004: site and service agree on refusing credential-looking text", { todo: "finding VF-004" }, () => {
-  for (const secret of ["sk-abcdefghijklmnopqrstuvwxyz", "password: hunter2hunter2", "ghp_abcdefghijklmnopqrstuvwxyz0123"]) {
+  for (const secret of [CANARY.openAiStyle, CANARY.passwordAssignment, CANARY.githubClassicShort]) {
     const server = serviceNormalize({ schemaVersion: "1.0", ...formInput, actual: secret });
     assert.equal(server.ok, false, "precondition: service refuses " + secret.slice(0, 6));
     const client = attempt(site.normalizeReport)({ ...formInput, actual: secret });

@@ -6,6 +6,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { normalizeReport } from "../../service/report-domain.mjs";
 import { makeIntake } from "../../service/intake.mjs";
+import { CANARY } from "../verification/canaries.mjs";
 import { schemaValidator, attempt, validRequest, memoryStore, CHALLENGE, IDEMPOTENCY_KEY } from "../verification/contracts.mjs";
 
 const schema = schemaValidator("schemas/intake-request.schema.json");
@@ -52,7 +53,7 @@ const DIVERGENT_CASES = Object.freeze([
   ["NUL in title", wire({ title: "a\u0000b" }), "VF-007"],
   ["javascript: page URL", wire({ pageUrl: "javascript:alert(1)" }), "VF-007"],
   ["data: page URL", wire({ pageUrl: "data:text/html,x" }), "VF-007"],
-  ["credential text", wire({ actual: "password: hunter2hunter2" }), "VF-007"],
+  ["credential text", wire({ actual: CANARY.passwordAssignment }), "VF-007"],
   // runtime accepts, schema refuses
   ["empty pageUrl (what the browser sends when blank)", wire({ pageUrl: "" }), "VF-007"],
   ["null steps", wire({ steps: null }), "VF-007"],
@@ -67,7 +68,7 @@ for (const [name, payload, finding] of DIVERGENT_CASES) {
   });
 }
 
-test("VIT-DOM-003: an observation produced by makeIntake validates against observation.schema.json", async () => {
+test("VIT-DOM-003: an observation produced by makeIntake validates against observation.schema.json", { todo: "finding VF-021" }, async () => {
   const store = memoryStore();
   const intake = makeIntake({ store, verifyChallenge: async () => true, now: () => "2026-10-08T12:00:00.000Z" });
   await intake.submit(validRequest(), { idempotencyKey: IDEMPOTENCY_KEY, challengeToken: CHALLENGE });

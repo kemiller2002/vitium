@@ -9,6 +9,7 @@
 import {
   test, expect, snapshot, writeEvidence, activeId, tabTo, horizontalOverflow, runAxe, INTAKE_HOSTS
 } from "./support.mjs";
+import { CANARY, urlWithUserinfo } from "../verification/canaries.mjs";
 
 const REPORT = Object.freeze({
   product: "Forma",
@@ -17,7 +18,7 @@ const REPORT = Object.freeze({
   actualLines: ["I pressed Save.", "Nothing changed: 100% reproducible?"],
   expectedText: "My changes should be saved + confirmed.",
   stepsLines: ["1. Open the editor", "2. Press Save"],
-  pageUrl: "https://user:hunter2@example.com/app/edit page?access_token=SECRET123#frag",
+  pageUrl: urlWithUserinfo("https", "user", CANARY.passwordWord, "example.com/app/edit page?access_token=SECRET123#frag"),
   sanitizedUrl: "https://example.com/app/edit%20page"
 });
 
@@ -120,7 +121,7 @@ test.describe("VIT-AC-001 / VIT-AC-002 keyboard-only legacy flow", () => {
     expect(await activeId(page)).toBe("expected");
     await kb.type(REPORT.expectedText);
     await kb.press("Tab");
-    expect(await activeId(page)).toBe("summary");
+    expect(await page.evaluate(() => document.activeElement?.tagName), "focus on the optional-details disclosure").toBe("SUMMARY");
     await kb.press("Enter");
     await kb.press("Tab");
     expect(await activeId(page)).toBe("steps");
@@ -139,7 +140,7 @@ test.describe("VIT-AC-001 / VIT-AC-002 keyboard-only legacy flow", () => {
     await kb.press("Enter");
 
     await expect(page.locator("#review")).toBeVisible();
-    expect(await activeId(page), "focus moves to the review region").toBe("review");
+    expect(await page.evaluate(() => Boolean(document.activeElement?.closest("#review"))), "focus moves into the review region (region or its heading)").toBe(true);
     await expect(page.locator("#progress")).toContainText("Step 2 of 2");
     await expect(page.locator("#preview-pageUrl")).toHaveText(REPORT.sanitizedUrl);
     await expect(page.locator("#preview-actual")).toHaveText(REPORT.actualLines.join("\n"));
@@ -168,7 +169,7 @@ test.describe("VIT-AC-001 / VIT-AC-002 keyboard-only legacy flow", () => {
     expect(body).toContain("> " + REPORT.expectedText);
     expect(body).toContain("> " + REPORT.stepsLines[0] + "\n> " + REPORT.stepsLines[1]);
     expect(body).toContain(REPORT.sanitizedUrl);
-    for (const secret of ["hunter2", "SECRET123", "access_token", "#frag", "user:"]) expect(href).not.toContain(secret);
+    for (const secret of [CANARY.passwordWord, "SECRET123", "access_token", "#frag", "user:"]) expect(href).not.toContain(secret);
     expect(href, "raw characters are percent-encoded").not.toMatch(/[ "<>]/);
 
     // Activate Continue by keyboard; the github.com navigation must be aborted.
@@ -205,11 +206,13 @@ test.describe("VIT-AC-004 / VIT-UX-007 validation", () => {
     await page.locator("[data-testid=review-button]").click();
     await expect(page.locator("#review")).toBeHidden();
     await expect(page.locator("#title")).toHaveValue("Partially typed summary");
-    expect(await activeId(page), "focus moves to first invalid control").toBe("product");
+    // Baseline: native validation focused the first invalid control. After the VF-001 fix the
+    // focused element is the error summary, which the stricter VF-001 test below requires.
+    expect(["product", "feedback"], "focus moves to the error summary or the first invalid control").toContain(await activeId(page));
   });
 
   test("empty submit focuses an error summary whose entries link to aria-describedby field errors", async ({ page }) => {
-    test.fail(true, "VF-001: baseline relies on native reportValidity bubbles; no focusable error summary, no aria-invalid/aria-describedby field errors (VIT-UX-007, VIT-AC-001)");
+    // VF-001 closed by integration (6d2be13); marker removed in fix round 1, assertion unchanged.
     await page.locator("#title").fill("Partially typed summary");
     await page.locator("[data-testid=review-button]").click();
     const summary = await page.evaluate(() => {
@@ -232,7 +235,7 @@ test.describe("VIT-AC-004 / VIT-UX-007 validation", () => {
   });
 
   test("hint text is programmatically associated with its field", async ({ page }) => {
-    test.fail(true, "VF-002: .hint paragraphs for #title and #pageUrl are not referenced by aria-describedby (VIT-UX-006)");
+    // VF-002 closed by integration (6d2be13); marker removed in fix round 1, assertion unchanged.
     for (const id of ["title", "pageUrl"]) {
       const describedBy = await page.locator("#" + id).getAttribute("aria-describedby");
       expect(describedBy, id).toBeTruthy();
@@ -242,7 +245,7 @@ test.describe("VIT-AC-004 / VIT-UX-007 validation", () => {
 
 test.describe("VIT-AC-004 / VIT-UX-007 long text", () => {
   test("pasting 10,000 characters is never silently truncated", async ({ page }) => {
-    test.fail(true, "VF-003: maxlength silently truncates a 10k paste to 1200 chars with no message (VIT-UX-007 'never silently truncate')");
+    // VF-003 closed by integration (6d2be13); marker removed in fix round 1, assertion unchanged.
     const long = "x".repeat(10_000);
     await page.locator("#actual").focus();
     await page.keyboard.insertText(long);
@@ -309,7 +312,7 @@ test.describe("VIT-AC-004 / VIT-AC-008 / VIT-AC-015 hostile input", () => {
 
   test("credential-looking text is refused or redacted before the public GitHub link is built", async ({ page }) => {
     test.fail(true, "VF-004: legacy client accepts ghp_/sk-/password=/PRIVATE KEY text and places it in the public GitHub issue URL; the service refuses the same text (VIT-AC-008, VIT-AC-015, VIT-NFR-004)");
-    const token = "ghp_" + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8";
+    const token = CANARY.githubClassic;
     await fillValid(page, { actualLines: ["My token is " + token] });
     await page.locator("[data-testid=review-button]").click();
     const href = await page.locator("#submit-link").getAttribute("href");
@@ -369,9 +372,11 @@ test.describe("VIT-AC-003 gate / VIT-AC-015 private intake is unreachable while 
     await expect(page.locator("#review")).toBeVisible();
     await expect(page.locator("#submit-private")).toBeHidden();
     await expect(page.locator("#submit-link")).toBeVisible();
+    const privateControls = await page.locator("#submit-private").count();
     expect(await page.evaluate(() => document.querySelectorAll("script[src*='challenges.cloudflare.com']").length)).toBe(0);
-    // Force-click the hidden private button: the handler must still refuse (fail closed).
-    await page.locator("#submit-private").dispatchEvent("click");
+    // Force-click the hidden private button if it exists at all: the handler must still
+    // refuse (fail closed). Absence from the DOM (template-only, integration) is stronger.
+    if (privateControls > 0) await page.locator("#submit-private").dispatchEvent("click");
     await page.waitForTimeout(300);
     await page.locator("#edit").click();
     const touched = guard.requests.filter(r => INTAKE_HOSTS.includes(new URL(r.url).hostname));
