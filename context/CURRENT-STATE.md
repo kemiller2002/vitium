@@ -40,3 +40,11 @@ Execute and verify Conditor installation from the manifest, follow the scaffold 
 - [Vitium public site run 37758370436](https://github.com/kemiller2002/vitium/actions/runs/37758370436) **failed**: Node test step completed **13 tests, 13 passed, 0 failed**, but `actions/configure-pages@v5` returned `Get Pages site failed ... Not Found`. The logs explicitly instruct enabling Pages for GitHub Actions in repository settings. Upload and deploy were skipped.
 - Do not call the site deployed or the HTTPS custom hostname live based on passing Node tests. Real browser, DNS, TLS and deployment remain **unverified**.
 - GitHub Actions lacks sufficient special token privileges to bootstrap Pages via `enablement:true` with its default `GITHUB_TOKEN`. Operator must enable Pages first; do not add a secret merely to hide the settings requirement.
+
+## Requirements audit (2026-10-08)
+
+- Proposed complete product-scope requirements drafted in `docs/requirements/VITIUM-REQUIREMENTS.md` (**79 requirements**, 8 groups, P0/P1/P2); not approved or verified as implemented.
+- `docs/requirements/VITIUM-ACCEPTANCE.md` proposes **31 scenarios** with positive, negative, privacy, concurrency, integration and release-readiness checks. No end-to-end scenarios are claimed to have passed.
+- `docs/requirements/VITIUM-OPEN-DECISIONS.md` records **18 open product/architecture/security decisions**. No authorizations or operator commitments have been assumed.
+- Issues #8–#13 now track domain modeling, embedded reporting, source synchronization, regression evidence, reporter follow-up and production operations in addition to the original #1–#7.
+- Static requirements integrity checks were added to `npm test`; those checks prove the written baseline is internally structured, **not** that behavior has been built or independently verified.
