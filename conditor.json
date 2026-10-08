@@ -1,5 +1,5 @@
 {
-  "$schema": "https://raw.githubusercontent.com/kemiller2002/conditor/main/schemas/conditor.schema.json",
+  "$schema": "https://raw.githubusercontent.com/kemiller2002/conditor/8dffc14156a23fc977c71e20f7a99821722e6a82/schemas/conditor.schema.json",
   "schemaVersion": 1,
   "name": "vitium",
   "components": [
