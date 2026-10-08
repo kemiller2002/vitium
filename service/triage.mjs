@@ -21,7 +21,7 @@ const graph=Object.freeze({
   closed:["reopened"],
   duplicate:["reopened"],
   "not-reproducible":["reopened"],
-  reopened:["triaged","reproducing"]
+  reopened:["triaged","reproducing","in-progress"]
 });
 export class TransitionError extends Error {
   constructor(message){super(message);this.name="TransitionError";}
@@ -41,8 +41,35 @@ export function transition(record, command) {
   if (!observation && !defectStates.includes(command.to)) throw new TransitionError("Cannot cross record kinds.");
   if (observation && !observationStates.includes(command.to)) throw new TransitionError("Cannot cross record kinds.");
   if (typeof command.reason!=="string" || !command.reason.trim() || command.reason.length>1000) throw new TransitionError("A bounded reason is required.");
-  if (command.to==="resolved" && (command.role!=="verifier" && command.role!=="administrator" || !command.evidenceId)) {
-    throw new TransitionError("Independent verification evidence is required.");
+  // Candidate state constraints: final authority belongs to qualified Ordo, not this helper.
+  const has = value => typeof value==="string" && value.trim().length>0;
+  const verifying = record.state==="awaiting-verification" &&
+    ["resolved","in-progress"].includes(command.to);
+  if (command.to==="awaiting-verification" && (!has(command.attemptId) || !has(command.candidateRevision) || !has(command.evidenceId))) {
+    throw new TransitionError("Candidate attempt, revision and verification request evidence are required.");
+  }
+  if (verifying) {
+    if (!["verifier","administrator"].includes(command.role) || !has(command.evidenceId) ||
+        !has(command.attemptId) || !has(command.candidateRevision)) {
+      throw new TransitionError("Independent verifier, attempt, revision and result evidence are required.");
+    }
+    const expectedOutcome=command.to==="resolved" ? "passed" : "failed";
+    if (command.verificationOutcome!==expectedOutcome) {
+      throw new TransitionError("Verification outcome must match the requested transition.");
+    }
+    const candidate=[...(record.history||[])].reverse().find(event=>event.to==="awaiting-verification");
+    if (candidate && (candidate.attemptId!==command.attemptId ||
+      candidate.candidateRevision!==command.candidateRevision)) {
+      throw new TransitionError("Verification result must refer to the submitted candidate attempt and revision.");
+    }
+  }
+  if (command.to==="reopened" &&
+      (!has(command.evidenceId) || !has(command.affectedRelease))) {
+    throw new TransitionError("Reopening requires recurrence evidence and affected release.");
+  }
+  if (record.state==="reopened" && command.to==="in-progress" &&
+      (!has(command.attemptId) || !has(command.workItemId))) {
+    throw new TransitionError("Resuming a reopened defect requires a new work attempt and work item.");
   }
   if (command.to==="confirmed" && !command.evidenceId) throw new TransitionError("Reproduction evidence required.");
   if (command.to==="classified" && !command.classification) throw new TransitionError("Classification required.");
@@ -50,7 +77,13 @@ export function transition(record, command) {
   const event=Object.freeze({
     from:record.state,to:command.to,actor:command.actor,role:command.role,
     reason:command.reason.trim(),evidenceId:command.evidenceId||null,
-    classification:command.classification||null,occurredAt:command.occurredAt,
+    classification:command.classification||null,
+    verificationOutcome:command.verificationOutcome||null,
+    attemptId:command.attemptId||null,
+    candidateRevision:command.candidateRevision||null,
+    workItemId:command.workItemId||null,
+    affectedRelease:command.affectedRelease||null,
+    occurredAt:command.occurredAt,
     sequence:record.revision+1
   });
   return Object.freeze({
