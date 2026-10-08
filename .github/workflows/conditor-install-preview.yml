@@ -49,15 +49,19 @@ jobs:
               echo "::error::Native $repo executable not found in its attested archive"
               exit 1
             fi
-            install -m 755 "$executable" "$RUNNER_TEMP/bin/$repo"
-            # Native archives may ship a launcher plus a neighboring *-bin executable.
-            sidecar="$(dirname "$executable")/$repo-bin"
-            if [ -f "$sidecar" ]; then
-              install -m 755 "$sidecar" "$RUNNER_TEMP/bin/$repo-bin"
-              # The Ordo release's legacy launcher can target an unbuilt npm
-              # dist/MANIFEST. Use its verified native sidecar for lifecycle.
-              if [ "$repo" = "ordo" ]; then
-                install -m 755 "$sidecar" "$RUNNER_TEMP/bin/ordo"
+            if [ "$repo" = "ordo" ]; then
+              # Ordo's native distribution requires its adjacent dist/ payload;
+              # this mirrors the officially documented SDE_PAYLOAD_DIR launcher.
+              tool_root="$RUNNER_TEMP/ordo-native"
+              mkdir -p "$tool_root"
+              cp -a "$(dirname "$executable")"/. "$tool_root/"
+              printf '#!/bin/sh\nSDE_PAYLOAD_DIR="%s/dist" exec "%s/ordo" "$@"\n' "$tool_root" "$tool_root" > "$RUNNER_TEMP/bin/ordo"
+              chmod +x "$RUNNER_TEMP/bin/ordo"
+            else
+              install -m 755 "$executable" "$RUNNER_TEMP/bin/$repo"
+              sidecar="$(dirname "$executable")/$repo-bin"
+              if [ -f "$sidecar" ]; then
+                install -m 755 "$sidecar" "$RUNNER_TEMP/bin/$repo-bin"
               fi
             fi
           done
