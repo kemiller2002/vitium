@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "1.0.0",
+  "protocolVersion": "1.0.0",
+  "repository": "vitium",
+  "actor": "ros-bootstrap",
+  "startedAt": "2026-10-08T12:51:23.048Z",
+  "updatedAt": "2026-10-08T12:51:23.048Z",
+  "baselineDirtyPaths": [],
+  "workItems": [
+    {
+      "id": "ROS-INSTALL-3-7-2",
+      "type": "mechanical",
+      "state": "complete",
+      "semanticState": "complete",
+      "evidence": [
+        {
+          "type": "installation",
+          "path": ".ros/installation.json"
+        }
+      ],
+      "updatedAt": "2026-10-08T12:51:23.048Z",
+      "completedAt": "2026-10-08T12:51:23.048Z"
+    }
+  ]
+}
