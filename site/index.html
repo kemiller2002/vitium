@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
   <meta name="description" content="Report a problem with Echelon Foundry software.">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' https://cdn.jsdelivr.net; script-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'self'; form-action https://github.com">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' https://cdn.jsdelivr.net https://challenges.cloudflare.com; script-src 'self' https://challenges.cloudflare.com; img-src 'self' data: https://challenges.cloudflare.com; connect-src 'self' https://intake.vitium.echelonfoundry.com https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; object-src 'none'; base-uri 'self'; form-action https://github.com">
   <link rel="canonical" href="https://vitium.echelonfoundry.com/">
   <meta property="og:url" content="https://vitium.echelonfoundry.com/">
   <meta property="og:title" content="Report a defect · Vitium">
@@ -37,7 +37,7 @@
           <li><strong>How to repeat it</strong><span>Include steps if you know them. This is optional.</span></li>
         </ol>
       </div>
-      <div class="privacy-note"><span aria-hidden="true">ⓘ</span><p><strong>Public reports</strong><br>GitHub Issues in this repository are public. Do not include passwords, private customer data, access tokens, or sensitive screenshots.</p></div>
+      <div class="privacy-note"><span aria-hidden="true">ⓘ</span><p><strong id="privacy-heading">Public reports</strong><br><span id="privacy-description">GitHub Issues in this repository are public. Do not include passwords, private customer data, access tokens, or sensitive screenshots.</span></p></div>
     </aside>
     <section class="report-shell" id="report" aria-labelledby="form-title">
       <div class="report-head">
@@ -105,7 +105,7 @@
         <button class="primary-button" type="submit" data-testid="review-button">Review my report <span aria-hidden="true">→</span></button>
       </form>
       <section id="review" class="review" tabindex="-1" aria-labelledby="review-title" hidden>
-        <span class="overline">Review before publishing</span>
+        <span class="overline" id="review-overline">Review before publishing</span>
         <h3 id="review-title">Does this look right?</h3>
         <dl class="report-preview">
           <div><dt>Application</dt><dd id="preview-product"></dd></div>
@@ -116,16 +116,31 @@
           <div id="preview-steps-row" hidden><dt>Steps to reproduce</dt><dd id="preview-steps"></dd></div>
           <div id="preview-url-row" hidden><dt>Page URL</dt><dd id="preview-pageUrl"></dd></div>
         </dl>
-        <div class="destination-note">
+        <div class="destination-note" id="github-destination">
           <strong>Next: GitHub</strong>
           <p>Selecting Continue opens GitHub with your report filled in. You must sign in to GitHub and select <strong>Submit new issue</strong> there to finish. The report is not yet submitted.</p>
+        </div>
+        <div class="destination-note" id="private-destination" hidden>
+          <strong>Private report submission</strong>
+          <p>This report will be stored privately for Echelon triage, not published to GitHub. Please complete the anti-abuse verification below. Submission does not guarantee a fix or personal response.</p>
+          <div id="turnstile-challenge" aria-label="Human verification"></div>
         </div>
         <div class="review-actions">
           <button type="button" class="secondary-button" id="edit">← Edit report</button>
           <a class="primary-button" id="submit-link" data-testid="github-submit" href="https://github.com/kemiller2002/vitium/issues/new" target="_blank" rel="noopener noreferrer">Continue to GitHub <span aria-hidden="true">↗</span></a>
+          <button type="button" class="primary-button" id="submit-private" data-testid="private-submit" hidden>Send private report <span aria-hidden="true">→</span></button>
         </div>
       </section>
-      <div class="report-foot">No account needed to fill out this form. <strong>A GitHub account is currently required to submit.</strong></div>
+      <section id="private-success" class="review" aria-labelledby="success-title" tabindex="-1" hidden>
+        <span class="overline">Report received</span>
+        <h3 id="success-title">Thank you for reporting this.</h3>
+        <p>We have durably received your report for triage. This does not mean the defect has been verified or fixed.</p>
+        <p><strong>Keep this reference:</strong> <code id="report-reference"></code></p>
+        <p class="hint">This receipt does not provide access to private status information. No fix date or reply is guaranteed.</p>
+        <button type="button" class="secondary-button" id="report-another">Report another problem</button>
+      </section>
+      <div class="report-foot" id="github-foot">No account needed to fill out this form. <strong>A GitHub account is currently required to submit.</strong></div>
+      <div class="report-foot" id="private-foot" hidden>Private submission does not require a GitHub account. Never include credentials or sensitive personal data.</div>
     </section>
   </main>
   <footer class="footer"><span>Vitium · Echelon Foundry</span><span>Better reports. Better fixes.</span></footer>
