@@ -2,6 +2,8 @@
 
 Date: 2026-10-08
 
+**Canonical domain:** https://vitium.echelonfoundry.com/ (configured in source; DNS/Pages/HTTPS not verified).
+
 ## Implemented in the repository
 
 - Public, responsive, two-step reporting form in `site/index.html`.
@@ -11,10 +13,14 @@ Date: 2026-10-08
 - A versioned internal defect JSON Schema.
 - Node unit tests for the report normalization/link contract.
 - GitHub Actions files for CI tests and GitHub Pages deployment.
+- Conditor lifecycle manifest declared, not installed or verified.
+- Echelon governance and migration contract documented.
 
 ## Not confirmed or not implemented
 
-- GitHub Pages Settings may still require enabling the Actions deployment source.
+- GitHub Pages Settings must configure custom domain `vitium.echelonfoundry.com` and GitHub Actions as source. DNS CNAME and HTTPS still require setup/verification.
+- Conditor needs a real tool-run installation and verified lock; no lifecycle installation is evidenced.
+- Forma 0.3.0 CSS in the current frontend has not yet been proved a valid pinned deployed asset or upgraded to the Echelon 0.4.1 target. The JavaScript form must migrate to the Conditor-managed F#/Limen application baseline.
 - CI and deployment have not been verified as successful.
 - Browser automation, axe a11y verification and screenshots are not yet executed.
 - Direct submission without GitHub (issue #1).
@@ -25,4 +31,4 @@ Date: 2026-10-08
 
 ## Immediate next action
 
-Enable GitHub Pages source **GitHub Actions**, run the quality-gates workflow and verify the hosted form in a real browser before calling it live. For reporting without GitHub accounts, implement issue #1 first.
+Execute and verify Conditor installation from the manifest, follow the scaffold migration plan in `docs/GOVERNANCE.md`, configure `vitium.echelonfoundry.com` per `DEPLOYMENT.md`, and pass all tests before calling the site live. For reporting without GitHub accounts, implement issue #1 first.
