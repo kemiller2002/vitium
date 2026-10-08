@@ -1,5 +1,8 @@
 // Pure reporting contract. No browser APIs, network effects or persisted drafts.
 export const ISSUE_REPOSITORY = "kemiller2002/vitium";
+// PRODUCTS and IMPACTS are the display names of schemas/products.v1.json (canonical
+// registry, VIT-DOM-004). Pages serves only site/, so they are constants here;
+// tests/domain-registry.test.mjs fails if they diverge from the registry or service list.
 export const PRODUCTS = Object.freeze([
   "Arca", "Chrona", "Dokimos", "Fides", "Folio", "Forma",
   "Forma Studio", "HelixNote", "Ordo", "Praxis", "Signal", "Summa",
