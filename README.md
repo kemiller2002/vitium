@@ -22,6 +22,12 @@ The first delivery is a public, accessible report form in `site/`. It collects a
 
 The canonical publishing address is **https://vitium.echelonfoundry.com/**. Hosting currently targets GitHub Pages via `.github/workflows/pages.yml`. Configuration of the GitHub Pages custom domain, DNS, and enforced HTTPS must be verified independently; see [DEPLOYMENT.md](DEPLOYMENT.md).
 
+## NuGet packages for Echelon build systems
+
+Two F# preview libraries now live in `src/`: `EchelonFoundry.Vitium.Contracts` and `EchelonFoundry.Vitium.Client`. They compile into versioned NuGet artifacts via [the package CI workflow](.github/workflows/nuget-ci.yml). [Package setup, local build, trusted publishing and Praxis integration instructions](docs/NUGET-PACKAGES.md) explain how to use them.
+
+**Not yet published or operational:** GitHub Actions builds and packs candidate artifacts but does not publish to NuGet.org. The machine reporting API does not exist as a deployed service. A guarded manual publication workflow requires an owner-approved distribution/license decision, an approved GitHub environment, a matching release tag and NuGet Trusted Publishing configuration.
+
 ## Engineering governance
 
 Vitium follows the Echelon engineering stack. Conditor is the authority for installing and upgrading repository lifecycle capabilities; its manifest is `conditor.json`. **The manifest declares the target state. No Conditor installation or successful verification has been demonstrated here.** Do not create `.conditor/lock.json` or tool-owned files by hand.
