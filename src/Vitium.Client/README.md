@@ -15,7 +15,8 @@ open System
 open System.Net.Http
 open EchelonFoundry.Vitium.Client
 
-let http = new HttpClient(BaseAddress = Uri("https://your-approved-vitium-api.example"))
+let http = new HttpClient()
+http.BaseAddress <- Uri("https://your-approved-vitium-api.example/")
 // Provide IAccessTokenProvider through your trusted workload identity implementation.
 let client = VitiumClient(http, tokenProvider)
 ```
