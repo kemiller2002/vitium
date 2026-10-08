@@ -31,7 +31,9 @@ test("reproduction and closure dispositions require evidence and retain history"
   assert.throws(()=>transition(caseOf("defect","triaged"),cmd("confirmed")),/Reproduction/);
   const verified=transition(caseOf("defect","triaged"),cmd("confirmed",{evidenceId:"repro-1"}));
   assert.equal(verified.history.length,1);
-  const reopened=transition(caseOf("defect","closed"),cmd("reopened",{reason:"Regression on a new release"}));
+  // Semantics change (DOM-001): reopening now requires new-occurrence/triage-correction evidence.
+  assert.throws(()=>transition(caseOf("defect","closed"),cmd("reopened",{reason:"Regression on a new release"})),/New occurrence evidence/);
+  const reopened=transition(caseOf("defect","closed"),cmd("reopened",{reason:"Regression on a new release",evidenceId:"occurrence-7"}));
   assert.equal(reopened.state,"reopened");
   assert.equal(reopened.history[0].from,"closed");
 });

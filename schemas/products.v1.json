@@ -1,0 +1,34 @@
+{
+  "$schema": "./products.schema.v1.json",
+  "schemaVersion": "1.0",
+  "id": "vitium.products",
+  "registryVersion": "1.0.0",
+  "description": "Canonical product registry (VIT-DOM-004). Derived only from the product list that existed in service/report-domain.mjs and site/submission.mjs at baseline bba1d59; no products were added. Names that do not resolve are refused, never mapped to another product. 'unknown' is an explicit reporter choice, not a fallback.",
+  "aliasMatching": "Unicode NFKC, trim, collapse internal whitespace to one space, lower-case. Ids and display names are always aliases of their own product.",
+  "products": [
+    { "id": "arca", "displayName": "Arca", "aliases": [] },
+    { "id": "chrona", "displayName": "Chrona", "aliases": [] },
+    { "id": "dokimos", "displayName": "Dokimos", "aliases": [] },
+    { "id": "fides", "displayName": "Fides", "aliases": [] },
+    { "id": "folio", "displayName": "Folio", "aliases": [] },
+    { "id": "forma", "displayName": "Forma", "aliases": [] },
+    { "id": "forma-studio", "displayName": "Forma Studio", "aliases": [] },
+    { "id": "helixnote", "displayName": "HelixNote", "aliases": [] },
+    {
+      "id": "ordo",
+      "displayName": "Ordo",
+      "aliases": ["State Directed Engineering", "SDE"],
+      "aliasSource": "kemiller2002/ordo README: the methodology was named State Directed Engineering and the historical `sde` command remains an alias."
+    },
+    { "id": "praxis", "displayName": "Praxis", "aliases": [] },
+    { "id": "signal", "displayName": "Signal", "aliases": [] },
+    { "id": "summa", "displayName": "Summa", "aliases": [] },
+    { "id": "unknown", "displayName": "Other / not sure", "aliases": [], "unknown": true }
+  ],
+  "impacts": [
+    { "id": "cannot-use", "displayName": "Cannot use the feature" },
+    { "id": "workaround", "displayName": "Can use it with a workaround" },
+    { "id": "minor", "displayName": "Minor inconvenience or display problem" },
+    { "id": "unknown", "displayName": "Not sure" }
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://echelonfoundry.com/schemas/vitium/defect/2.0",
+  "title": "Vitium defect record (v2)",
+  "description": "Internal defect identity, created only by explicit promotion of a classified observation or by migration of a v1 defect. Lifecycle states/guards: schemas/lifecycle/transitions.v1.json (candidate, not Ordo-authorized). Migration from defect/1.0: service/domain-records.mjs migrateDefectV1, original retained under migration.original. No GitHub-specific fields: GitHub links are generic workItems.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "kind", "defectId", "externalReferences", "observationIds", "source", "product", "summary", "reportedImpact", "triage", "evidence", "workItems", "state", "revision", "history", "createdAt"],
+  "properties": {
+    "schemaVersion": { "const": "2.0" },
+    "kind": { "const": "defect" },
+    "defectId": { "type": "string", "pattern": "^DEF-[0-9]{4,}$" },
+    "legacyId": { "type": "string", "pattern": "^VIT-[0-9]{4,}$", "description": "v1 id retained after migration." },
+    "externalReferences": { "type": "array", "items": { "type": "string", "maxLength": 128 } },
+    "observationIds": { "type": "array", "items": { "type": "string", "pattern": "^OBS-[a-f0-9]{32}$" } },
+    "source": { "$ref": "observation.v2.schema.json#/$defs/source" },
+    "product": { "$ref": "observation.v2.schema.json#/$defs/productResolution" },
+    "summary": {
+      "type": "object", "additionalProperties": false, "required": ["title", "observed", "expected"],
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "observed": { "type": "string", "minLength": 1, "maxLength": 1200 },
+        "expected": { "type": "string", "minLength": 1, "maxLength": 1200 },
+        "steps": { "type": "string", "maxLength": 900 },
+        "pageUrl": { "type": "string", "maxLength": 2000 }
+      }
+    },
+    "reportedImpact": { "enum": ["cannot-use", "workaround", "minor", "unknown", null] },
+    "triage": { "$ref": "observation.v2.schema.json#/$defs/triage" },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["kind", "ref"],
+        "properties": {
+          "kind": { "enum": ["reproduction", "reproduction-attempt", "verification-run", "specification-reference", "decision-record", "new-occurrence", "triage-correction", "supporting", "unspecified"] },
+          "ref": { "type": "string", "minLength": 1, "maxLength": 512 }
+        }
+      }
+    },
+    "workItems": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["system", "ref"],
+        "properties": {
+          "system": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,31}$" },
+          "ref": { "type": "string", "minLength": 1, "maxLength": 512 },
+          "relation": { "type": "string", "maxLength": 64 }
+        }
+      }
+    },
+    "state": { "enum": ["new", "triaged", "reproducing", "confirmed", "in-progress", "awaiting-verification", "resolved", "closed", "reopened", "duplicate", "not-reproducible", "expected-behavior", "declined", "superseded"] },
+    "revision": { "type": "integer", "minimum": 0 },
+    "history": { "type": "array", "items": { "type": "object" } },
+    "createdAt": { "type": "string", "minLength": 20 },
+    "updatedAt": { "type": "string", "minLength": 20 },
+    "dedupeKey": { "type": "string", "maxLength": 256 },
+    "notes": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "rootCause": { "type": "string" }, "verification": { "type": "string" } }
+    },
+    "migration": { "$ref": "observation.v2.schema.json#/$defs/migration" }
+  }
+}

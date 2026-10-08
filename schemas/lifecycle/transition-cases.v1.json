@@ -1,0 +1,1057 @@
+{
+  "schemaVersion": "1.0",
+  "table": "schemas/lifecycle/transitions.v1.json",
+  "description": "Shared transition cases. Consumed by tests/domain-lifecycle-contract.test.mjs (service/lifecycle.mjs) and domain/Vitium.Domain.Tests (F#). Both implementations must return the same ok/state/revision or the same error code. Commands use the strict (non-legacy) shape; provenance is required.",
+  "cases": [
+    {
+      "name": "observation accepted for triage",
+      "record": {
+        "kind": "observation",
+        "state": "received",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "accepted-for-triage"
+      },
+      "expect": {
+        "ok": true,
+        "state": "accepted-for-triage",
+        "revision": 1
+      }
+    },
+    {
+      "name": "observation classified with classification",
+      "record": {
+        "kind": "observation",
+        "state": "accepted-for-triage",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "classified",
+        "fields": {
+          "classification": "suspected defect",
+          "severity": "high",
+          "priority": "normal"
+        }
+      },
+      "expect": {
+        "ok": true,
+        "state": "classified",
+        "revision": 1
+      }
+    },
+    {
+      "name": "observation classification required",
+      "record": {
+        "kind": "observation",
+        "state": "accepted-for-triage",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "classified"
+      },
+      "expect": {
+        "ok": false,
+        "code": "missing_field"
+      }
+    },
+    {
+      "name": "observation rejected requires reason",
+      "record": {
+        "kind": "observation",
+        "state": "received",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "   ",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "rejected"
+      },
+      "expect": {
+        "ok": false,
+        "code": "missing_reason"
+      }
+    },
+    {
+      "name": "observation rejected with reason",
+      "record": {
+        "kind": "observation",
+        "state": "quarantined",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Spam",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "rejected"
+      },
+      "expect": {
+        "ok": true,
+        "state": "rejected",
+        "revision": 1
+      }
+    },
+    {
+      "name": "observation cannot become confirmed defect",
+      "record": {
+        "kind": "observation",
+        "state": "received",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "confirmed"
+      },
+      "expect": {
+        "ok": false,
+        "code": "forbidden_transition"
+      }
+    },
+    {
+      "name": "classified observation is terminal",
+      "record": {
+        "kind": "observation",
+        "state": "classified",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "accepted-for-triage"
+      },
+      "expect": {
+        "ok": false,
+        "code": "forbidden_transition"
+      }
+    },
+    {
+      "name": "cross-kind observation to in-progress",
+      "record": {
+        "kind": "observation",
+        "state": "quarantined",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "in-progress"
+      },
+      "expect": {
+        "ok": false,
+        "code": "forbidden_transition"
+      }
+    },
+    {
+      "name": "cross-kind defect to observation state",
+      "record": {
+        "kind": "defect",
+        "state": "resolved",
+        "revision": 0,
+        "history": [],
+        "id": "DEF-0001"
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "accepted-for-triage"
+      },
+      "expect": {
+        "ok": false,
+        "code": "forbidden_transition"
+      }
+    },
+    {
+      "name": "unknown record kind",
+      "record": {
+        "kind": "work-item",
+        "state": "new",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "triaged"
+      },
+      "expect": {
+        "ok": false,
+        "code": "unknown_machine"
+      }
+    },
+    {
+      "name": "unknown source state",
+      "record": {
+        "kind": "defect",
+        "state": "fixed",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "closed"
+      },
+      "expect": {
+        "ok": false,
+        "code": "unknown_state"
+      }
+    },
+    {
+      "name": "missing actor",
+      "record": {
+        "kind": "defect",
+        "state": "new",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "triaged"
+      },
+      "expect": {
+        "ok": false,
+        "code": "missing_actor"
+      }
+    },
+    {
+      "name": "actor with whitespace refused",
+      "record": {
+        "kind": "defect",
+        "state": "new",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "Jane Doe",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "triaged"
+      },
+      "expect": {
+        "ok": false,
+        "code": "missing_actor"
+      }
+    },
+    {
+      "name": "missing provenance",
+      "record": {
+        "kind": "defect",
+        "state": "new",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "triaged"
+      },
+      "expect": {
+        "ok": false,
+        "code": "invalid_provenance"
+      }
+    },
+    {
+      "name": "anonymous provenance cannot command triage",
+      "record": {
+        "kind": "defect",
+        "state": "new",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "anonymous-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "triaged"
+      },
+      "expect": {
+        "ok": false,
+        "code": "invalid_provenance"
+      }
+    },
+    {
+      "name": "stale revision",
+      "record": {
+        "kind": "defect",
+        "state": "new",
+        "revision": 3,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 2,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "triaged"
+      },
+      "expect": {
+        "ok": false,
+        "code": "stale_revision"
+      }
+    },
+    {
+      "name": "negative revision",
+      "record": {
+        "kind": "defect",
+        "state": "new",
+        "revision": -1,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": -1,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "triaged"
+      },
+      "expect": {
+        "ok": false,
+        "code": "stale_revision"
+      }
+    },
+    {
+      "name": "reporter role not authorized",
+      "record": {
+        "kind": "defect",
+        "state": "new",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "reporter",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "triaged"
+      },
+      "expect": {
+        "ok": false,
+        "code": "unauthorized_role"
+      }
+    },
+    {
+      "name": "triager cannot resolve",
+      "record": {
+        "kind": "defect",
+        "state": "awaiting-verification",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "resolved",
+        "evidence": [
+          {
+            "kind": "verification-run",
+            "ref": "evidence-1"
+          }
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "code": "unauthorized_role"
+      }
+    },
+    {
+      "name": "verifier resolves with verification evidence",
+      "record": {
+        "kind": "defect",
+        "state": "awaiting-verification",
+        "revision": 5,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 5,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "verifier",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "resolved",
+        "evidence": [
+          {
+            "kind": "verification-run",
+            "ref": "run-42"
+          }
+        ]
+      },
+      "expect": {
+        "ok": true,
+        "state": "resolved",
+        "revision": 6
+      }
+    },
+    {
+      "name": "verifier without verification evidence",
+      "record": {
+        "kind": "defect",
+        "state": "awaiting-verification",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "verifier",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "resolved"
+      },
+      "expect": {
+        "ok": false,
+        "code": "missing_evidence"
+      }
+    },
+    {
+      "name": "wrong evidence kind does not satisfy",
+      "record": {
+        "kind": "defect",
+        "state": "awaiting-verification",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "verifier",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "resolved",
+        "evidence": [
+          {
+            "kind": "supporting",
+            "ref": "evidence-1"
+          }
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "code": "missing_evidence"
+      }
+    },
+    {
+      "name": "unspecified evidence never satisfies",
+      "record": {
+        "kind": "defect",
+        "state": "triaged",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "confirmed",
+        "evidence": [
+          {
+            "kind": "unspecified",
+            "ref": "evidence-1"
+          }
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "code": "missing_evidence"
+      }
+    },
+    {
+      "name": "unknown evidence kind refused",
+      "record": {
+        "kind": "defect",
+        "state": "triaged",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "confirmed",
+        "evidence": [
+          {
+            "kind": "hearsay",
+            "ref": "evidence-1"
+          }
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "code": "invalid_evidence"
+      }
+    },
+    {
+      "name": "confirm requires reproduction",
+      "record": {
+        "kind": "defect",
+        "state": "triaged",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "confirmed"
+      },
+      "expect": {
+        "ok": false,
+        "code": "missing_evidence"
+      }
+    },
+    {
+      "name": "confirm with reproduction",
+      "record": {
+        "kind": "defect",
+        "state": "triaged",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "confirmed",
+        "evidence": [
+          {
+            "kind": "reproduction",
+            "ref": "repro-1"
+          }
+        ]
+      },
+      "expect": {
+        "ok": true,
+        "state": "confirmed",
+        "revision": 1
+      }
+    },
+    {
+      "name": "duplicate requires duplicateOf",
+      "record": {
+        "kind": "defect",
+        "state": "triaged",
+        "revision": 0,
+        "history": [],
+        "id": "DEF-0002"
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "duplicate"
+      },
+      "expect": {
+        "ok": false,
+        "code": "missing_field"
+      }
+    },
+    {
+      "name": "duplicateOf must be a defect id",
+      "record": {
+        "kind": "defect",
+        "state": "triaged",
+        "revision": 0,
+        "history": [],
+        "id": "DEF-0002"
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "duplicate",
+        "fields": {
+          "duplicateOf": "#123"
+        }
+      },
+      "expect": {
+        "ok": false,
+        "code": "invalid_field"
+      }
+    },
+    {
+      "name": "duplicate of itself refused",
+      "record": {
+        "kind": "defect",
+        "state": "triaged",
+        "revision": 0,
+        "history": [],
+        "id": "DEF-0002"
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "duplicate",
+        "fields": {
+          "duplicateOf": "DEF-0002"
+        }
+      },
+      "expect": {
+        "ok": false,
+        "code": "self_reference"
+      }
+    },
+    {
+      "name": "duplicate with duplicateOf",
+      "record": {
+        "kind": "defect",
+        "state": "triaged",
+        "revision": 0,
+        "history": [],
+        "id": "DEF-0002"
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "duplicate",
+        "fields": {
+          "duplicateOf": "DEF-0001"
+        }
+      },
+      "expect": {
+        "ok": true,
+        "state": "duplicate",
+        "revision": 1
+      }
+    },
+    {
+      "name": "superseded requires supersededBy",
+      "record": {
+        "kind": "defect",
+        "state": "confirmed",
+        "revision": 0,
+        "history": [],
+        "id": "DEF-0002"
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "superseded"
+      },
+      "expect": {
+        "ok": false,
+        "code": "missing_field"
+      }
+    },
+    {
+      "name": "expected-behavior requires specification reference",
+      "record": {
+        "kind": "defect",
+        "state": "triaged",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "expected-behavior"
+      },
+      "expect": {
+        "ok": false,
+        "code": "missing_evidence"
+      }
+    },
+    {
+      "name": "declined with decision record",
+      "record": {
+        "kind": "defect",
+        "state": "triaged",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "declined",
+        "evidence": [
+          {
+            "kind": "decision-record",
+            "ref": "DOM-099"
+          }
+        ]
+      },
+      "expect": {
+        "ok": true,
+        "state": "declined",
+        "revision": 1
+      }
+    },
+    {
+      "name": "not-reproducible needs attempt evidence",
+      "record": {
+        "kind": "defect",
+        "state": "reproducing",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "not-reproducible"
+      },
+      "expect": {
+        "ok": false,
+        "code": "missing_evidence"
+      }
+    },
+    {
+      "name": "field not declared for transition",
+      "record": {
+        "kind": "defect",
+        "state": "new",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "triaged",
+        "fields": {
+          "duplicateOf": "DEF-0001"
+        }
+      },
+      "expect": {
+        "ok": false,
+        "code": "unexpected_field"
+      }
+    },
+    {
+      "name": "severity outside vocabulary",
+      "record": {
+        "kind": "defect",
+        "state": "new",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "triaged",
+        "fields": {
+          "severity": "P0"
+        }
+      },
+      "expect": {
+        "ok": false,
+        "code": "invalid_field"
+      }
+    },
+    {
+      "name": "reason too long",
+      "record": {
+        "kind": "defect",
+        "state": "new",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "triaged"
+      },
+      "expect": {
+        "ok": false,
+        "code": "reason_too_long"
+      }
+    },
+    {
+      "name": "timestamp required",
+      "record": {
+        "kind": "defect",
+        "state": "new",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "yesterday",
+        "to": "triaged"
+      },
+      "expect": {
+        "ok": false,
+        "code": "invalid_timestamp"
+      }
+    },
+    {
+      "name": "closed reopen requires new evidence",
+      "record": {
+        "kind": "defect",
+        "state": "closed",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "reopened"
+      },
+      "expect": {
+        "ok": false,
+        "code": "missing_evidence"
+      }
+    },
+    {
+      "name": "closed reopen with new occurrence",
+      "record": {
+        "kind": "defect",
+        "state": "closed",
+        "revision": 2,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 2,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "reopened",
+        "evidence": [
+          {
+            "kind": "new-occurrence",
+            "ref": "occ-9"
+          }
+        ]
+      },
+      "expect": {
+        "ok": true,
+        "state": "reopened",
+        "revision": 3
+      }
+    },
+    {
+      "name": "duplicate cannot jump to in-progress",
+      "record": {
+        "kind": "defect",
+        "state": "duplicate",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "in-progress"
+      },
+      "expect": {
+        "ok": false,
+        "code": "forbidden_transition"
+      }
+    },
+    {
+      "name": "resolved cannot go back to new",
+      "record": {
+        "kind": "defect",
+        "state": "resolved",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "new"
+      },
+      "expect": {
+        "ok": false,
+        "code": "forbidden_transition"
+      }
+    },
+    {
+      "name": "unknown target state",
+      "record": {
+        "kind": "defect",
+        "state": "new",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "done"
+      },
+      "expect": {
+        "ok": false,
+        "code": "forbidden_transition"
+      }
+    },
+    {
+      "name": "failed proof returns to in-progress",
+      "record": {
+        "kind": "defect",
+        "state": "awaiting-verification",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "verifier",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "in-progress"
+      },
+      "expect": {
+        "ok": true,
+        "state": "in-progress",
+        "revision": 1
+      }
+    }
+  ]
+}
