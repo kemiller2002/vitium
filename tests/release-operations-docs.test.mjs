@@ -54,3 +54,22 @@ test("runbooks never instruct enabling intake or deploying without approval", ()
   assert.doesNotMatch(staging, /--stack-name vitium-intake-production|--guided/);
   assert.match(read("docs/operations/ROLLBACK-AND-DR.md"), /enabled: false/);
 });
+
+test("machine-reporting decisions exist, are undecided/unassigned and map to INT-013..018 and AC-032/035", () => {
+  const register = read("docs/operations/OPERATOR-DECISIONS.md");
+  const rows = register.split("\n").filter(l => /^\| M-\d{2} \|/.test(l));
+  assert.ok(rows.length >= 8, `expected machine-reporting decisions, got ${rows.length}`);
+  for (const row of rows) {
+    const cells = row.split("|").map(s => s.trim());
+    assert.equal(cells[3], "UNASSIGNED", row);
+    assert.match(cells[4], /UNDECIDED/, row);
+    assert.match(cells[6], /VIT-INT-01[3-8]/, row);
+    assert.match(cells[7], /VIT-AC-03[25]/, row);
+  }
+  for (const topic of ["Workload identity", "audience", "per producer", "hostname", "rotation", "outbox", "self-reporting", "upstream producer PRs"]) {
+    assert.ok(rows.some(r => r.toLowerCase().includes(topic.toLowerCase())), topic);
+  }
+  for (const id of ["VIT-INT-013", "VIT-INT-014", "VIT-INT-015", "VIT-INT-016", "VIT-INT-017", "VIT-INT-018", "VIT-AC-032", "VIT-AC-035"]) {
+    assert.ok(rows.some(r => r.includes(id)), id);
+  }
+});

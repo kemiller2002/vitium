@@ -124,3 +124,47 @@ test("owned workflows never persist checkout credentials and never deploy to AWS
     assert.doesNotMatch(text, /sam deploy|aws-actions\/configure-aws-credentials/, `${file}: no AWS deploy in CI`);
   }
 });
+
+// VIT-AC-035 item 8 / VIT-INT-015 (echo suppression): Vitium's own CI must not report defects
+// to Vitium (or open GitHub issues) today. Adding self-reporting must be a deliberate change
+// that edits this guard together with a recorded decision (OPERATOR-DECISIONS M-07).
+// Reads EVERY workflow, including the Praxis-generated one (read-only, never edited).
+const SELF_REPORTING_PATTERNS = Object.freeze([
+  { id: "intake-host", re: /intake\.vitium\.echelonfoundry\.com/i },
+  { id: "public-report-route", re: /\/api\/v1\/reports\b/ },
+  { id: "machine-observation-route", re: /\/api\/v1\/observations\b/ },
+  { id: "api-gateway-url", re: /execute-api\.[a-z0-9-]+\.amazonaws\.com/i },
+  { id: "intake-or-reporting-secret", re: /secrets\.[A-Z0-9_]*(VITIUM|INTAKE|TURNSTILE|OBSERVATION|REPORT)[A-Z0-9_]*/i },
+  { id: "vitium-oidc-audience", re: /audience[^\n]*vitium/i },
+  { id: "http-post", re: /\bcurl\b[^\n]*(-X\s*POST|--request\s+POST|--data\b|\s-d\s|--json\b)|\bwget\b[^\n]*--post/i },
+  { id: "github-issue-creation", re: /\bgh\s+issue\s+(create|reopen|comment|edit)\b|issues:\s*write|actions\/github-script@/i }
+]);
+
+// findSelfReporting :: (file, text) -> [{ file, id, line }]  (pure; comments stripped first)
+export const findSelfReporting = (file, text) =>
+  stripComments(text).split("\n").flatMap((line, i) =>
+    SELF_REPORTING_PATTERNS.filter(p => p.re.test(line)).map(p => ({ file, id: p.id, line: i + 1 })));
+
+test("recursion guard: no Vitium workflow reports to Vitium intake/observations or opens issues", () => {
+  assert.ok(ALL_WORKFLOWS.length >= 8, "guard must see every workflow");
+  const hits = ALL_WORKFLOWS.flatMap(f => findSelfReporting(f, read(`.github/workflows/${f}`)));
+  assert.deepEqual(hits, [], JSON.stringify(hits));
+});
+
+test("recursion guard detects each self-reporting shape (no vacuous pass)", () => {
+  const samples = {
+    "intake-host": "run: node x.mjs https://intake.vitium.echelonfoundry.com/",
+    "public-report-route": "url: https://example.invalid/api/v1/reports",
+    "machine-observation-route": "run: node report.mjs --endpoint /api/v1/observations",
+    "api-gateway-url": "url: https://abc123.execute-api.us-east-1.amazonaws.com/staging",
+    "intake-or-reporting-secret": "token: ${{ secrets.VITIUM_MACHINE_TOKEN }}",
+    "vitium-oidc-audience": "audience: vitium-intake",
+    "http-post": "run: curl -sS -X POST https://example.invalid/hook",
+    "github-issue-creation": "run: gh issue create --title failure"
+  };
+  for (const [id, line] of Object.entries(samples)) {
+    assert.ok(findSelfReporting("x.yml", line).some(h => h.id === id), `${id} not detected`);
+  }
+  assert.deepEqual(findSelfReporting("x.yml", "# curl -X POST https://intake.vitium.echelonfoundry.com/api/v1/reports"), [], "comments are ignored");
+  assert.deepEqual(findSelfReporting("x.yml", "run: npm test\nrun: ./praxis validate"), []);
+});
