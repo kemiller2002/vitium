@@ -1,26 +1,28 @@
 # P0 implementation audit
 
 Date: 2026-10-08
-Status: **implementation candidate, not production-approved or deployed**
+Status: **engineering candidate (mission VIT-P0-2026-10-08), not production-approved or deployed**
 
 This file distinguishes code present from independently verified operation. Product requirements authority: [VITIUM-REQUIREMENTS.md](requirements/VITIUM-REQUIREMENTS.md). Echelon governance authority: [GOVERNANCE.md](GOVERNANCE.md).
 
-## P0 delivery matrix
+## P0 delivery matrix (updated by mission VIT-P0-2026-10-08)
+
+Requirement-level detail and evidence: [requirements/P0-TRACEABILITY.md](requirements/P0-TRACEABILITY.md). Local = executed in the mission sandbox at `a8a95f7`.
 
 | P0 concern | Implementation | Verified evidence / outstanding gate |
 |---|---|---|
-| User can describe and review a defect | Existing semantic two-step site; legacy GitHub issue handoff | Node contract tests; real Playwright/mobile/accessibility checks still required (#2) |
-| GitHub-free submission | Feature-gated private submission in site/app.mjs and site/public-config.mjs | Disabled by default; no live API, Turnstile key or private custom domain |
-| Typed, versioned transport | service/report-domain.mjs, schemas/intake-request.schema.json | Client/server product-name compatibility and validation tests |
-| Secure direct HTTPS API | service/http.mjs; AWS Lambda adapter, API Gateway SAM candidate | SAM build/validate in CI; actual AWS deployment, DNS, TLS, IAM audit and negative e2e required |
-| Private durable receipt | Conditional DynamoDB PutItem/consistent GetItem with idempotency and opaque reference | Unit and simulated-store retry/outage/adversarial tests pass; real DynamoDB behavior not tested |
-| Abuse and moderation | Single-use Cloudflare Turnstile verifier, limited payload, stage throttling, private queue; suspicious credentials refused | Turnstile live verification, IP-level controls, operator and abuse runbook missing; API Gateway throttle is global/best-effort |
-| Observation vs defect and governance | Separate report/observation/defect contracts; service/triage.mjs transitions, explicit actor/reason/revision/evidence | Domain tests; Ordo integration and audited approved state policy outstanding (#8) |
-| Initial private operator review | service/triage-cli.mjs uses AWS IAM identity and conditional DynamoDB updates; no public review route | Not tested with a real IAM principal/table; Fides-backed UI intentionally deferred |
-| Security and privacy | No secrets in static frontend; challenge secret read via Secrets Manager; no anonymous read endpoint | Privacy notice, retention, data ownership, deletion, secret rotation and authenticated private review need operator approval (#13) |
-| Echelon lifecycle governance | conditor.json, Conditor plan workflow, isolated installation preview | Read-only Conditor plan verified; actual installed files/lock, Praxis/Ordo evidence and F#/Limen migration not committed (#5,#6) |
-| User confirmation/status | Receipt acknowledgement only after HTTP success; no fake "fixed" state | No live E2E. Anonymous status capability and notifications belong to later #12 |
-| Production domain | vitium.echelonfoundry.com and proposed API intake.vitium.echelonfoundry.com | DNS/Pages/TLS must be configured, verified and continuously monitored (#7) |
+| User can describe and review a defect | Pure state machine reporter; review/edit/cancel; accessible errors; legacy GitHub handoff with credential guard | Local unit + browser (320/375/1280, keyboard, axe 0 violations); CI browser run and screen-reader session outstanding (#2) |
+| GitHub-free submission | Typed private client, disabled in `site/public-config.mjs` | Contract tests against the real handler; no live endpoint, Turnstile key or intake domain |
+| Typed, versioned transport | `service/limits.mjs`, `service/errors.mjs`, v2 schemas, shared case files, schema/runtime parity | Local; one documented schema-inexpressible case (DOM-001) |
+| Secure direct HTTPS API | Thin HTTP adapter; byte cap before parse; least-privilege SAM candidate (staging origin parameter, deletion protection, no CLI in package) | cfn-lint locally; `sam validate`/build in CI; deployment, DNS, TLS, IAM audit outstanding |
+| Private durable receipt | Conditional put, NFC payload hash, replay without re-challenge, challenge before conflict | **Emulator** (dynalite) concurrency evidence; real DynamoDB untested |
+| Abuse and moderation | Redaction + quarantine + security flag; malformed-token pre-filter; global stage throttle | Per-source throttling needs WAF/topology decision; moderation owner unassigned |
+| Observation vs defect and lifecycle | One table (`transitions.v1.json` 1.3.1) in JS + F#; transactional promotion; failed-verification loop; reopen-and-resume; repair budget; human verifier for pass | Local JS + F# + emulator; **not Ordo-authorized**; VF-034 needs a user decision |
+| Operator review | `triage-cli.mjs` strict path; fail-closed human-role classification (`VITIUM_HUMAN_OPERATOR_ROLE_ARNS`, no default) | Emulator only; role list is operator decision D-25 |
+| Machine observations (VIT-INT-013) | Proposed authenticated envelope, branded verified principal, principal-scoped idempotency, echo suppression, outbox policy | Local core tests; no endpoint or producer (P1, M-01..M-10) |
+| Security and privacy | No secrets in client; git-aware secret scan; log/response/store canary | Retention, deletion, DSR, escalation owner undecided (VIT-OQ-008/009) |
+| Echelon lifecycle governance | Real Conditor installation committed; CI verifies committed state | CI runs 37813042099 and 37813042172 (success on `a8532cb`); Praxis work items not yet completed |
+| Production domain | Fail-closed Pages workflow; read-only site verifier | NXDOMAIN; Pages not enabled (D-01..D-05) |
 
 ## What tests establish
 
@@ -42,4 +44,10 @@ This file distinguishes code present from independently verified operation. Prod
 
 ## Next engineering slice
 
-Focus on #5 (actual Conditor lifecycle), #6 (non-destructive Echelon application migration) and #1 (staging integration proof) before adding P1 integrations or dashboards. The user can assess the source, tests and workflows now, but P0 must not be described as complete until the blockers above are resolved.
+1. Review/merge the P0 PRs and observe CI on the merged head.
+2. User decision on VF-034 (DOM-001 §29).
+3. Operator gates: Pages/DNS/TLS, then AWS staging with Turnstile and the staging E2E list in `docs/operations/STAGING-READINESS.md` (real DynamoDB concurrency, transactions, IAM, log redaction).
+4. Ordo review of `transitions.v1.json` before it is called transition authority; qualified Limen/Forma release set for the F# application migration (#6).
+5. P1: authenticated machine endpoint and one Praxis + one CI/Dokimos producer (#14) after M-01..M-10.
+
+P0 must not be described as complete until the blockers above are resolved.
