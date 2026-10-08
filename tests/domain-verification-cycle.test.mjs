@@ -20,11 +20,13 @@ const valueOf = (e, k) => e?.fields?.[k] ?? e?.[k];
 function applyStep(current, initial, s) {
   const record = s.from === "initial" ? initial : current;
   const expectedRevision = s.expectedRevision ?? record.revision;
+  // The step's trusted caller context (VF-027) is passed as the context option, never in the command.
+  const options = s.context ? { context: s.context } : {};
   switch (s.op) {
-    case "transition": return evaluateTransition(table, record, { ...s.command, expectedRevision });
-    case "inconclusive": return recordInconclusive(table, record, { ...s.command, expectedRevision });
-    case "escalate": return recordEscalation(table, record, { ...s.command, expectedRevision });
-    case "reopenAndResume": return reopenAndResume(table, record, { ...s.reopen, expectedRevision }, s.resume);
+    case "transition": return evaluateTransition(table, record, { ...s.command, expectedRevision }, options);
+    case "inconclusive": return recordInconclusive(table, record, { ...s.command, expectedRevision }, options);
+    case "escalate": return recordEscalation(table, record, { ...s.command, expectedRevision }, options);
+    case "reopenAndResume": return reopenAndResume(table, record, { ...s.reopen, expectedRevision }, s.resume, options);
     default: throw new Error("unknown op " + s.op);
   }
 }
@@ -105,8 +107,8 @@ test("bounded repair policy is a pure function with an explicit parameter and a 
   assert.equal(agentRepairBudget(table, [...history, { to: "reopened", sequence: 5 }], 2).exhausted, false, "reopening opens a new cycle");
   assert.equal(agentRepairBudget(table, [...history, { type: "verification", fields: { verificationOutcome: "inconclusive" }, sequence: 5 }], 3).failed, 2, "inconclusive is not a failure");
   const refused = evaluateTransition(table, { kind: "defect", state: "in-progress", revision: 4, history },
-    { to: "awaiting-verification", actor: "bot", provenance: "agent", role: "triager", reason: "retry", occurredAt: "2026-10-08T12:00:00Z", expectedRevision: 4, fields: { attemptId: "a-3", candidateRevision: "s-3" }, evidence: [{ kind: "verification-request", ref: "r" }] },
-    { maxFailedAttempts: 2 });
+    { to: "awaiting-verification", actor: "bot", role: "triager", reason: "retry", occurredAt: "2026-10-08T12:00:00Z", expectedRevision: 4, fields: { attemptId: "a-3", candidateRevision: "s-3" }, evidence: [{ kind: "verification-request", ref: "r" }] },
+    { maxFailedAttempts: 2, context: { provenance: "agent" } });
   assert.equal(refused.error.code, "escalation_required", "evaluateTransition honours an explicit budget");
 });
 
@@ -116,7 +118,7 @@ test("verificationCycle reads legacy top-level and v1.2 nested field shapes alik
     { to: "in-progress", verificationOutcome: "failed", sequence: 2 },
     { to: "awaiting-verification", fields: { attemptId: "new", candidateRevision: "c-new", author: "bot" }, sequence: 3 }
   ]);
-  assert.deepEqual({ ...cycle.latestSubmission }, { attemptId: "new", candidateRevision: "c-new", author: "bot", sequence: 3 });
+  assert.deepEqual({ ...cycle.latestSubmission }, { attemptId: "new", candidateRevision: "c-new", author: "bot", actor: null, sequence: 3 });
   assert.deepEqual([...cycle.submittedAttempts], ["old", "new"]);
 });
 
@@ -127,4 +129,42 @@ test("table loader refuses a non-provisional or missing repair budget", () => {
   const none = structuredClone(rawTable);
   delete none.policy;
   assert.equal(loadTable(none).ok, false);
+});
+
+// ---- round 3: VF-025..VF-028 (trusted context, canonical identity, author, human pass) ----
+
+test("VF-025: the recorded author is always the submitting actor, even when a matching variant is named", () => {
+  const r = evaluateTransition(table, { kind: "defect", state: "in-progress", revision: 0, history: [] },
+    { to: "awaiting-verification", actor: "dev-1", role: "triager", reason: "submit", occurredAt: "2026-10-08T12:00:00Z", expectedRevision: 0,
+      fields: { attemptId: "a-1", candidateRevision: "c-1", author: "DEV-1" }, evidence: [{ kind: "verification-request", ref: "r" }] },
+    { context: { provenance: "authenticated-human" } });
+  assert.equal(r.ok, true, JSON.stringify(r.error));
+  assert.equal(r.value.event.fields.author, "dev-1", "author recorded from the actor, not the caller-supplied spelling");
+});
+
+test("VF-026: canonicalActor is NFKC + trim + lower-case and is the only identity comparison", async () => {
+  const { canonicalActor } = await import("../service/lifecycle.mjs");
+  assert.equal(canonicalActor(" Dev-1 "), "dev-1");
+  assert.equal(canonicalActor("Ｄｅｖ-1"), "dev-1", "full-width compatibility form folds");
+  assert.notEqual(canonicalActor("dev-1"), canonicalActor("dev-2"));
+  assert.equal(canonicalActor(undefined), "");
+});
+
+test("VF-027: triage-cli passes its authenticated provenance as trusted context (operator not budget-bound)", async () => {
+  const { decide } = await import("../service/triage-cli.mjs");
+  // Agent attempts fail until the budget is exhausted; the CLI operator (trusted human) may still submit.
+  const at = "2026-10-08T12:00:00Z";
+  let record = { kind: "defect", id: "DEF-0900", state: "in-progress", revision: 0, history: [] };
+  for (let n = 1; n <= table.policy.maxAutonomousFailedAttempts.value; n++) {
+    record = evaluateTransition(table, record, { to: "awaiting-verification", actor: "bot", role: "triager", reason: "s", occurredAt: at, expectedRevision: record.revision,
+      fields: { attemptId: "b-" + n, candidateRevision: "c-" + n }, evidence: [{ kind: "verification-request", ref: "r" + n }] }, { context: { provenance: "agent" } }).value.record;
+    record = evaluateTransition(table, record, { to: "in-progress", actor: "qa", role: "verifier", reason: "f", occurredAt: at, expectedRevision: record.revision,
+      fields: { attemptId: "b-" + n, candidateRevision: "c-" + n, verificationOutcome: "failed" }, evidence: [{ kind: "verification-run", ref: "f" + n }] }, { context: { provenance: "authenticated-human" } }).value.record;
+  }
+  assert.equal(agentRepairBudget(table, record.history).exhausted, true, "precondition: budget exhausted");
+  const args = { command: "advance", to: "awaiting-verification", role: "triager", reason: "operator retry",
+    fields: { attemptId: "op-1", candidateRevision: "c-op" }, evidence: [{ kind: "verification-request", ref: "req-op" }] };
+  const r = decide({ args, record, actor: "arn:aws:iam::123456789012:user/operator", occurredAt: at });
+  assert.equal(r.ok, true, "trusted operator context exempts the human operator: " + JSON.stringify(r.error));
+  assert.equal(r.value.events[0].provenance, "authenticated-human");
 });

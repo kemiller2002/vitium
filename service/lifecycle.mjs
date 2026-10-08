@@ -15,8 +15,18 @@ export const errorCodes = Object.freeze([
   "missing_reason", "reason_too_long", "invalid_timestamp", "unexpected_field", "missing_field",
   "invalid_field", "invalid_evidence", "missing_evidence", "self_reference", "invalid_defect_id",
   "unknown_fact", "inconsistent_history", "outcome_mismatch", "attempt_mismatch",
-  "duplicate_attempt", "independence_required", "escalation_required", "unknown_event"
+  "duplicate_attempt", "independence_required", "escalation_required", "unknown_event",
+  "author_mismatch", "provenance_conflict", "human_verifier_required"
 ]);
+
+/**
+ * Canonical actor identity for comparisons (VF-026): Unicode NFKC, trimmed, lower-cased.
+ * Used everywhere two actor identities are compared (author check, independence). The
+ * recorded value stays as supplied; only comparisons are canonical. Same rule in F#
+ * (Identity.fs ActorId.canonical).
+ */
+export const canonicalActor = id => typeof id === "string" ? id.normalize("NFKC").trim().toLowerCase() : "";
+const sameActor = (a, b) => canonicalActor(a) !== "" && canonicalActor(a) === canonicalActor(b);
 
 const isObject = v => v !== null && typeof v === "object" && !Array.isArray(v);
 const isText = v => typeof v === "string" && v.trim().length > 0;
@@ -110,6 +120,7 @@ export function loadTable(raw) {
     return bad("policy.maxAutonomousFailedAttempts must be a positive integer marked provisional.");
   }
   if (typeof raw.policy.independentVerification?.required !== "boolean") return bad("policy.independentVerification.required must be boolean.");
+  if (typeof raw.policy.passRequiresHumanVerifier !== "boolean") return bad("policy.passRequiresHumanVerifier must be boolean.");
   const events = raw.events;
   if (!isObject(events) || !isObject(events["verification-inconclusive"]) || !isObject(events.escalation)) return bad("events.verification-inconclusive and events.escalation are required.");
   for (const [name, e] of Object.entries(events)) {
@@ -153,6 +164,7 @@ export function verificationCycle(history) {
       attemptId: valueOf(latest, "attemptId") ?? null,
       candidateRevision: valueOf(latest, "candidateRevision") ?? null,
       author: valueOf(latest, "author") ?? null,
+      actor: typeof latest.actor === "string" ? latest.actor : null,
       sequence: latest.sequence
     }) : null,
     submittedAttempts: Object.freeze(submissions.map(e => valueOf(e, "attemptId")).filter(isText)),
@@ -170,9 +182,15 @@ export function agentRepairBudget(table, history, maxFailedAttempts = table.poli
 }
 
 // Attempt guards for a rule with `attempt`. Returns extra fields to record, or a failure.
-function checkAttempt(table, rule, record, history, fields, command, provenance, options) {
+// Budget class (VF-027, fail closed): only a TRUSTED authenticated-human context is exempt
+// from the agent repair budget. Asserted (body) provenance, "unrecorded" (legacy shape),
+// agent, application and ci all count as autonomous for the budget.
+const budgetClass = options => options.context?.provenance === "authenticated-human" ? "authenticated-human" : "agent";
+
+function checkAttempt(table, rule, record, history, fields, command, declaredProvenance, options) {
   const a = rule.attempt;
   const cycle = verificationCycle(history);
+  const provenance = budgetClass(options);
   if (a.kind === "submission" || a.kind === "rework") {
     if (cycle.submittedAttempts.includes(fields.attemptId)) {
       return fail("duplicate_attempt", "This attemptId was already submitted; a new attempt needs a new attemptId.");
@@ -181,8 +199,12 @@ function checkAttempt(table, rule, record, history, fields, command, provenance,
     if (provenance === "agent" && agentRepairBudget(table, history, options.maxFailedAttempts).exhausted) {
       return fail("escalation_required", "Autonomous repair budget exhausted for this cycle; a human must record an escalation.");
     }
-    // The strict API records the submitting actor as the attempt's author unless named.
-    return ok(fields.author === undefined && options.defaultAuthor !== false ? { author: command.actor } : {});
+    // The attempt's author IS the submitting actor (VF-025). An explicit author is accepted
+    // only when it canonically equals that actor; naming someone else is refused.
+    if (fields.author !== undefined && !sameActor(fields.author, command.actor)) {
+      return fail("author_mismatch", "The attempt author must be the submitting actor.");
+    }
+    return ok({ author: command.actor });
   }
   const outcome = fields.verificationOutcome;
   if (outcome !== undefined && outcome !== a.outcome) {
@@ -198,8 +220,18 @@ function checkAttempt(table, rule, record, history, fields, command, provenance,
     return fail("attempt_mismatch", "Verification results must name the submitted candidate (latest attemptId and candidateRevision).");
   }
   const independence = table.policy.independentVerification;
-  if (a.independent && independence.required && independence.appliesTo.includes(a.outcome) && latest?.author && latest.author === command.actor) {
+  // Author of the latest submission: its recorded author, else the submitting event's actor.
+  // The legacy shape ("unrecorded" provenance) relies on the verifier role only (DOM-001 s.21).
+  // VF-026: identities are compared canonically (sameActor), never by exact string.
+  const author = latest?.author ?? latest?.actor;
+  if (a.independent && independence.required && independence.appliesTo.includes(a.outcome) && declaredProvenance !== "unrecorded" && author && sameActor(author, command.actor)) {
     return fail("independence_required", "Independent verification: the attempt's author cannot record its passing result.");
+  }
+  // VF-028 (provisional): a passing result needs an authenticated-human verifier. The legacy
+  // shape ("unrecorded") is tolerated only because Kevin's authority tests use it; it has no
+  // production caller (triage-cli uses the strict path with a trusted context). DOM-001 s.28.
+  if (a.outcome === "passed" && table.policy.passRequiresHumanVerifier && !["authenticated-human", "unrecorded"].includes(declaredProvenance)) {
+    return fail("human_verifier_required", "A passing verification result requires an authenticated human verifier.");
   }
   return ok({ verificationOutcome: a.outcome });
 }
@@ -224,8 +256,19 @@ function checkField(def, value) {
   return value.length <= (def.maxLength ?? 200) && !/[\u0000-\u001f\u007f]/u.test(value);
 }
 
-function checkActor(table, command, { allowUnrecordedProvenance }) {
+// Provenance is taken from the TRUSTED caller context when one is given (VF-027):
+// options.context = { provenance } is supplied by the authenticated boundary (triage-cli's
+// IAM identity, the machine core's verified principal), never by the command body. A body
+// value that disagrees with the context is refused. Without a context, the body value is a
+// caller ASSERTION: it is recorded, but it never exempts a submission from the agent repair
+// budget (see budgetClass).
+function checkActor(table, command, { allowUnrecordedProvenance, context }) {
   if (typeof command.actor !== "string" || !ACTOR_ID.test(command.actor)) return fail("missing_actor", "Actor identity required.");
+  if (context !== undefined) {
+    if (!isObject(context) || !table.commandProvenances.includes(context.provenance)) return fail("invalid_provenance", "Trusted context provenance is invalid.");
+    if (command.provenance !== undefined && command.provenance !== context.provenance) return fail("provenance_conflict", "Command provenance disagrees with the trusted caller context.");
+    return ok(context.provenance);
+  }
   const provenance = command.provenance ?? (allowUnrecordedProvenance ? "unrecorded" : undefined);
   if (!(table.commandProvenances.includes(provenance) || (allowUnrecordedProvenance && provenance === "unrecorded"))) {
     return fail("invalid_provenance", "Actor provenance class is required.");

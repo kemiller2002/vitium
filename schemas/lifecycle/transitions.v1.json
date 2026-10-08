@@ -2,7 +2,7 @@
   "$schema": "./transitions.schema.v1.json",
   "schemaVersion": "1.0",
   "id": "vitium.lifecycle.transitions",
-  "tableVersion": "1.2.0",
+  "tableVersion": "1.3.0",
   "authority": "vitium-domain-candidate",
   "ordoAuthorized": false,
   "decisionRecord": "docs/decisions/DOM-001-lifecycle-and-identities.md",
@@ -936,7 +936,7 @@
   },
   "evidenceRule": "evidenceAnyOf: the command must carry at least one evidence item whose kind is listed. An empty list means no evidence is required. Kind \"unspecified\" (legacy untyped evidence) never satisfies a non-empty requirement.",
   "policy": {
-    "description": "Provisional policy values (DOM-001 sections 18-22). Not Ordo-authorized; every value here is a reversible engineering default awaiting an owner decision (VIT-OQ-012, VIT-VER-011).",
+    "description": "Provisional policy values (DOM-001 sections 18-28). Not Ordo-authorized; every value here is a reversible engineering default awaiting an owner decision (VIT-OQ-012, VIT-VER-006/011). passRequiresHumanVerifier (provisional, integrator decision VF-028): a passing verification result needs provenance authenticated-human; agent, application and ci actors may record failed and inconclusive results only.",
     "maxAutonomousFailedAttempts": {
       "value": 3,
       "provisional": true,
@@ -948,8 +948,9 @@
         "passed"
       ],
       "provisional": true,
-      "description": "A passing verification result may not be recorded by the author of the submitted attempt (VIT-VER-006, VIT-AC-036). The author is the submission's 'author' field; the strict API defaults it to the submitting actor, the legacy call shape records it only when supplied."
-    }
+      "description": "A passing verification result may not be recorded by the submitter of the attempt. The attempt's author IS the submitting actor; an explicit 'author' is accepted only when it canonically equals that actor (VF-025). Actor identities are compared canonically: NFKC, trimmed, lower-cased (VF-026)."
+    },
+    "passRequiresHumanVerifier": true
   },
   "events": {
     "description": "Append-only events that never change state. 'verification-inconclusive' records a flaky/environmental run against the latest submission and leaves the defect awaiting verification; it never counts as a failure (VIT-VER-010). 'escalation' is a human decision that resets the autonomous repair budget for the open cycle (VIT-VER-011).",
@@ -986,6 +987,9 @@
     "attempt_mismatch",
     "duplicate_attempt",
     "independence_required",
-    "escalation_required"
+    "escalation_required",
+    "author_mismatch",
+    "provenance_conflict",
+    "human_verifier_required"
   ]
 }

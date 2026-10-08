@@ -69,7 +69,8 @@ let unwrap r = okValue "identity" r
 let actor role =
     { Id = ActorId.create "operator-1" |> unwrap
       Provenance = Provenance.AuthenticatedHuman
-      Role = role }
+      Role = role
+      Trusted = true }
 
 let triager = actor "triager"
 let verifier = actor "verifier"
@@ -151,8 +152,8 @@ let guardCloseNeedsEvidence (t: Table) =
 
 // ---- verification cycle (round 2) ----------------------------------------------------
 
-let agentActor = { Id = ActorId.create "agent-repair-1" |> unwrap; Provenance = Provenance.Agent; Role = "triager" }
-let humanVerifier = { Id = ActorId.create "verifier-2" |> unwrap; Provenance = Provenance.AuthenticatedHuman; Role = "verifier" }
+let agentActor = { Id = ActorId.create "agent-repair-1" |> unwrap; Provenance = Provenance.Agent; Role = "triager"; Trusted = true }
+let humanVerifier = { Id = ActorId.create "verifier-2" |> unwrap; Provenance = Provenance.AuthenticatedHuman; Role = "verifier"; Trusted = true }
 
 let submitCmd attempt rev =
     { command "awaiting-verification" with
@@ -197,6 +198,38 @@ let guardReopenEvidence (t: Table) =
     let r = Lifecycle.transition t triager { command "reopened" with ExpectedRevision = 1; Fields = Map [ "affectedRelease", "v2" ] } (defect "resolved" |> at' 1)
     equal "reopen without recurrence evidence" "missing_evidence" (codeOf r)
 
+// ---- round 3 guards (VF-025..VF-028) ----
+let dev1 role = { Id = ActorId.create "dev-1" |> unwrap; Provenance = Provenance.AuthenticatedHuman; Role = role; Trusted = true }
+
+let guardAuthorIsSubmitter (t: Table) =
+    let named = { submitCmd "q-1" "s-1" with Fields = Map.ofList [ "attemptId", "q-1"; "candidateRevision", "s-1"; "author", "someone-else" ] }
+    equal "naming another author" "author_mismatch" (codeOf (Lifecycle.transition t (dev1 "triager") named (defect "in-progress")))
+
+let guardCanonicalIndependence (t: Table) =
+    let r1, _ = Lifecycle.transition t (dev1 "triager") (submitCmd "s-1" "c-1") (defect "in-progress") |> okValue "submit"
+    let alias = { dev1 "verifier" with Id = ActorId.create "DEV-1" |> unwrap }
+    equal "case variant of the author" "independence_required" (codeOf (Lifecycle.transition t alias { resultCmd "resolved" "s-1" "c-1" "passed" with ExpectedRevision = 1 } r1))
+
+let guardUntrustedBudget (t: Table) =
+    let mutable r = defect "in-progress"
+    for n in 1 .. t.Policy.MaxAutonomousFailedAttempts do
+        let a, rv = "u-" + string n, "s-" + string n
+        r <- Lifecycle.transition t agentActor { submitCmd a rv with ExpectedRevision = r.Revision } r |> okValue "submit" |> fst
+        r <- Lifecycle.transition t humanVerifier { resultCmd "in-progress" a rv "failed" with ExpectedRevision = r.Revision } r |> okValue "fail" |> fst
+    // Self-declared (untrusted) human provenance does not exempt.
+    let claimed = { agentActor with Provenance = Provenance.AuthenticatedHuman; Trusted = false }
+    equal "asserted human past budget" "escalation_required" (codeOf (Lifecycle.transition t claimed { submitCmd "u-next" "s-next" with ExpectedRevision = r.Revision } r))
+    let trusted = { claimed with Trusted = true }
+    isTrue "trusted human exempt" (Lifecycle.transition t trusted { submitCmd "u-next" "s-next" with ExpectedRevision = r.Revision } r |> Result.isOk)
+
+let guardHumanVerifierForPass (t: Table) =
+    let r1, _ = Lifecycle.transition t (dev1 "triager") (submitCmd "g-1" "s-1") (defect "in-progress") |> okValue "submit"
+    for p in [ Provenance.Agent; Provenance.Ci; Provenance.Application ] do
+        let v = { humanVerifier with Provenance = p }
+        equal ("pass by " + Provenance.toWire p) "human_verifier_required" (codeOf (Lifecycle.transition t v { resultCmd "resolved" "g-1" "s-1" "passed" with ExpectedRevision = 1 } r1))
+    let agentFail = Lifecycle.transition t { humanVerifier with Provenance = Provenance.Agent } { resultCmd "in-progress" "g-1" "s-1" "failed" with ExpectedRevision = 1 } r1
+    isTrue "agent may record a failure" (Result.isOk agentFail)
+
 let mutants: (string * (Table -> unit) * (Nodes.JsonNode -> unit)) list =
     [ "resolve role guard",
       guardResolveNeedsVerifier,
@@ -231,6 +264,9 @@ let mutants: (string * (Table -> unit) * (Nodes.JsonNode -> unit)) list =
       "reopen recurrence evidence",
       guardReopenEvidence,
       (fun root -> set (transitionNode root "defect" "resolved" "reopened") "evidenceAnyOf" (strings []))
+      "agent/ci/application cannot pass (VF-028 policy flag)",
+      guardHumanVerifierForPass,
+      (fun root -> set (node root [ "policy" ]) "passRequiresHumanVerifier" (Nodes.JsonValue.Create(false)))
       "forbidden edge (fail closed)",
       guardForbiddenEdge,
       (fun root ->
@@ -597,12 +633,18 @@ let tests: (string * (unit -> unit)) list =
                   let fromInitial = match s.TryGetProperty "from" with | true, v -> v.GetString() = "initial" | _ -> false
                   let record = if fromInitial then initial else current
                   let expected = match s.TryGetProperty "expectedRevision" with | true, v -> v.GetInt32() | _ -> record.Revision
+                  // The step's TRUSTED caller context (VF-027), never read from the command.
+                  let context =
+                      match s.TryGetProperty "context" with
+                      | true, c -> Provenance.ofWire (c.GetProperty("provenance").GetString())
+                      | _ -> None
+
                   let decode (e: JsonElement) =
                       // Wire commands carry no expectedRevision in cycles: inject it.
                       let o = Nodes.JsonNode.Parse(e.GetRawText()).AsObject()
                       o["expectedRevision"] <- Nodes.JsonValue.Create(expected)
                       use d = JsonDocument.Parse(o.ToJsonString())
-                      Wire.decodeTransition (d.RootElement.Clone())
+                      Wire.decodeTransitionWith context (d.RootElement.Clone())
 
                   let outcome =
                       match s.GetProperty("op").GetString() with
@@ -642,6 +684,20 @@ let tests: (string * (unit -> unit)) list =
               listOf "attempts" |> Option.iter (fun xs -> equal (name + " attempts") xs (submissions |> List.choose (Event.field "attemptId")))
               listOf "candidates" |> Option.iter (fun xs -> equal (name + " candidates") xs (submissions |> List.choose (Event.field "candidateRevision")))
               listOf "outcomes" |> Option.iter (fun xs -> equal (name + " outcomes") xs (results |> List.choose (Event.field "verificationOutcome")))
+
+      "round 3: author is the submitter, canonical identity, trusted provenance, human pass (VF-025..028)",
+      fun () ->
+          guardAuthorIsSubmitter table
+          guardCanonicalIndependence table
+          guardUntrustedBudget table
+          guardHumanVerifierForPass table
+          isTrue "canonical actor equality" (ActorId.sameAs (ActorId.create "Dev-1" |> unwrap) " dev-1 ")
+          isTrue "different actors differ" (not (ActorId.sameAs (ActorId.create "dev-1" |> unwrap) "dev-2"))
+          // Wire: a body provenance that disagrees with the trusted context is refused.
+          use d = JsonDocument.Parse("""{"actor":"bot","role":"triager","provenance":"authenticated-human"}""")
+          equal "provenance conflict" (Error TransitionError.ProvenanceConflict) (Wire.decodeActorWith (Some Provenance.Agent) d.RootElement)
+          let untrusted = Wire.decodeActorWith None d.RootElement |> okValue "asserted"
+          isTrue "asserted provenance is untrusted" (not untrusted.Trusted)
 
       "verification cycle guards (attempt, outcome, independence, budget, reopen evidence)",
       fun () ->

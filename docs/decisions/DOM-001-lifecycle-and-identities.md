@@ -227,6 +227,68 @@ they pass unedited.
     gap. `report-cases.v1.json` records it on its case (`schemaExpect`, `schemaGap`), and
     `tests/domain-report-contract.test.mjs` fails if any undocumented gap appears.
 
+### Round 3: identity and trust in the verification cycle (2026-10-08, still proposed; table 1.3.0)
+
+The findings VF-025 to VF-028 come from the verification agent's round-3 review
+(`docs/verification/EVIDENCE-APPRAISAL.md`, `tests/adversarial/verification-cycle.test.mjs`).
+
+25. **The author of an attempt is the submitter** (VF-025). The submission event always
+    records `author` = the submitting actor. A caller-supplied `author` is accepted only when
+    it canonically equals that actor; otherwise the submission is refused with
+    `author_mismatch`. Even a matching variant is recorded using the actor's own spelling.
+    There is no delegation event. That is the minimal safe rule, and delegation can be added
+    later as an explicit, authorized event if an owner needs it. Independence compares a
+    passing verifier against the recorded author, falling back to the submitting event's
+    actor, so a caller can no longer self-pass by naming a fictional author.
+
+    **Legacy shape (Kevin's tests):** with provenance `unrecorded`, the author is still
+    recorded as the actor, but the author-independence check is not applied. Independence
+    for that path rests on the verifier role, as in section 21. Kevin's tests submit and
+    verify as the same `operator-1`, and they pass unedited. A caller-supplied author can
+    never enable a self-pass on any path, because the author is always the actor.
+26. **Canonical actor identity** (VF-026). Every comparison of two actor identities uses
+    `canonicalActor` = Unicode NFKC, trimmed, lower-cased (F#: `ActorId.canonical` /
+    `ActorId.sameAs`, using invariant lower-casing). That covers both the author check and
+    independence. Recorded values keep the supplied spelling. Actor ids are ASCII-only
+    (the ActorId pattern), so compatibility-form ids such as full-width letters are refused
+    (`missing_actor`) before any comparison. NFKC is applied anyway, for comparisons against
+    recorded free text. The real fix is a Fides principal id; until Fides is qualified, this
+    is the canonical string form.
+27. **Provenance comes from the trusted caller boundary** (VF-027, mission section 7,
+    gate 4).
+    - The lifecycle API takes a **trusted context** argument:
+      `evaluateTransition(table, record, command, { context: { provenance } })`, and the same
+      for `recordInconclusive`, `recordEscalation` and `reopenAndResume`. F# uses
+      `Actor.Trusted` and `Wire.decodeActorWith context`.
+    - The context is supplied by the authenticated boundary: `triage-cli.mjs` passes its
+      IAM-authenticated operator context (the one call site I edited, with the coordinator's
+      grant), and the machine core will pass its verified principal's class.
+    - A command-body provenance that disagrees with the context is refused
+      (`provenance_conflict`).
+    - **Fail closed:** without a trusted `authenticated-human` context, every submission is
+      treated as autonomous for the repair budget. That includes the legacy shape
+      (`unrecorded`), an omitted context, and a body that merely asserts
+      `authenticated-human`. Once the budget is exhausted, `escalation_required` applies
+      until a human records an escalation.
+    - The strict API still requires *some* provenance (in the context or the body), so an
+      omitted provenance with no context is `invalid_provenance`.
+28. **A passing result requires an authenticated-human verifier** (VF-028; integrator
+    decision; **provisional and reversible pending VIT-OQ-012**). The table records it as
+    `policy.passRequiresHumanVerifier: true`.
+    - Actors with provenance `agent`, `application` or `ci` may record `failed` and
+      `inconclusive` results, but not `passed` (`human_verifier_required`).
+    - The legacy shape (`unrecorded`) is still allowed to pass, because Kevin's authority
+      tests use it. It has no production caller: `triage-cli` uses the strict path with a
+      trusted human context.
+    - Revisiting this requires an Ordo/owner decision on "qualified verification
+      process" (OPEN-DECISIONS VIT-OQ-012).
+
+    **Mutation-anchor note for the verification agent:** the appraisal's V05 anchor (the
+    old exact-string author comparison) no longer exists, because VF-026 had to replace it
+    with the canonical comparison. Its replacement is
+    `... && author && sameActor(author, command.actor)) {` in `checkAttempt`. V04 still
+    resolves.
+
 ## Alternatives considered
 
 - **Keep the graph in code (status quo).** Rejected: JS, F# and any UI would drift

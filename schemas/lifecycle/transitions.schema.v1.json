@@ -249,7 +249,8 @@
       "additionalProperties": false,
       "required": [
         "maxAutonomousFailedAttempts",
-        "independentVerification"
+        "independentVerification",
+        "passRequiresHumanVerifier"
       ],
       "properties": {
         "description": {
@@ -307,6 +308,12 @@
               "type": "string"
             }
           }
+        },
+        "passRequiresHumanVerifier": {
+          "enum": [
+            true,
+            false
+          ]
         }
       }
     },
