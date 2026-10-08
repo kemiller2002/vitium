@@ -5,6 +5,57 @@ Author role: independent verification agent (VIT-P0-2026-10-08). This document d
 
 Status vocabulary follows `docs/requirements/VITIUM-ACCEPTANCE.md`: `not-started`, `in-progress`, `blocked`, `executed-failed`, `verified-passed`. A check line can be `executed-pass`, `executed-fail (finding)` or `not-executed`.
 
+## Final status, fix round 2 (`p0/fix2-verify` from `p0/integration` @ `25ce853`)
+
+**Environment for every local result in this table:** local sandbox, Node v22.22.0. Browser: Chromium 153.0.8010.0 via `@sparticuz/chromium@153.0.0` and `@playwright/test@1.63.0`, at viewports 320 / 375 / 1280. Forma CDN blocked; the "file" mode serves the npm tarball's `dist/all.css` at the pinned URL. `test:integration` runs on the dynalite emulator.
+
+**CI legs** (`test.yml`, `p0-service.yml`, `browser.yml` cdn and blocked) are **pending** until the integrator reports CI run IDs. A local pass is local evidence only.
+
+No scenario is `verified-passed`. Every P0 scenario either depends on live infrastructure or operator decisions that do not exist, or still has an open finding or pending CI confirmation.
+
+### Commands and outputs on `25ce853` + this branch's test/doc changes
+
+| Command | Output |
+|---|---|
+| `npm test` | 207 tests, 207 pass, 0 fail, 0 todo |
+| `npm run test:adversarial` | 105 tests, 102 pass, 0 fail, 3 todo (VF-011, VF-018, VF-023) |
+| `npm run test:integration` | 20 tests, 20 pass (dynalite) |
+| `node scripts/secret-scan.mjs` | 293 text files, 0 blocked |
+| `VITIUM_LOCAL_CHROMIUM=sparticuz npm run test:browser` (CDN blocked) | 66 passed, 0 failed, 0 flaky; axe 0 violations |
+| same + `VITIUM_FORMA_CSS_FILE=…/dist/all.css` | 66 passed, 0 failed; axe 0 violations |
+| `node tests/verification/mutation-appraisal.mjs --suites=unit,adversarial` (55 mutants) + integration and browser follow-ups | 51 / 55 killed; 4 equivalent survivors (M23, M38, M43, M48) |
+
+### Per-scenario status
+
+| Scenario | Status | Evidence (local, `25ce853`) | What prevents a higher status |
+|---|---|---|---|
+| VIT-AC-001 | **blocked** | Browser suite, both CSS modes: no overflow at 320/375/1280; keyboard-only completion; error summary focused, with links and `aria-describedby` (VF-001/002 closed); no silent truncation (VF-003 closed); axe 0 violations | The scenario requires the **canonical site** (VIT-AC-014, operator Pages/DNS/TLS); a manual screen-reader session (not executed); CI browser run ID pending; axe `color-contrast` incomplete on decorative glyphs (manual review) |
+| VIT-AC-002 | **in-progress** | Browser keyboard flow: Review → Edit preserves every field → Review; Continue href is `github.com/kemiller2002/vitium/issues/new` with only title/body, sanitised URL, no secrets; every github.com request aborted; no "submitted" state; credential text blocked before the link (VF-004 closed) | CI `browser.yml` cdn leg pending; canonical site not live |
+| VIT-AC-003 | **blocked** | Adversarial: the browser's wire body is accepted by service and schema (VF-005 closed); receipt only after a durable write; gate `enabled:false` never contacts intake/Turnstile hosts (browser) | No AWS staging, Turnstile key, HTTPS intake domain or operator approval (VIT-OQ-003/004/008); feature gate stays off by policy |
+| VIT-AC-004 | **executed-failed** | Boundaries, unexpected/prototype fields, unicode/bidi/NFC, hostile markup, URL schemes and schema/runtime agreement all pass | **VF-011 open**: the service accepts `https://example.com/` + 990×`é` and stores a 5,960-character `pageUrl` (limit 2,000 measured before sanitising). Owner domain |
+| VIT-AC-005 | **blocked** | Challenge before any write; non-boolean verifier refused; replay never creates a record without a challenge (`replay-path.test.mjs`) | Per-source throttling not implemented (SEC-001); load test needs AWS staging. VF-024 (unchallenged store read per request) recorded |
+| VIT-AC-006 | **blocked** | Same key + same body → one record, same reference, 200 `replayed:true` without a new challenge (VF-010 closed); different body → 409 with no content; NFC-equivalent replay is one report; dynalite concurrency I-tests pass | Real DynamoDB conditional-write behaviour is untested (emulator only); needs AWS staging |
+| VIT-AC-007 | **blocked** | Store throw / malformed / inconsistent reply → 503, never a receipt (VF-013 closed); lossy-response retry passes on dynalite | Real store-failure and GitHub-sync behaviour need AWS staging; the GitHub sync worker is not implemented (P1) |
+| VIT-AC-008 | **blocked** | Redaction + quarantine for PEM, URL creds, secret params, `;jsessionid=`, Bearer, JWT, GitHub, AWS, Slack, API keys, cards; never stored or echoed (VF-009 closed); site blocks the same samples (VF-004 closed) | No designated operator or escalation owner (VIT-OQ-008); private escalation path not operational |
+| VIT-AC-009 | **executed-failed** | No read/status route; replay/conflict bodies contain no stored content; receipt is not a capability; IAM projection limits GetItem | **VF-023 open**: without a challenge, unknown key → 403, used key + other body → 409, so a leaked idempotency key's use is detectable. Owner intake |
+| VIT-AC-010 | **in-progress** | Product/impact lists identical across site JS, site HTML, service and schema; no silent alias mapping; unsupported schemaVersion refused; registry/migration tests in `npm test` pass | VF-011 (stored value exceeds the documented field limit); domain registry and migration tests (`tests/domain-*.test.mjs`) were not independently adjudicated in this pass |
+| VIT-AC-011 | **in-progress** | No observation → defect edge from any state; promotion only from `classified` by authorised roles; triage fields independent | Ordo authority not installed (table is `ordoAuthorized:false` by design); Fides operator authorization pending; CLI treats any permitted IAM principal as triager (documented provisional) |
+| VIT-AC-012 | **in-progress** | Lifecycle adversarial suite (table-driven): every edge executable with its obligations; every obligation enforced; every absent pair refused; closure reasons and evidence required; reopen needs new evidence and preserves byte-identical history; truncated/aliased history refused (VF-014..017 closed) | All executable checks pass **locally**; CI run ID pending. Candidate (non-Ordo) authority per DOM-001 |
+| VIT-AC-013 | **in-progress** | Not re-witnessed by verification in this pass | The coordinator reports `conditor verify/doctor`, `praxis verify --strict`, `ordo verify`, `./praxis validate` exit 0; independent re-run and CI run IDs pending |
+| VIT-AC-014 | **blocked** | n/a | Operator must enable Pages for Actions and configure the DNS/TLS custom domain; browser suite then re-run against `https://vitium.echelonfoundry.com/` |
+| VIT-AC-015 | **blocked** | Secret scan 0 findings; static assets contain no credential patterns or AWS endpoints; responses never echo token, infra errors or report text; log records allow-listed (`safe-log.mjs`) | CloudWatch log-redaction negative canary needs a deployed Lambda; VF-018 (no SRI on the CDN stylesheet) and VF-022 (scanner scope) open |
+
+### Open findings with owner
+
+| ID | Sev | Owner | Reproduction |
+|---|---|---|---|
+| VF-011 | medium | domain (`service/report-domain.mjs`) | `node --test --test-name-pattern="accepted by the site" tests/adversarial/contract-divergence.test.mjs` |
+| VF-018 | medium | ux / ops | `node --test --test-name-pattern="SRI" tests/adversarial/contract-divergence.test.mjs`; blocked on the jsDelivr byte check (UX-0001 UX-G1) |
+| VF-022 | low | ops (`scripts/lib/secret-scan.mjs`) | Put a runtime-assembled canary in `tests/browser/.output/x.md`, then run `node scripts/secret-scan.mjs` → 1 blocked |
+| VF-023 | medium | intake (`service/intake.mjs` replay path) | `node --test --test-name-pattern="unchallenged caller" tests/adversarial/replay-path.test.mjs` |
+| VF-024 | low | intake / ops | Probe: 20 unchallenged fresh-key requests → 20 store reads, 0 verifier calls (EVIDENCE-APPRAISAL § Fix round 2) |
+
+
 > **Fix round 1 update (`p0/fix1-verify` on `p0/integration` @ `2b9de54`).** The tables below record the phase-1 baseline runs.
 > Integrated-tree results:
 > - `npm run test:adversarial`: 101 tests, 72 pass, 0 fail, 29 todo.
@@ -262,3 +313,5 @@ Full reproductions are in the verification report; the summary is in `docs/verif
 | VF-020 | medium | AC-009, SEC-001 | intake | Receipt exposes `disposition`/`notices`, an oracle for the screening detectors (fix round 1) |
 | VF-021 | medium | DOM-003 | domain | `observation.schema.json` refuses the observation shape makeIntake produces (fix round 1) |
 | VF-022 | low | NFR-004 | ops | Secret scanner scans gitignored browser output; false positives after a browser run (fix round 1) |
+| VF-023 | medium | AC-009, API-010 | intake | Replay path: unchallenged key-existence oracle (403 vs 409) (fix round 2) |
+| VF-024 | low | AC-005, API-003 | intake/ops | One strongly consistent store read per unchallenged request (fix round 2) |
