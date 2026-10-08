@@ -78,7 +78,7 @@ test("T-34 triage CLI: pure parsing, queue-following update plan, no AWS call on
   assert.equal(parseArgs(["show", "--key=REQUEST#zz"]).error, "invalid_key");
   assert.equal(parseArgs(["scan"]).ok, false);
   const k = "--key=REQUEST#" + "a".repeat(64);
-  assert.equal(parseArgs(["advance", k, "--to=reopened", "--reason=r"]).error, "evidence_required");
+  assert.equal(parseArgs(["advance", k, "--to=reopened", "--reason=r"]).error, "missing_evidence");
   assert.deepEqual(parseArgs(["advance", k, "--to=reopened", "--reason=r", "--evidence=new-occurrence:OBS-1"]).value.evidence, [{kind:"new-occurrence", ref:"OBS-1"}]);
   assert.deepEqual(parseEvidence("a:1,b:x:y").value, [{kind:"a", ref:"1"}, {kind:"b", ref:"x:y"}]);
   assert.equal(parseEvidence("a:").ok, false);

@@ -73,8 +73,8 @@ test("I-13 strict path: typed evidence and declared fields are recorded; undecla
   let r = await cli(["advance", "--key=" + key, "--to=accepted-for-triage", "--reason=ok", "--evidence=supporting:EV-1"]);
   assert.equal(r.code, 0, r.err);
   r = await cli(["advance", "--key=" + key, "--to=classified", "--reason=bug", "--severity=high"]);
-  assert.equal(r.code, 5, "classification is a required field");
-  assert.match(r.err, /missing_field/);
+  assert.equal(r.code, 2, "classification is a required field: refused locally, before any AWS call");
+  assert.match(r.err, /--classification/);
   r = await cli(["advance", "--key=" + key, "--to=classified", "--reason=bug", "--classification=ui-defect", "--severity=high", "--evidence=reproduction:RUN-42"]);
   assert.equal(r.code, 0, r.err);
   const shown = JSON.parse((await cli(["show", "--key=" + key])).out);
@@ -102,8 +102,10 @@ test("I-11 stale concurrent advance is refused by the conditional update, not si
 
 test("I-12 illegal transitions and malformed keys exit non-zero without stack traces", async () => {
   const key = await submit("x");
-  const illegal = await cli(["advance", "--key=" + key, "--to=classified", "--reason=skip"]);
+  // received -> classified passes the local (table-wide) checks but is not a legal edge.
+  const illegal = await cli(["advance", "--key=" + key, "--to=classified", "--reason=skip", "--classification=x"]);
   assert.equal(illegal.code, 5);
+  assert.match(illegal.err, /forbidden_transition/);
   assert.ok(!/at .*\.mjs/.test(illegal.err));
   assert.equal((await cli(["show", "--key=REQUEST#nothex"])).code, 2);
   assert.equal((await cli(["show", "--key=REQUEST#" + "0".repeat(64)])).code, 4);
