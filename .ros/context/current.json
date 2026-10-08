@@ -4,7 +4,7 @@
   "repository": "vitium",
   "actor": "ros-bootstrap",
   "startedAt": "2026-10-08T12:51:23.048Z",
-  "updatedAt": "2026-10-08T12:51:23.048Z",
+  "updatedAt": "2026-10-08T12:57:26.000Z",
   "baselineDirtyPaths": [],
   "workItems": [
     {
@@ -20,6 +20,17 @@
       ],
       "updatedAt": "2026-10-08T12:51:23.048Z",
       "completedAt": "2026-10-08T12:51:23.048Z"
+    },
+    {
+      "id": "VIT-P0-GOV-001",
+      "type": "task",
+      "state": "active",
+      "semanticState": "active",
+      "evidence": [],
+      "updatedAt": "2026-10-08T12:57:26.000Z",
+      "telemetryExecutionIds": [
+        "EXE-20261008T125753191Z-b0366397"
+      ]
     }
   ]
 }
