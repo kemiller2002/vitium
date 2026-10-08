@@ -73,6 +73,14 @@ Execute and verify Conditor installation from the manifest, follow the scaffold 
 - Repair → failed independent verification → in-progress → rework → verification → resolved and resolved/closed → reopened → active repair are explicitly specified. The local candidate `service/triage.mjs` and tests now require verifier, outcome, candidate revision, evidence, attempt ID and reopen release metadata. Tracked in #15.
 - The state-helper tests are not proof of integrated Ordo transition governance or end-to-end Praxis remediation.
 
+## Vitium NuGet packages (2026-10-08)
+
+- Added F#/.NET 10 package projects `src/Vitium.Contracts` (`EchelonFoundry.Vitium.Contracts`) and `src/Vitium.Client` (`EchelonFoundry.Vitium.Client`) at version `0.1.0-preview.1`.
+- `Vitium.slnx`, F# consumer smoke tests, `nuget-ci.yml` compile/pack workflow and a guarded manual OIDC NuGet publishing workflow are present.
+- Actual CI [run 37817505596](https://github.com/kemiller2002/vitium/actions/runs/37817505596) **succeeded**, including build, typed transport checks, both `.nupkg` artifacts, and restoration/compilation from packages in an unrelated F# consumer.
+- Packages are **not published** to NuGet.org or deployed to any application. Releasing them requires approval of distribution/license, GitHub `nuget-release` environment, NuGet owner/trusted publishing policy, and immutable versioned tag. See `docs/NUGET-PACKAGES.md`.
+- The client models machine observation and verification submission with short-lived bearer credentials, but a live machine intake server, durable producer outbox, approved service identity and actual Praxis integration remain open (#14, #15).
+
 ## Machine reporting and rework lifecycle implementation candidate (2026-10-08, #14/#15)
 
 - **Implemented in source, unit-tested only:** strict machine-observation envelope v1.0 (`service/machine-observation.mjs`, `schemas/machine-observation.schema.json`), short-lived workload identity binding and scope checks (`service/machine-auth.mjs`), idempotent authenticated intake with conflict detection, restricted routing of security findings and Vitium echo suppression (`service/machine-intake.mjs`), a browser-refusing HTTP boundary for `POST /api/v1/observations` (`service/machine-http.mjs`), a bounded producer outbox that never alters the producer's build result (`service/machine-outbox.mjs`), and machine-result **proposals** that only an independent verifier can apply (`service/verification-proposals.mjs`).
