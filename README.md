@@ -24,6 +24,16 @@ Vitium follows the Echelon engineering stack. Conditor is the authority for inst
 
 See [governance and staged migration](docs/GOVERNANCE.md), [current state](context/CURRENT-STATE.md), and [domain and deployment setup](DEPLOYMENT.md).
 
+## P0 private-intake implementation candidate
+
+The repository now contains a **feature-gated private intake flow**:
+- `site/public-config.mjs` disables direct private submission until the API and public anti-bot site key are verified.
+- `service/` implements strict versioned input validation, a private observation, Turnstile verification, optimistic/idempotent durable receipt creation, and an AWS Lambda adapter.
+- `service/triage-cli.mjs` provides a provisional AWS IAM-authorized internal review path; it is not a public endpoint.
+- `infra/aws/template.yaml` provides a guarded AWS SAM staging candidate. It has **not been deployed**.
+
+The existing GitHub issue handoff remains the only presently usable submission path. Do not represent the private service as live or production approved. See [P0 implementation audit](docs/P0-IMPLEMENTATION.md), [intake infrastructure runbook](infra/aws/README.md), and [P0 acceptance requirements](docs/requirements/VITIUM-ACCEPTANCE.md).
+
 ## Development
 
 ```bash
