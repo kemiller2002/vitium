@@ -7,11 +7,14 @@
 // Ports (all injected):
 //   store.putOnce(item) -> Result<
 //        {created:true}
-//      | {created:false, existing:{eventId, canonicalHash, observationId, receivedAt}}     (same eventId already stored)
-//      | {created:false, attemptTaken:{eventId, eventType, observedAt}},                     (attemptKey already has a result)
+//      | {created:false, existing:{eventId, principalId, canonicalHash, observationId, receivedAt}} (same eventId already stored)
+//      | {created:false, attemptTaken:{eventId, eventType, observedAt}},                     (attemptKey already has a conclusive result)
 //      "unavailable"|"throttled">
 //     Conditional-put semantics: the store MUST atomically refuse a second item with the same
 //     pk (eventId) and, when item.attemptKey is non-null, a second item with the same attemptKey.
+//     eventIds are GLOBALLY unique, not namespaced per principal (MACH-001 decision 3a), because
+//     causation links reference eventIds across producers. The replay projection carries the
+//     storing principalId so a different principal is never acknowledged for it (VF-031).
 //   store.lookupEvent(eventId) -> Result<{found:boolean}, "unavailable"|"throttled">   (causation ordering)
 //   lookupAttempt(defectId, attemptId) -> Result<{found:false} | {found:true, author:{principalId}}, "unavailable">
 //     OPTIONAL. Who authored the repair attempt under verification. Without it no proposal is
@@ -105,8 +108,18 @@ export function screenEnvelope(envelope) {
 export const provenanceFor = system => system === "ci" ? "ci" : system === "agent" ? "agent" : "application";
 
 /** Echo: Vitium-originated events (marker) or a Vitium principal. Dropped, never stored (VIT-INT-015). */
-export const isEcho = (envelope, principal) =>
-  principal?.system === "vitium" || envelope.source.system === "vitium" || (envelope.correlation.originMarker ?? null) !== null;
+// Bound to the VERIFIED principal only (VF-030):
+//   "echo"    -> the authenticated workload is Vitium itself: dropped, never stored;
+//   "spoofed" -> a non-Vitium principal presents a Vitium origin marker: refused with a typed
+//                error (visible to the producer and its outbox), never silently dropped;
+//   "none"    -> ordinary event.
+// A caller-settable body field can therefore never make Vitium discard an event.
+// (source.system "vitium" from a non-Vitium principal is already refused by authorize.)
+export function echoStatus(envelope, principal) {
+  if (principal?.system === "vitium") return "echo";
+  if ((envelope.correlation.originMarker ?? null) !== null) return "spoofed";
+  return "none";
+}
 
 /** Security-classified routing (Tutela / security categories / vulnerability language). */
 export function routeFor(envelope, screening) {
@@ -160,7 +173,10 @@ export function fingerprint(envelope) {
 /** Idempotency hash of the canonical (redacted) envelope. */
 export const canonicalHash = envelope => sha256(canonicalJson(envelope));
 
-const attemptKeyFor = e => VERIFICATION_EVENT_TYPES.includes(e.eventType)
+// Only a CONCLUSIVE result (failed/passed) claims the attempt (VF-032, DOM-001 §19): an
+// inconclusive run is recorded as an observation and leaves the attempt open for a re-run.
+export const CONCLUSIVE_EVENT_TYPES = Object.freeze(["verification.failed", "verification.passed"]);
+const attemptKeyFor = e => CONCLUSIVE_EVENT_TYPES.includes(e.eventType)
   ? "ATTEMPT#" + e.correlation.defectId + "#" + e.correlation.verificationAttemptId : null;
 
 // --- verification: flags and (non-executable) proposals ---------------------------------
@@ -238,9 +254,9 @@ export function buildRecord({ envelope, screening, principal, verification, obse
   });
 }
 
-/** Pure: producer acknowledgement. Same eventId + same content -> same ack (replayed:true). */
-export const ackFor = ({ eventId, observationId, receivedAt }, replayed) => Object.freeze({
-  schemaVersion: "1.0", eventId, observationId, receivedAt, status: "recorded", replayed
+/** Pure: producer acknowledgement, scoped to the storing principal. Same principal + eventId + content -> same ack (replayed:true). */
+export const ackFor = ({ eventId, principalId, observationId, receivedAt }, replayed) => Object.freeze({
+  schemaVersion: "1.0", eventId, principalId, observationId, receivedAt, status: "recorded", replayed
 });
 
 /** Pure: interpret the conditional-put outcome for a candidate record. */
@@ -248,13 +264,16 @@ export function decidePut(record, outcome) {
   if (!isObject(outcome) || typeof outcome.ok !== "boolean") return fail(machineFailure("storage_unavailable"));
   if (!outcome.ok) return fail(machineFailure(outcome.error === "throttled" ? "throttled" : "storage_unavailable"));
   const v = outcome.value;
-  if (v?.created === true) return ok(ackFor(record, false));
+  if (v?.created === true) return ok(ackFor({ ...record, principalId: record.principal.principalId }, false));
   if (v?.created !== false) return fail(machineFailure("storage_unavailable"));
   if (isObject(v.existing)) {
-    if (typeof v.existing.canonicalHash !== "string") return fail(machineFailure("storage_unavailable"));
+    if (typeof v.existing.canonicalHash !== "string" || typeof v.existing.principalId !== "string") return fail(machineFailure("storage_unavailable"));
+    // Another principal's eventId (VF-031): conflict, decided BEFORE the content hash, so the
+    // response is identical whether or not the body matches and nothing stored is disclosed.
+    if (v.existing.principalId !== record.principal.principalId) return fail(machineFailure("event_conflict"));
     if (v.existing.canonicalHash !== record.canonicalHash) return fail(machineFailure("event_conflict"));
     if (typeof v.existing.observationId !== "string" || typeof v.existing.receivedAt !== "string") return fail(machineFailure("storage_unavailable"));
-    return ok(ackFor({ eventId: record.eventId, observationId: v.existing.observationId, receivedAt: v.existing.receivedAt }, true));
+    return ok(ackFor({ eventId: record.eventId, principalId: v.existing.principalId, observationId: v.existing.observationId, receivedAt: v.existing.receivedAt }, true));
   }
   if (isObject(v.attemptTaken) && typeof v.attemptTaken.observedAt === "string") {
     return fail(machineFailure(Date.parse(record.observedAt) < Date.parse(v.attemptTaken.observedAt) ? "stale_event" : "attempt_conflict"));
@@ -295,8 +314,10 @@ export function makeMachineIntake({ store, now, observationId, lookupAttempt }) 
       // 3. Authorization from verified scopes; caller-supplied source must agree.
       const authz = authorize(principal, envelope, at);
       if (!authz.ok) return fail(machineFailure(authz.error.code));
-      // 4. Echo suppression: no record, no ack id, no recursion.
-      if (isEcho(envelope, principal)) return ok(Object.freeze({ disposition: "echo-suppressed", eventId: envelope.eventId }));
+      // 4. Echo suppression bound to the verified principal; a spoofed marker is refused.
+      const echo = echoStatus(envelope, principal);
+      if (echo === "echo") return ok(Object.freeze({ disposition: "echo-suppressed", eventId: envelope.eventId }));
+      if (echo === "spoofed") return fail(machineFailure("spoofed_echo_marker"));
       // 5. Safety screening (redaction, log-dump and evidence refusal).
       const screened = screenEnvelope(envelope);
       if (!screened.ok) return screened;

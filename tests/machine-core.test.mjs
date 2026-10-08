@@ -66,6 +66,48 @@ test("same eventId with different content is a conflict that reveals nothing sto
   assert.equal(store.records().length, 1);
 });
 
+test("VF-031: the same eventId from a DIFFERENT principal is a conflict that discloses nothing, identical whether or not the body matches", async () => {
+  const { intake, store } = harness();
+  const v = example("observation-detected.ci.v1.json");
+  const first = await intake.submit({ principal: await principal("label-ci"), body: body(v) });
+  assert.equal(first.value.ack.principalId, "wl:ci:summa", "ack is principal-scoped");
+  // Another CI workload in scope for the same repository and system.
+  const other = await principal("label-ci-detect-only");
+  const same = await intake.submit({ principal: other, body: body(v) });
+  const changed = await intake.submit({ principal: other, body: body({ ...v, finding: { ...v.finding, observed: "Different" } }) });
+  for (const r of [same, changed]) {
+    assert.equal(r.ok, false);
+    assert.equal(r.error.code, "event_conflict");
+    assert.equal(JSON.stringify(r).includes(first.value.ack.observationId), false, "original observation id never disclosed");
+  }
+  assert.deepEqual(same, changed, "no oracle for whether the other principal's body matched");
+  // The original principal still gets its replay ack.
+  const again = await intake.submit({ principal: await principal("label-ci"), body: body(v) });
+  assert.equal(again.value.ack.replayed, true);
+  assert.equal(again.value.ack.observationId, first.value.ack.observationId);
+  assert.equal(store.records().length, 1);
+  assert.equal(decidePut({ principal: { principalId: "a" }, canonicalHash: "h" }, { ok: true, value: { created: false, existing: { canonicalHash: "h", observationId: "o", receivedAt: "t" } } }).error.code, "storage_unavailable", "replay projection without principalId fails closed");
+});
+
+test("VF-032: inconclusive results never claim the attempt; a second CONCLUSIVE result does", async () => {
+  const attempts = { "DEF-0042#VA-0042-2": { principalId: "wl:praxis:agent-7" } };
+  const { intake, store } = harness({ attempts });
+  const d = await principal("label-dokimos");
+  const pass = example("verification-passed.dokimos.v1.json");
+  const inconclusive = { ...pass, eventId: v4(), eventType: "verification.inconclusive", observedAt: "2026-10-08T14:00:00Z", finding: { ...pass.finding, category: "infrastructure-error" } };
+  const inconclusive2 = { ...inconclusive, eventId: v4(), observedAt: "2026-10-08T14:30:00Z" };
+  assert.ok((await intake.submit({ principal: d, body: body(inconclusive) })).ok);
+  assert.ok((await intake.submit({ principal: d, body: body(inconclusive2) })).ok, "two inconclusive runs of one attempt");
+  assert.ok((await intake.submit({ principal: d, body: body(pass) })).ok, "re-run after inconclusive records a pass");
+  const lateInconclusive = { ...inconclusive, eventId: v4(), observedAt: "2026-10-08T16:00:00Z" };
+  assert.ok((await intake.submit({ principal: d, body: body(lateInconclusive) })).ok, "inconclusive never conflicts");
+  const secondConclusive = { ...example("verification-failed.dokimos.v1.json"), eventId: v4(), observedAt: "2026-10-08T16:30:00Z", correlation: { ...pass.correlation } };
+  assert.equal((await intake.submit({ principal: d, body: body(secondConclusive) })).error.code, "attempt_conflict");
+  const recs = store.records();
+  assert.equal(recs.length, 4);
+  assert.deepEqual(recs.map(r => r.attemptKey), [null, null, "ATTEMPT#DEF-0042#VA-0042-2", null]);
+});
+
 test("concurrent identical deliveries produce exactly one record (conditional put)", async () => {
   const { intake, store } = harness();
   const p = await principal("label-ci");
@@ -182,6 +224,28 @@ test("item 3: unsafe evidence and oversized/malformed payloads are refused with 
   v.schemaVersion = "0.9";
   assert.equal(await code(v), "unsupported_version");
   assert.equal(store.records().length, 0);
+});
+
+test("VF-029: inherited-name keys at any level are refused before redaction/storage, so nothing unredacted is persisted", async () => {
+  const { intake, store } = harness();
+  const p = await principal("label-ci");
+  const token = ["gh", "p_", "B".repeat(36)].join("");
+  const levels = ["", "source", "subject", "finding", "correlation"];
+  for (const key of ["constructor", "toString", "__proto__", "valueOf", "hasOwnProperty"]) {
+    for (const at of levels) {
+      const raw = body(example("observation-detected.ci.v1.json"));
+      const needle = at ? `"${at}":{` : "{";
+      const text = raw.replace(needle, needle + `"${key}":{"note":"${token}"},`);
+      const r = await intake.submit({ principal: p, body: text });
+      assert.equal(r.ok, false, key + " at " + (at || "$"));
+      assert.equal(r.error.code, "invalid_envelope");
+      assert.equal(r.error.path, (at ? "$." + at : "$") + "." + key);
+    }
+  }
+  assert.equal(store.records().length, 0);
+  assert.equal(JSON.stringify(store.records()).includes(token), false);
+  assert.equal(machineFailure("constructor").code, "storage_unavailable", "error catalogue lookup is own-property only");
+  assert.equal(machineFailure("__proto__").code, "storage_unavailable");
 });
 
 test("full log dumps and stack traces are refused, not stored", async () => {
@@ -344,14 +408,21 @@ test("item 7: malformed verification and forged passing status cannot reach stor
 
 // ---- item 8: echo suppression -------------------------------------------------------------
 
-test("item 8: Vitium-originated events (marker or vitium principal) are dropped, never stored", async () => {
+test("item 8 / VF-030: only the VERIFIED Vitium principal is an echo; a vitium marker from anyone else is a typed refusal, never a silent drop", async () => {
   const { intake, store } = harness();
   const marked = example("observation-detected.ci.v1.json");
   marked.correlation.originMarker = "vitium/issue-sync:DEF-0042";
   const r1 = await intake.submit({ principal: await principal("label-ci"), body: body(marked) });
-  assert.equal(r1.ok, true);
-  assert.equal(r1.value.disposition, "echo-suppressed");
-  assert.equal(r1.value.ack, undefined, "no ack: nothing to correlate further");
+  assert.equal(r1.ok, false, "spoofed echo marker must not be accepted as an echo");
+  assert.equal(r1.error.code, "spoofed_echo_marker");
+  assert.equal(r1.error.status, 403);
+  assert.equal(r1.error.retryable, false, "the producer outbox dead-letters it, so it is visible");
+  // Vitium itself, with or without a marker: suppressed.
+  const own = example("observation-detected.ci.v1.json");
+  own.eventId = v4();
+  own.source = { ...own.source, system: "vitium", repository: "kemiller2002/vitium" };
+  own.correlation.originMarker = "vitium/issue-sync:DEF-0042";
+  assert.equal((await intake.submit({ principal: await principal("label-vitium"), body: body(own) })).value.disposition, "echo-suppressed");
   const self = example("observation-detected.ci.v1.json");
   self.eventId = v4();
   self.source = { ...self.source, system: "vitium", repository: "kemiller2002/vitium" };
