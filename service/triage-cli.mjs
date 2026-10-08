@@ -12,6 +12,7 @@
  */
 import {table as lifecycleTable} from "./triage.mjs";
 import {evaluateTransition, recordInconclusive, reopenAndResume, promoteObservation} from "./lifecycle.mjs";
+import {AGENT, HUMAN_ROLE_ENV, classifyCaller, parseHumanRoleAllowList} from "./operator-identity.mjs";
 
 // VIT-LCY-002 promotion: a NEW defect identity linked to a classified observation. Defect ids
 // must match the table's defectIdPattern (^DEF-[0-9]{4,}$, DOM-001 item 8); they are opaque
@@ -20,11 +21,13 @@ import {evaluateTransition, recordInconclusive, reopenAndResume, promoteObservat
 export const DEFECT_ID_DIGITS = 16;
 export const isGeneratedDefectId = id => new RegExp(lifecycleTable.promotion.defectIdPattern).test(id) && id.length === 4 + DEFECT_ID_DIGITS;
 
-// Strict domain path (DOM-001 item 7): commands carry an explicit provenance class, typed
-// evidence [{kind, ref}] and declared fields. The legacy untyped evidenceId shape and the
-// "unrecorded" provenance are NOT used here; evaluateTransition is called without
-// allowUnrecordedProvenance, so a missing provenance is refused.
-export const OPERATOR_PROVENANCE = "authenticated-human";
+// Strict domain path (DOM-001 item 7): commands carry typed evidence [{kind, ref}] and declared
+// fields; provenance is the TRUSTED context derived from the STS caller identity (VF-035):
+// `authenticated-human` only for an assumed-role session of an allow-listed human operator
+// role (env VITIUM_HUMAN_OPERATOR_ROLE_ARNS, no defaults), otherwise `agent`. The legacy
+// evidenceId shape and the "unrecorded" provenance are never used here, and no CLI flag or
+// command-body value can choose the actor kind.
+const trustedProvenance = provenance => provenance === "authenticated-human" ? provenance : AGENT;
 // CLI flag -> lifecycle table field. Verification-cycle flags use operator-friendly names.
 const FIELD_FLAGS = Object.freeze({
   classification:"classification", severity:"severity", priority:"priority", confidence:"confidence",
@@ -171,8 +174,8 @@ export function parseArgs(argv) {
 }
 
 /** Pure: parsed advance arguments + current record + actor + clock -> strict lifecycle command. */
-export const buildCommand = ({args, record, actor, occurredAt}) => Object.freeze({
-  to:args.to, expectedRevision:record.revision, actor, provenance:OPERATOR_PROVENANCE,
+export const buildCommand = ({args, record, actor, occurredAt, provenance}) => Object.freeze({
+  to:args.to, expectedRevision:record.revision, actor, provenance:trustedProvenance(provenance),
   role:args.role ?? "triager", reason:args.reason, fields:args.fields, evidence:args.evidence, occurredAt
 });
 
@@ -180,12 +183,12 @@ export const buildCommand = ({args, record, actor, occurredAt}) => Object.freeze
  * Pure: promotion decision. Refuses an observation that was already promoted (one defect per
  * observation through this tool; merging/duplicates are a triage decision, VIT-OQ-014).
  */
-export function decidePromotion({args, record, actor, occurredAt, defectId}) {
+export function decidePromotion({args, record, actor, occurredAt, defectId, provenance}) {
   if (record.promotedTo) return {ok:false, error:{code:"already_promoted", message:"This observation was already promoted to " + record.promotedTo + "."}};
   if (!isGeneratedDefectId(defectId)) return {ok:false, error:{code:"invalid_defect_id", message:"Defect id effect returned an invalid id."}};
   const observation = {kind:"observation", state:record.state, revision:record.revision, history:record.history,
     ...(record.links ? {links:record.links} : {})};
-  return promoteObservation(lifecycleTable, observation, {actor, provenance:OPERATOR_PROVENANCE, role:args.role,
+  return promoteObservation(lifecycleTable, observation, {actor, provenance:trustedProvenance(provenance), role:args.role,
     reason:args.reason, occurredAt, expectedRevision:record.revision, defectId});
 }
 
@@ -219,13 +222,19 @@ export function planPromotion({table, key, record, result, createdAt}) {
   ]};
 }
 
-/** Pure: the domain decision for one CLI command against the current record (no I/O). */
-export function decide({args, record, actor, occurredAt}) {
+/**
+ * Pure: the domain decision for one CLI command against the current record (no I/O).
+ * `provenance` is the caller classification from classifyCaller (VF-035). It is OPTIONAL and
+ * fails closed: when absent, or anything other than authenticated-human, the caller is an
+ * agent (repair budget applies; passing verification and escalation are refused by domain).
+ */
+export function decide({args, record, actor, occurredAt, provenance}) {
   const current = {kind:record.kind, ...(record.id ? {id:record.id} : {}), state:record.state, revision:record.revision, history:record.history};
-  const base = {actor, provenance:OPERATOR_PROVENANCE, role:args.role ?? "triager", occurredAt};
-  // VF-027: provenance comes from this authenticated boundary (IAM identity), passed as the
-  // lifecycle's trusted context rather than read from the command body.
-  const trusted = {context:{provenance:OPERATOR_PROVENANCE}};
+  const kind = trustedProvenance(provenance);
+  const base = {actor, provenance:kind, role:args.role ?? "triager", occurredAt};
+  // VF-027/VF-035: provenance comes from this authenticated boundary (STS identity checked
+  // against the human-role allow-list), passed as the lifecycle's trusted context.
+  const trusted = {context:{provenance:kind}};
   if (args.command === "verify") {
     const r = recordInconclusive(lifecycleTable, current, {...base, expectedRevision:record.revision,
       reason:args.reason, fields:args.fields, evidence:args.evidence}, trusted);
@@ -237,7 +246,7 @@ export function decide({args, record, actor, occurredAt}) {
       {...base, to:args.resumeTo, reason:args.resumeReason, fields:args.resume.fields, evidence:[]}, trusted);
     return r.ok ? {ok:true, value:{record:r.value.record, events:r.value.events}} : r;
   }
-  const r = evaluateTransition(lifecycleTable, current, buildCommand({args, record, actor, occurredAt}), trusted);
+  const r = evaluateTransition(lifecycleTable, current, buildCommand({args, record, actor, occurredAt, provenance:kind}), trusted);
   return r.ok ? {ok:true, value:{record:r.value.record, events:[r.value.event]}} : r;
 }
 
@@ -294,8 +303,10 @@ export function planUpdate({table, key, current, changed, reference, receivedAt}
  * identity() -> Promise<arn>, now() -> ISO string, out(text), err(text).
  * Returns the process exit code. Never prints AWS error text (may carry ARNs/request data).
  */
-export async function runTriage({argv, table, db, commands, identity, now, out, err, newDefectId}) {
+export async function runTriage({argv, table, db, commands, identity, now, out, err, newDefectId, humanOperatorRoles}) {
   const args = parseArgs(argv);
+  const allowList = parseHumanRoleAllowList(humanOperatorRoles);
+  if (!allowList.ok) { err(allowList.error.message + "\n"); return 2; }
   if (!table || !args.ok) {
     const messages = {
       invalid_key:"A valid private record key is required (REQUEST#<hash> or DEFECT#DEF-<n>).",
@@ -313,6 +324,7 @@ export async function runTriage({argv, table, db, commands, identity, now, out, 
   try {
     const actor = await identity();
     if (typeof actor !== "string" || !actor) { err("AWS identity is unavailable.\n"); return 3; }
+    const caller = classifyCaller(actor, allowList.value);
     if (command === "queue") {
       const result = await db.send(new commands.QueryCommand({
         TableName:table, IndexName:"ReviewQueue",
@@ -338,7 +350,7 @@ export async function runTriage({argv, table, db, commands, identity, now, out, 
     }
     if (command === "promote") {
       const occurredAt = now();
-      const promoted = decidePromotion({args:args.value, record, actor, occurredAt, defectId:newDefectId()});
+      const promoted = decidePromotion({args:args.value, record, actor, occurredAt, defectId:newDefectId(), provenance:caller.provenance});
       if (!promoted.ok) { err("Promotion refused (" + promoted.error.code + "): " + promoted.error.message + "\n"); return 5; }
       try {
         await db.send(new commands.TransactWriteItemsCommand(planPromotion({table, key:args.value.key, record,
@@ -350,10 +362,10 @@ export async function runTriage({argv, table, db, commands, identity, now, out, 
         }
         throw error;
       }
-      out(JSON.stringify({observation:args.value.key, defect:"DEFECT#" + promoted.value.defect.id, state:promoted.value.defect.state, actor}) + "\n");
+      out(JSON.stringify({observation:args.value.key, defect:"DEFECT#" + promoted.value.defect.id, state:promoted.value.defect.state, actor, provenance:caller.provenance}) + "\n");
       return 0;
     }
-    const evaluated = decide({args:args.value, record, actor, occurredAt:now()});
+    const evaluated = decide({args:args.value, record, actor, occurredAt:now(), provenance:caller.provenance});
     if (!evaluated.ok) {
       err("Transition refused (" + evaluated.error.code + "): " + evaluated.error.message + "\n");
       return 5;
@@ -367,7 +379,7 @@ export async function runTriage({argv, table, db, commands, identity, now, out, 
       throw error;
     }
     out(JSON.stringify({reference:record.reference ?? record.id, state:changed.state, revision:changed.revision,
-      events:evaluated.value.events.map(e => e.type + ":" + (e.to ?? e.fields?.verificationOutcome ?? "")), actor}) + "\n");
+      events:evaluated.value.events.map(e => e.type + ":" + (e.to ?? e.fields?.verificationOutcome ?? "")), actor, provenance:caller.provenance}) + "\n");
     return 0;
   } catch {
     err("Triage operation failed (AWS unavailable or access denied).\n");
@@ -381,14 +393,14 @@ if (isMain) {
   const argv = process.argv.slice(2);
   const pre = parseArgs(argv);
   if (!table || !pre.ok) {
-    process.exitCode = await runTriage({argv, table, out:t => process.stdout.write(t), err:t => process.stderr.write(t)});
+    process.exitCode = await runTriage({argv, table, humanOperatorRoles:process.env[HUMAN_ROLE_ENV], out:t => process.stdout.write(t), err:t => process.stderr.write(t)});
   } else {
     const {DynamoDBClient, GetItemCommand, QueryCommand, UpdateItemCommand, TransactWriteItemsCommand} = await import("@aws-sdk/client-dynamodb");
     const {randomInt} = await import("node:crypto");
     const {STSClient, GetCallerIdentityCommand} = await import("@aws-sdk/client-sts");
     const sts = new STSClient({});
     process.exitCode = await runTriage({
-      argv, table, db:new DynamoDBClient({}), commands:{GetItemCommand, QueryCommand, UpdateItemCommand, TransactWriteItemsCommand},
+      argv, table, humanOperatorRoles:process.env[HUMAN_ROLE_ENV], db:new DynamoDBClient({}), commands:{GetItemCommand, QueryCommand, UpdateItemCommand, TransactWriteItemsCommand},
       // Opaque random defect id: 16 digits, first digit non-zero (no leading-zero ambiguity).
       newDefectId:() => "DEF-" + String(randomInt(1, 10)) + Array.from({length:DEFECT_ID_DIGITS - 1}, () => randomInt(0, 10)).join(""),
       identity:async () => (await sts.send(new GetCallerIdentityCommand({}))).Arn,

@@ -71,7 +71,7 @@ test("VIT-AC-036 / VIT-VER-006: no exported lifecycle entry point lets an actor 
 
 // triage-cli maps EVERY IAM principal to authenticated-human (OPERATOR_PROVENANCE). An agent
 // workload's role session therefore escapes both the repair budget and the human-verifier rule.
-test("mission §7 gate 4 / VIT-VER-011: the triage-cli boundary does not grant authenticated-human to a non-human IAM workload", { todo: "finding VF-035" }, () => {
+test("mission §7 gate 4 / VIT-VER-011: the triage-cli boundary does not grant authenticated-human to a non-human IAM workload", () => {
   let rec = start();
   for (let i = 1; i <= 3; i += 1) {
     rec = run(rec, { ...submit("bot", "B" + i, "c" + i), provenance: "agent" }).value.record;

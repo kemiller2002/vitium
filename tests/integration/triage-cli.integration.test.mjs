@@ -24,9 +24,12 @@ before(async () => {
 after(async () => { client?.destroy(); await new Promise(r => server.close(r)); });
 
 const commands = {GetItemCommand, QueryCommand, UpdateItemCommand};
-async function cli(argv, actor = "arn:aws:iam::000000000000:user/emulator-operator") {
+// VF-035: human operators are assumed-role sessions of allow-listed roles.
+const OPERATOR = "arn:aws:sts::000000000000:assumed-role/TriageOperator/emulator-operator";
+const HUMAN_ROLES = "arn:aws:iam::000000000000:role/vitium/TriageOperator,arn:aws:iam::000000000000:role/VerifierOperator";
+async function cli(argv, actor = OPERATOR) {
   const out = [], err = [];
-  const code = await runTriage({argv, table:TABLE, db:client, commands, identity:async () => actor,
+  const code = await runTriage({argv, table:TABLE, db:client, commands, identity:async () => actor, humanOperatorRoles:HUMAN_ROLES,
     now:() => "2026-10-08T13:00:00.000Z", out:t => out.push(t), err:t => err.push(t)});
   return {code, out:out.join(""), err:err.join("")};
 }
@@ -63,7 +66,7 @@ test("I-10 advancing quarantined -> accepted-for-triage moves it to the pending 
   const shown = JSON.parse((await cli(["show", "--key=" + key])).out);
   assert.equal(shown.state, "rejected");
   assert.equal(shown.revision, 2);
-  assert.equal(shown.history[0].actor, "arn:aws:iam::000000000000:user/emulator-operator");
+  assert.equal(shown.history[0].actor, OPERATOR);
   assert.equal(shown.history[0].provenance, "authenticated-human", "strict path records provenance, never 'unrecorded'");
   assert.deepEqual(shown.history[0].evidence, []);
 });

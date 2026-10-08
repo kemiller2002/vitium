@@ -84,7 +84,9 @@ test("T-34 triage CLI: pure parsing, queue-following update plan, no AWS call on
   assert.equal(parseEvidence("a:").ok, false);
   const cmd = buildCommand({args:parseArgs(["advance", k, "--to=classified", "--reason=r", "--classification=c"]).value,
     record:{revision:3}, actor:"arn:x", occurredAt:"2026-10-08T00:00:00.000Z"});
-  assert.equal(cmd.provenance, "authenticated-human");
+  assert.equal(cmd.provenance, "agent", "VF-035: no trusted classification -> agent (fail closed)");
+  assert.equal(buildCommand({args:parseArgs(["advance", k, "--to=classified", "--reason=r", "--classification=c"]).value,
+    record:{revision:3}, actor:"arn:x", occurredAt:"2026-10-08T00:00:00.000Z", provenance:"authenticated-human"}).provenance, "authenticated-human");
   assert.deepEqual(cmd.fields, {classification:"c"});
   assert.equal(cmd.expectedRevision, 3);
   assert.equal(cmd.evidenceId, undefined, "legacy untyped evidence shape is not used");

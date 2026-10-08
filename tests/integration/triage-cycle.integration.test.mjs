@@ -22,13 +22,15 @@ before(async () => {
 after(async () => { client?.destroy(); await new Promise(r => server.close(r)); });
 
 const commands = {GetItemCommand, QueryCommand, UpdateItemCommand};
-const DEV = "arn:aws:iam::000000000000:user/developer";
-const QA = "arn:aws:iam::000000000000:user/verifier";
+// VF-035: humans are assumed-role sessions of allow-listed roles; anything else is an agent.
+const DEV = "arn:aws:sts::000000000000:assumed-role/TriageOperator/developer";
+const QA = "arn:aws:sts::000000000000:assumed-role/VerifierOperator/verifier";
+const HUMAN_ROLES = "arn:aws:iam::000000000000:role/vitium/TriageOperator,arn:aws:iam::000000000000:role/VerifierOperator";
 let clock = 0;
 const now = () => new Date(Date.UTC(2026, 9, 8, 13, 0, clock++)).toISOString();
 async function cli(argv, actor = DEV, db = client) {
   const out = [], err = [];
-  const code = await runTriage({argv, table:TABLE, db, commands, identity:async () => actor, now, out:t => out.push(t), err:t => err.push(t)});
+  const code = await runTriage({argv, table:TABLE, db, commands, identity:async () => actor, now, humanOperatorRoles:HUMAN_ROLES, out:t => out.push(t), err:t => err.push(t)});
   return {code, out:out.join(""), err:err.join("")};
 }
 const show = async key => JSON.parse((await cli(["show", "--key=" + key])).out);
