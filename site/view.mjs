@@ -13,7 +13,7 @@ export const FIELD_LABELS = Object.freeze({
   pageUrl: "Page URL", privacyAcknowledged: "Privacy confirmation"
 });
 export const FOCUS_TARGETS = Object.freeze({
-  "error-summary": "feedback", "review-title": "review-title", "form-title": "form-title",
+  "error-summary": "feedback", review: "review", "review-title": "review-title", "form-title": "form-title",
   "submit-error": "submit-error", "review-status": "review-status", "result-title": "success-title",
   product: "product", impact: "impact", title: "title", actual: "actual", expected: "expected",
   steps: "steps", pageUrl: "pageUrl", privacyAcknowledged: "privacyAcknowledged"
@@ -98,13 +98,14 @@ export function project(state) {
       code: state.error?.code ?? "", kind: state.error?.kind ?? ""
     } : null,
     submitVisible: isPrivate && ["reviewing", "submitting"].includes(state.phase) || canRetry,
-    submitLabel: state.phase === "submitting" ? "Sending…" : canRetry ? "Try sending again" : "Send private report",
+    submitLabel: !isPrivate ? "Send" : state.phase === "submitting" ? "Sending…" : canRetry ? "Try sending again" : "Send private report",
     submitDisabled: state.phase === "submitting",
     editDisabled: state.phase === "submitting",
     busy: state.phase === "submitting",
     resultVisible: ["accepted", "under-review"].includes(state.phase),
     result: state.receipt ? {
-      kind: state.phase, reference: state.receipt.reference, receivedAt: state.receipt.receivedAt
+      kind: state.phase, reference: state.receipt.reference, receivedAt: state.receipt.receivedAt,
+      credentialRedacted: state.receipt.notices?.includes("credential-redacted") === true
     } : null,
     focus: state.focus,
     announcement: state.announcement
@@ -227,8 +228,13 @@ export function applyView(doc, view, prev) {
   if (view.result) {
     setText(byId(doc, "success-overline"), view.result.kind === "under-review" ? "Report received · held for review" : "Report received");
     setText(byId(doc, "result-explanation"), view.result.kind === "under-review"
-      ? "We have received your report and stored it privately. It is being held for review before triage. This does not mean the defect has been verified or fixed."
+      ? "We have received and stored your report privately. A person will review it before it enters triage, so it may take longer to be looked at. This does not mean the defect has been verified or fixed."
       : "We have durably received your report for triage. This does not mean the defect has been verified or fixed.");
+    const notice = byId(doc, "redaction-notice");
+    setHidden(notice, !view.result.credentialRedacted);
+    setText(notice, view.result.credentialRedacted
+      ? "Something in your report looked like a password, key or token. It was removed before your report was stored. If it was a real secret, change it now: it may have been exposed where you copied it from."
+      : "");
     setText(byId(doc, "report-reference"), view.result.reference);
     setText(byId(doc, "report-received-at"), view.result.receivedAt);
   }

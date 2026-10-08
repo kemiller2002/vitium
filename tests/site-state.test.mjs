@@ -61,7 +61,7 @@ test("legacy: invalid review keeps every typed value and lists all errors in for
 test("legacy: valid review is handoff-ready with a sanitized GitHub link, never a submitted state", () => {
   const { state, effects } = run(initialState(), { type: "ReviewRequested", values: typed() });
   assert.equal(state.phase, "handoff-ready");
-  assert.equal(state.focus.target, "review-title");
+  assert.equal(state.focus.target, "review");
   assert.match(state.announcement, /not been submitted/);
   const url = new URL(state.handoffUrl);
   assert.equal(url.origin + url.pathname, "https://github.com/kemiller2002/vitium/issues/new");
@@ -136,6 +136,40 @@ test("private: review requests the challenge and binds a single idempotency key"
   assert.deepEqual(bad.values, typed());
 });
 
+test("over-limit typing is reported live and the text is kept, never truncated (VF-003)", () => {
+  const draft = initialState();
+  const long = "x".repeat(10_000);
+  const next = transition(draft, { type: "FieldChanged", field: "actual", value: long });
+  assert.equal(next.state.values.actual.length, 10_000);
+  assert.equal(next.state.fieldErrors[0].field, "actual");
+  assert.equal(next.state.fieldErrors[0].code, "too_long");
+  assert.match(next.state.fieldErrors[0].message, /1,200 characters or less.*10,000.*Nothing has been cut/);
+  assert.match(next.state.announcement, /1,200/);
+  const fixed = reduce(next.state, { type: "FieldChanged", field: "actual", value: "short" });
+  assert.deepEqual(fixed.fieldErrors, []);
+  assert.match(fixed.announcement, /within the length limit/);
+  // Code points, not UTF-16 units: 1,200 emoji are within the limit.
+  assert.deepEqual(reduce(draft, { type: "FieldChanged", field: "actual", value: "🪲".repeat(1200) }).fieldErrors, []);
+});
+
+test("legacy: credential-looking text never reaches the public GitHub link (VF-004)", () => {
+  const github = "gh" + "p_" + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8";
+  for (const [field, value] of [["actual", "My token is " + github], ["title", "pass" + "word: hunter2hunter2"], ["steps", "Use s" + "k-" + "x".repeat(24)]]) {
+    const values = typed({ [field]: value });
+    const { state, effects } = run(initialState(), { type: "ReviewRequested", values });
+    assert.equal(state.phase, "draft", field);
+    assert.equal(state.handoffUrl, null, field);
+    assert.equal(state.fieldErrors[0].field, field);
+    assert.equal(state.fieldErrors[0].code, "credential");
+    assert.deepEqual(state.values, values, "typed content kept so the reporter can remove the secret");
+    assert.equal(state.focus.target, "error-summary");
+    assert.deepEqual(effects, []);
+  }
+  const session = reduce(initialState(), { type: "ReviewRequested", values: typed({ pageUrl: "https://example.com/app;jsessionid=ABCDEF123456" }) });
+  assert.equal(session.fieldErrors[0].field, "pageUrl");
+  assert.equal(session.fieldErrors[0].code, "credential");
+});
+
 test("private: client mirrors server credential guard before transmission", () => {
   const values = typed({ actual: "my password: hunter22 does not work" });
   const state = reduce(initialState("private"), { type: "ReviewRequested", values, requestId: randomUUID() });
@@ -179,8 +213,15 @@ test("accepted is reached only with a valid server receipt; the draft is cleared
   assert.deepEqual(ok.state.values, EMPTY_VALUES);
   assert.equal(ok.state.attempt, null);
   assert.equal(ok.state.focus.target, "result-title");
-  const held = reduce(state, { type: "SubmitCompleted", correlationId: requestId, outcome: { kind: "Success", status: 201, body: receipt({ status: "quarantined" }) } });
+  const held = reduce(state, { type: "SubmitCompleted", correlationId: requestId, outcome: { kind: "Success", status: 201, body: receipt({ disposition: "quarantined", notices: ["credential-redacted", "unknown-notice"] }) } });
   assert.equal(held.phase, "under-review");
+  assert.deepEqual(held.receipt.notices, ["credential-redacted"]);
+  assert.match(held.announcement, /held for review before triage/);
+  assert.match(held.announcement, /looked like a secret was removed/);
+  // SEC-001 receipts may omit disposition entirely: that is an ordinary acceptance.
+  const plain = reduce(state, { type: "SubmitCompleted", correlationId: requestId, outcome: { kind: "Success", status: 201, body: receipt({ disposition: undefined }) } });
+  assert.equal(plain.phase, "accepted");
+  assert.deepEqual(plain.receipt.notices, []);
   const replay = reduce(state, { type: "SubmitCompleted", correlationId: requestId, outcome: { kind: "Success", status: 200, body: receipt({ replayed: true }) } });
   assert.equal(replay.phase, "accepted");
 });
@@ -189,6 +230,9 @@ const NON_RECEIPTS = [
   ["201 without reference", { kind: "Success", status: 201, body: receipt({ reference: undefined }) }],
   ["201 malformed reference", { kind: "Success", status: 201, body: receipt({ reference: "<img src=x>" }) }],
   ["201 wrong status word", { kind: "Success", status: 201, body: receipt({ status: "ok" }) }],
+  ["201 status quarantined (not a status word)", { kind: "Success", status: 201, body: receipt({ status: "quarantined" }) }],
+  ["201 unknown disposition", { kind: "Success", status: 201, body: receipt({ disposition: "published" }) }],
+  ["201 inherited disposition", { kind: "Success", status: 201, body: receipt({ disposition: "constructor" }) }],
   ["201 inherited status", { kind: "Success", status: 201, body: receipt({ status: "toString" }) }],
   ["201 without receivedAt", { kind: "Success", status: 201, body: receipt({ receivedAt: undefined }) }],
   ["201 null body", { kind: "Success", status: 201, body: null }],
@@ -335,4 +379,13 @@ test("random event sequences never reach success without a receipt and never los
       state = next;
     }
   }
+});
+
+test("private: blank optional fields are omitted from the request; schemaVersion is sent (VF-005)", () => {
+  const { effects } = submittingPrivate(typed({ pageUrl: "", steps: "   " }));
+  const body = JSON.parse(httpEffect(effects).request.body);
+  assert.equal(body.schemaVersion, "1.0");
+  assert.ok(!Object.hasOwn(body, "pageUrl"), "pageUrl omitted");
+  assert.ok(!Object.hasOwn(body, "steps"), "steps omitted");
+  assert.deepEqual(Object.keys(body).sort(), ["actual", "challengeToken", "expected", "impact", "privacyAcknowledged", "product", "schemaVersion", "title"]);
 });

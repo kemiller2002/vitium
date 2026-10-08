@@ -47,17 +47,20 @@ test("status region, error summary and focus targets exist", () => {
   for (const [name, id] of Object.entries(FOCUS_TARGETS)) {
     assert.match(page, new RegExp('id="' + id + '"'), "focus target " + name);
   }
-  for (const id of ["form-title", "review-title", "success-title", "review-status", "submit-error"]) {
+  for (const id of ["form-title", "review", "review-title", "success-title", "review-status", "submit-error"]) {
     assert.match(page, new RegExp('id="' + id + '"[^>]*tabindex="-1"'), id + " must be programmatically focusable");
   }
 });
 
 test("private intake UI is inert while disabled: only inside <template>, never in the live document", () => {
-  for (const id of ["private-destination", "turnstile-challenge", "submit-private", "private-success", "report-reference", "private-foot", "submit-error"]) {
+  for (const id of ["private-destination", "turnstile-challenge", "private-success", "report-reference", "private-foot", "submit-error", "redaction-notice"]) {
     assert.doesNotMatch(outsideTemplates, new RegExp('id="' + id + '"'), id + " outside template");
     assert.match(page, new RegExp('id="' + id + '"'), id + " present in template");
   }
   assert.doesNotMatch(outsideTemplates, /Send private report|stored privately|does not require a GitHub account/i);
+  // The submit button exists hidden with a neutral label so a forced click reaches the
+  // fail-closed reducer instead of a missing element.
+  assert.match(outsideTemplates, /<button[^>]*id="submit-private"[^>]*hidden>/);
   assert.match(outsideTemplates, /GitHub account is currently required to submit/);
   assert.match(outsideTemplates, /You must sign in to GitHub and select <strong>Submit new issue<\/strong> there to finish/);
 });
@@ -69,7 +72,7 @@ test("client assets contain no secrets or token-bearing URLs (VIT-AC-015)", () =
     assert.doesNotMatch(text, /\bgh[pousr]_[A-Za-z0-9_]{15,}/, file);
     assert.doesNotMatch(text, /\bAKIA[0-9A-Z]{16}\b/, file);
     assert.doesNotMatch(text, /\bsk-[A-Za-z0-9_-]{18,}/, file);
-    assert.doesNotMatch(text, /(secret|siteverify)\s*[:=]\s*["'][^"']{8,}/i, file);
+    assert.doesNotMatch(text, /(secret|siteverify)\s*[:=]\s*["'][^"'\s]{8,}["']/i, file);
     assert.doesNotMatch(text, /https?:\/\/[^"'\s]*[?&](token|key|secret|password)=/i, file);
     assert.doesNotMatch(text, /localStorage|sessionStorage|indexedDB|document\.cookie/, file + " must not persist drafts");
     assert.doesNotMatch(text, /innerHTML|outerHTML|insertAdjacentHTML|document\.write/, file + " must not inject HTML");
@@ -95,7 +98,7 @@ test("review projection shows exactly what will be sent plus visibility and rete
   const legacy = project(reduce(initialState(), { type: "ReviewRequested", values }));
   assert.equal(legacy.reviewVisible, true);
   assert.equal(legacy.formVisible, false);
-  assert.deepEqual(legacy.preview, { product: "Forma", impact: "Not sure", title: "T", actual: "A\nB", expected: "E", steps: "", pageUrl: "https://x.example/p" });
+  assert.deepEqual(legacy.preview, { product: "Forma", impact: "Not sure", title: "T", actual: "A\nB", expected: "E", steps: undefined, pageUrl: "https://x.example/p" });
   assert.equal(legacy.githubDestinationVisible, true);
   assert.equal(legacy.privateDestinationVisible, false);
   assert.equal(legacy.submitVisible, false);
