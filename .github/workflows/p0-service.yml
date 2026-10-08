@@ -1,0 +1,43 @@
+name: Vitium P0 service and infrastructure
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'service/**'
+      - 'infra/aws/**'
+      - 'tests/**'
+      - '.github/workflows/p0-service.yml'
+  pull_request:
+    paths:
+      - 'service/**'
+      - 'infra/aws/**'
+      - 'tests/**'
+      - '.github/workflows/p0-service.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  p0-service:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Contract and adversarial tests
+        run: npm test
+      - name: Validate service module syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          for module in service/*.mjs site/*.mjs; do
+            node --check "$module"
+          done
+      - uses: aws-actions/setup-sam@v2
+      - name: Validate AWS infrastructure
+        run: sam validate --lint --template-file infra/aws/template.yaml
+      - name: Build the AWS service candidate (no deploy)
+        run: sam build --template-file infra/aws/template.yaml
