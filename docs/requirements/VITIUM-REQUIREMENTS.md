@@ -89,7 +89,7 @@ Delivery stages (priority is product-sequencing, **not** defect severity):
 
 | ID | Stage | Requirement |
 |---|---|---|
-| VIT-LCY-001 | P0 | Define a machine-readable legal state-transition model and guard conditions owned by Ordo or a domain-equivalent core; UI controls and API enforce the same model. |
+| VIT-LCY-001 | P0 | A machine-readable legal state-transition model and guard conditions MUST be defined under Ordo or a domain-equivalent core; UI controls and API MUST enforce the same model. |
 | VIT-LCY-002 | P0 | New intake MUST first be classified; no untrusted report automatically becomes a confirmed defect or developer work item. |
 | VIT-LCY-003 | P0 | Authorized triage MUST classify product/owner, suspected type, urgency, severity, priority, reproduction status and next step with auditable rationale. |
 | VIT-LCY-004 | P0 | A defect can close as verified fixed, duplicate, not reproducible, expected behavior, declined or superseded; terminal reason MUST be explicit and reversible via authorized reopening. |
@@ -123,10 +123,10 @@ Delivery stages (priority is product-sequencing, **not** defect severity):
 | VIT-VER-001 | P1 | Every confirmed defect MUST have falsifiable acceptance conditions: observed behavior, expected behavior, supported reproduction/evidence and environment/version scope. |
 | VIT-VER-002 | P1 | Fix evidence SHOULD show regression test failure before the correction and success afterward; absence MUST be explicitly justified and independently reviewed. |
 | VIT-VER-003 | P1 | Passing tests alone MUST NOT prove a fix; check test relevance, negative/adversarial cases and failure sensitivity, using Dokimos where qualified. |
-| VIT-VER-004 | P1 | Verify across the declared matrix of affected product versions, supported browsers/platforms, integration boundaries and rollback scenarios proportionate to risk. |
+| VIT-VER-004 | P1 | Verification MUST cover the declared matrix of affected product versions, supported browsers/platforms, integration boundaries and rollback scenarios proportionate to risk. |
 | VIT-VER-005 | P1 | "Code merged", "fix built", "fix deployed", "verified resolved" and "reporter confirmed" MUST be separate facts and states/events, not one boolean. |
 | VIT-VER-006 | P1 | Independent verification MUST have an actor/evidence authority distinct from the implementation self-report where risk policy requires it. |
-| VIT-VER-007 | P1 | Link Git commits, PRs, test runs, release artifacts, deployed versions and evidence digests immutably; do not rewrite history when a regression occurs. |
+| VIT-VER-007 | P1 | Git commits, PRs, test runs, release artifacts, deployed versions and evidence digests MUST be linked immutably; history MUST NOT be rewritten when a regression occurs. |
 | VIT-VER-008 | P2 | For recurrence, the system SHOULD correlate original and reintroduced defects, failed safeguard, intervening changes, architectural rules and confidence; suspected AI drift is a hypothesis, not an automatic conclusion. |
 
 ### G. Internal interface, communication and intelligence
@@ -152,7 +152,7 @@ Delivery stages (priority is product-sequencing, **not** defect severity):
 | VIT-NFR-004 | P0 | Secrets MUST reside only in approved service stores; logs, telemetry, source, URLs, client assets and public artifacts MUST be redaction-tested. |
 | VIT-NFR-005 | P0 | The platform MUST identify ownership of customer reports, moderation, retention, security escalation and operator actions before an unauthenticated production launch. |
 | VIT-NFR-006 | P1 | Production MUST expose health/diagnostic status, safe structured error/trace IDs, intake failure and queue/backlog monitoring, alert routing and escalation without reporter data leakage. |
-| VIT-NFR-007 | P1 | Define and test availability targets, overload/back-pressure, retry boundaries, disaster recovery/RPO/RTO and storage restore once the backend topology is chosen; values are not assumed here. |
+| VIT-NFR-007 | P1 | Availability targets, overload/back-pressure, retry boundaries, disaster recovery/RPO/RTO and storage restore MUST be defined and tested once the backend topology is chosen; values are not assumed here. |
 | VIT-NFR-008 | P1 | CI/release MUST verify pinned immutable Echelon dependencies, test suite significance, browser accessibility/machine operability, negative auth cases, schema migrations, reproducible artifacts and supply-chain integrity. |
 | VIT-NFR-009 | P1 | Releases MUST have staged rollout/rollback, schema backward compatibility where promised, feature flags for security-sensitive integrations and a documented incident runbook. |
 | VIT-NFR-010 | P1 | Product integrations and public API MUST document compatibility, idempotency, paging, error codes, deprecation and data-export behavior without exposing internal provider tokens. |
