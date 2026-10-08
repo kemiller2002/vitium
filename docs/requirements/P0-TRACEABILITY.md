@@ -42,7 +42,18 @@ CI evidence witnessed so far (GitHub Actions, REST API):
 | [37813042099](https://github.com/kemiller2002/vitium/actions/runs/37813042099) | Conditor governance verification (attestation-verified Conditor/Praxis/Ordo install, verify/doctor/status, no-drift check, governance tests) | `a8532cb` | success, every step |
 | [37813042172](https://github.com/kemiller2002/vitium/actions/runs/37813042172) | Praxis validation | `a8532cb` | success |
 
-CI for the integration head is recorded in the PR once observed; until then local results are local only.
+CI on PR #19 head `6be6d02` (all success, observed 2026-10-08):
+
+| Run | Workflow | Covers |
+|---|---|---|
+| [37856574261](https://github.com/kemiller2002/vitium/actions/runs/37856574261) | Vitium quality gates | `npm test`, secret scan, `test:adversarial`, F# domain build + tests (SDK 8 pinned) |
+| [37856574275](https://github.com/kemiller2002/vitium/actions/runs/37856574275) | Vitium browser and adversarial verification | Playwright/axe suite, both **cdn** (real Forma CDN) and **blocked** legs |
+| [37856574333](https://github.com/kemiller2002/vitium/actions/runs/37856574333) | Vitium P0 service and infrastructure | `npm ci`, unit + emulator integration tests, syntax check, `sam validate`/build |
+| [37856574294](https://github.com/kemiller2002/vitium/actions/runs/37856574294) | Conditor governance verification | attestation-verified installs, verify/doctor/status, no drift |
+| [37856574326](https://github.com/kemiller2002/vitium/actions/runs/37856574326) | Praxis validation | registry check, work attribution |
+| [37856574291](https://github.com/kemiller2002/vitium/actions/runs/37856574291) | Vitium NuGet build and pack | main's F# packages still build after integration |
+
+These are CI results for source and emulator checks. They are not evidence of a deployment, real AWS behaviour, or a live site.
 
 ## Requirements
 
@@ -53,7 +64,7 @@ CI for the integration head is recorded in the PR once observed; until then loca
 | VIT-UX-003 | ux | `site/state.mjs`, `site/view.mjs` review/edit/cancel | `tests/site-state.test.mjs`; browser suite | #2 | implemented / local (retention notice states the policy is not yet published — VIT-OQ-009) |
 | VIT-UX-004 | ux, intake | `site/state.mjs`, `site/private-intake.mjs` `parseReceipt` | `tests/site-state.test.mjs`, `tests/p0-contract.test.mjs` (behavioural, 3 mutants killed) | #1 #2 | implemented / local; live path disabled |
 | VIT-UX-005 | intake, ux | `service/intake.mjs` receipt, `site/private-intake.mjs` | `tests/intake-core.test.mjs`, `tests/site-intake-contract.test.mjs` | #1 | partial: works against emulator; no deployed endpoint (blocked on AWS staging) |
-| VIT-UX-006 | ux, verify | semantic markup, focus management, reduced motion | browser suite (320/375/1280, keyboard-only, axe, reduced motion) | #2 | partial: local Chromium only; CI browser run and a manual screen-reader session outstanding |
+| VIT-UX-006 | ux, verify | semantic markup, focus management, reduced motion | browser suite (320/375/1280, keyboard-only, axe, reduced motion); CI run 37856574275 (cdn + blocked) | #2 | partial: CI-witnessed browser checks; manual screen-reader session and canonical-site run outstanding |
 | VIT-UX-007 | ux | over-limit messaging without truncation (VF-003), values kept on error | `tests/site-state.test.mjs`; browser suite | #2 | implemented / local |
 | VIT-DOM-001 | domain | `service/domain-records.mjs`, `domain/Vitium.Domain/*.fs` | `tests/domain-*.test.mjs`; F# runner | #8 | implemented / local |
 | VIT-DOM-002 | domain, intake | opaque `VIT-` reference, `DEF-` ids | `tests/intake-core.test.mjs`, domain tests | #8 | implemented / local |

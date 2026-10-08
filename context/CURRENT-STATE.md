@@ -22,7 +22,7 @@ Local evidence only unless a CI run is cited. Full matrix: `docs/requirements/P0
 - No AWS deployment, real DynamoDB, Turnstile, IAM principal or log-redaction evidence; concurrency evidence is from the dynalite emulator only (and dynalite lacks TransactWriteItems).
 - Lifecycle transitions are not under Ordo authority; F#/Limen/Forma 0.4.1 application migration (#6) not started (needs qualified Limen release set; NuGet blocked in the mission sandbox).
 - Praxis work items are attributed but not checkpointed or completed (requires the pushed, reviewed state).
-- Browser and axe evidence is from a local sandbox Chromium; CI browser run and a manual screen-reader session are outstanding.
+- Browser and axe checks passed in CI on PR #19 head `6be6d02` ([run 37856574275](https://github.com/kemiller2002/vitium/actions/runs/37856574275), real Forma CDN and blocked legs); a manual screen-reader session and a run against the canonical live site are outstanding.
 - Open findings: VF-034 (needs a user decision, DOM-001 §29) and VF-018 (Forma SRI).
 - Maintainer dashboard (#3), attachments (#4), machine producers (#14 P1), Arca/Fides integration.
 
@@ -82,4 +82,5 @@ Review and merge the P0 PRs; decide VF-034; then the operator gates in `docs/ope
 - Seven specialist agents (governance, domain, intake/security, UX, release/ops, independent verification, build-system integrations) worked in isolated worktrees; the principal integrator merged in dependency order on `p0/integration` and attributed every specialist commit to Praxis work items VIT-P0-{GOV,DOM,INT,UX,OPS,VER,MACH,INTEG}-001.
 - Local results at `a8a95f7`: `npm test` 310/310; adversarial 146 pass / 0 fail / 2 open findings; emulator integration 30/30; F# 25/25; browser 66/66 per CSS mode with 0 axe violations; secret scan 0; Conditor/Praxis/Ordo verification exit 0.
 - The independent verifier raised VF-001..VF-036; 34 closed with failing-before/passing-after evidence, VF-034 contained pending user decision, VF-018 blocked.
+- CI on PR #19 head `6be6d02`: quality gates, browser/adversarial, P0 service, Conditor governance, Praxis validation and NuGet build all succeeded (see `docs/requirements/P0-TRACEABILITY.md`).
 - No acceptance scenario is `verified-passed`; P0 is an **engineering candidate**, not shipped.
