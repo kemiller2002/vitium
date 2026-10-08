@@ -14,7 +14,8 @@ export const errorCodes = Object.freeze([
   "invalid_provenance", "stale_revision", "forbidden_transition", "unauthorized_role",
   "missing_reason", "reason_too_long", "invalid_timestamp", "unexpected_field", "missing_field",
   "invalid_field", "invalid_evidence", "missing_evidence", "self_reference", "invalid_defect_id",
-  "unknown_fact", "inconsistent_history"
+  "unknown_fact", "inconsistent_history", "outcome_mismatch", "attempt_mismatch",
+  "duplicate_attempt", "independence_required", "escalation_required", "unknown_event"
 ]);
 
 const isObject = v => v !== null && typeof v === "object" && !Array.isArray(v);
@@ -94,6 +95,8 @@ export function loadTable(raw) {
       const declared = [...(t.requiredFields || []), ...(t.optionalFields || [])];
       if (!declared.every(f => f in fields) || !unique(declared)) return bad("Transition " + pair + " declares unknown fields.");
       if (!Array.isArray(t.evidenceAnyOf) || !t.evidenceAnyOf.every(k => k in kinds && k !== "unspecified")) return bad("Transition " + pair + " has invalid evidence kinds.");
+      if (t.attempt !== undefined && !validAttempt(t.attempt, fields)) return bad("Transition " + pair + " has an invalid attempt rule.");
+      if (t.messages !== undefined && (!isObject(t.messages) || !Object.values(t.messages).every(isText))) return bad("Transition " + pair + " has invalid messages.");
     }
     for (const term of def.terminal || []) if (!def.states.includes(term)) return bad("Unknown terminal state " + term + ".");
   }
@@ -102,8 +105,106 @@ export function loadTable(raw) {
     return bad("Promotion must start from an existing observation state and create the defect initial state.");
   }
   if (!isObject(raw.facts) || !isObject(raw.facts.kinds)) return bad("facts.kinds required.");
+  const budget = raw.policy?.maxAutonomousFailedAttempts;
+  if (!isObject(raw.policy) || !Number.isSafeInteger(budget?.value) || budget.value < 1 || budget.provisional !== true) {
+    return bad("policy.maxAutonomousFailedAttempts must be a positive integer marked provisional.");
+  }
+  if (typeof raw.policy.independentVerification?.required !== "boolean") return bad("policy.independentVerification.required must be boolean.");
+  const events = raw.events;
+  if (!isObject(events) || !isObject(events["verification-inconclusive"]) || !isObject(events.escalation)) return bad("events.verification-inconclusive and events.escalation are required.");
+  for (const [name, e] of Object.entries(events)) {
+    if (name === "description") continue;
+    if (!Array.isArray(e.roles) || !e.roles.length || !e.roles.every(r => roles.includes(r))) return bad("Event " + name + " has unknown roles.");
+  }
   return ok(deepFreeze(structuredClone(raw)));
 }
+
+// An attempt rule marks the verification cycle edges (VIT-LCY-010/011, VIT-VER-009):
+// submission (in-progress -> awaiting-verification), result (awaiting-verification ->
+// in-progress | resolved, with the outcome the target implies) and rework (reopened ->
+// in-progress with a new work attempt).
+function validAttempt(a, fields) {
+  if (!isObject(a)) return false;
+  if (a.kind === "submission" || a.kind === "rework") return "attemptId" in fields;
+  if (a.kind === "result") return ["passed", "failed"].includes(a.outcome) && "attemptId" in fields && "candidateRevision" in fields;
+  return false;
+}
+
+// ---------------------------------------------------------------------------------
+// Verification cycle, read from history (pure). Events may be v1.2 transition events
+// (values under `fields`) or legacy/pre-1.2 events (values at the top level).
+// ---------------------------------------------------------------------------------
+const valueOf = (event, key) => event?.fields?.[key] ?? event?.[key];
+const isSubmission = e => e?.to === "awaiting-verification";
+const isCycleBoundary = e => e?.to === "reopened" || e?.type === "escalation";
+
+/** The latest submission, every submitted attemptId, and failed results in the open cycle. */
+export function verificationCycle(history) {
+  const list = Array.isArray(history) ? history : [];
+  const submissions = list.filter(isSubmission);
+  const latest = submissions.length ? submissions[submissions.length - 1] : null;
+  let failedInOpenCycle = 0;
+  for (let i = list.length - 1; i >= 0 && !isCycleBoundary(list[i]); i--) {
+    // Only "failed" counts; an inconclusive run is never a failure (VIT-VER-010).
+    if (valueOf(list[i], "verificationOutcome") === "failed") failedInOpenCycle++;
+  }
+  return Object.freeze({
+    latestSubmission: latest ? Object.freeze({
+      attemptId: valueOf(latest, "attemptId") ?? null,
+      candidateRevision: valueOf(latest, "candidateRevision") ?? null,
+      author: valueOf(latest, "author") ?? null,
+      sequence: latest.sequence
+    }) : null,
+    submittedAttempts: Object.freeze(submissions.map(e => valueOf(e, "attemptId")).filter(isText)),
+    failedInOpenCycle
+  });
+}
+
+/**
+ * Bounded autonomous repair (VIT-VER-011, mission section 7). Pure policy over history:
+ * `maxFailedAttempts` is an explicit parameter; the table only supplies a provisional default.
+ */
+export function agentRepairBudget(table, history, maxFailedAttempts = table.policy.maxAutonomousFailedAttempts.value) {
+  const { failedInOpenCycle } = verificationCycle(history);
+  return Object.freeze({ failed: failedInOpenCycle, max: maxFailedAttempts, exhausted: failedInOpenCycle >= maxFailedAttempts });
+}
+
+// Attempt guards for a rule with `attempt`. Returns extra fields to record, or a failure.
+function checkAttempt(table, rule, record, history, fields, command, provenance, options) {
+  const a = rule.attempt;
+  const cycle = verificationCycle(history);
+  if (a.kind === "submission" || a.kind === "rework") {
+    if (cycle.submittedAttempts.includes(fields.attemptId)) {
+      return fail("duplicate_attempt", "This attemptId was already submitted; a new attempt needs a new attemptId.");
+    }
+    if (a.kind === "rework") return ok({});
+    if (provenance === "agent" && agentRepairBudget(table, history, options.maxFailedAttempts).exhausted) {
+      return fail("escalation_required", "Autonomous repair budget exhausted for this cycle; a human must record an escalation.");
+    }
+    // The strict API records the submitting actor as the attempt's author unless named.
+    return ok(fields.author === undefined && options.defaultAuthor !== false ? { author: command.actor } : {});
+  }
+  const outcome = fields.verificationOutcome;
+  if (outcome !== undefined && outcome !== a.outcome) {
+    return fail("outcome_mismatch", "Verification outcome '" + outcome + "' does not allow a move to " + rule.to + ".");
+  }
+  const latest = cycle.latestSubmission;
+  // A result must name the latest submitted candidate. Records with no submission in their
+  // history (entered awaiting-verification before table 1.2, or migrated) have none to name.
+  if (latest && (fields.attemptId === undefined || fields.candidateRevision === undefined)) {
+    return fail("missing_field", rule.messages?.missing_field ?? "attemptId and candidateRevision are required.");
+  }
+  if (latest && (latest.attemptId !== fields.attemptId || latest.candidateRevision !== fields.candidateRevision)) {
+    return fail("attempt_mismatch", "Verification results must name the submitted candidate (latest attemptId and candidateRevision).");
+  }
+  const independence = table.policy.independentVerification;
+  if (a.independent && independence.required && independence.appliesTo.includes(a.outcome) && latest?.author && latest.author === command.actor) {
+    return fail("independence_required", "Independent verification: the attempt's author cannot record its passing result.");
+  }
+  return ok({ verificationOutcome: a.outcome });
+}
+
+const TRIAGE_FIELDS = Object.freeze(["classification", "severity", "priority", "confidence", "productId", "owner"]);
 
 const findTransition = (table, machine, from, to) =>
   table.machines[machine].transitions.find(t => t.from === from && t.to === to) || null;
@@ -168,6 +269,7 @@ export function evaluateTransition(table, record, command, options = {}) {
   if (!isText(command.reason)) return fail("missing_reason", "A bounded reason is required.");
   if (command.reason.length > table.reasonMaxLength) return fail("reason_too_long", "A bounded reason is required.");
   if (typeof command.occurredAt !== "string" || !isInstant(command.occurredAt)) return fail("invalid_timestamp", "Timestamp required.");
+  const missingFieldMessage = f => rule.messages?.missing_field ?? defaultMissingFieldMessage(f);
   const fields = command.fields ?? {};
   if (!isObject(fields)) return fail("invalid_field", "Fields must be an object.");
   const declared = [...rule.requiredFields, ...rule.optionalFields];
@@ -182,13 +284,15 @@ export function evaluateTransition(table, record, command, options = {}) {
   if (!evidence.ok) return evidence;
   if (rule.evidenceAnyOf.length && !evidence.value.some(e => rule.evidenceAnyOf.includes(e.kind))) {
     const label = table.evidenceKinds[rule.evidenceAnyOf[0]].label;
-    return fail("missing_evidence", label + " evidence is required.", { anyOf: rule.evidenceAnyOf });
+    return fail("missing_evidence", rule.messages?.missing_evidence ?? label + " evidence is required.", { anyOf: rule.evidenceAnyOf });
   }
   const selfRef = ["duplicateOf", "supersededBy"].find(f => fields[f] !== undefined && fields[f] === record.id);
   if (selfRef) return fail("self_reference", "A defect cannot be a " + selfRef + " of itself.");
 
-  const cleanFields = Object.fromEntries(supplied.map(([k, v]) => [k, v.trim()]));
   const history = owned.value;
+  const attempt = rule.attempt ? checkAttempt(table, rule, record, history, fields, command, actor.value, options) : ok({});
+  if (!attempt.ok) return attempt;
+  const cleanFields = { ...Object.fromEntries(supplied.map(([k, v]) => [k, v.trim()])), ...attempt.value };
   const priorClosure = command.to === "reopened" ? lastDisposition(table, record.kind, history) : null;
   const event = deepFreeze({
     type: "transition", machine: record.kind, from: record.state, to: command.to,
@@ -197,7 +301,7 @@ export function evaluateTransition(table, record, command, options = {}) {
     ...(priorClosure ? { reopens: priorClosure } : {}),
     occurredAt: command.occurredAt, sequence: record.revision + 1
   });
-  const triageFields = Object.fromEntries(Object.entries(cleanFields).filter(([k]) => !["duplicateOf", "supersededBy", "workItemRef"].includes(k)));
+  const triageFields = Object.fromEntries(Object.entries(cleanFields).filter(([k]) => TRIAGE_FIELDS.includes(k)));
   const next = {
     ...record, state: command.to, revision: record.revision + 1,
     history: Object.freeze([...history, event]),
@@ -206,7 +310,7 @@ export function evaluateTransition(table, record, command, options = {}) {
   return ok(Object.freeze({ record: Object.freeze(next), event }));
 }
 
-const missingFieldMessage = f => ({
+const defaultMissingFieldMessage = f => ({
   classification: "Classification required.",
   duplicateOf: "A duplicate disposition requires duplicateOf.",
   supersededBy: "A superseded disposition requires supersededBy."
@@ -277,4 +381,81 @@ export function recordFact(table, record, command) {
   }
   const event = deepFreeze({ type: "fact", machine: record.kind, fact: command.fact, state: record.state, actor: command.actor, provenance: actor.value, role: command.role, evidence: evidence.value, occurredAt: command.occurredAt, sequence: record.revision + 1 });
   return ok(Object.freeze({ record: Object.freeze({ ...record, revision: record.revision + 1, history: Object.freeze([...owned.value, event]) }), event }));
+}
+
+// Shared guard prefix for non-transition events (same order as evaluateTransition).
+function eventPrelude(table, record, command, def, options) {
+  if (!isObject(record) || !isObject(command)) return fail("invalid_payload", "Invalid event payload.");
+  if (record.kind !== def.machine) return fail("unknown_machine", "This event applies to defects only.");
+  if (!table.machines[record.kind].states.includes(record.state)) return fail("unknown_state", "Unknown source state.");
+  const actor = checkActor(table, command, options);
+  if (!actor.ok) return actor;
+  if (def.provenances && !def.provenances.includes(actor.value)) return fail("invalid_provenance", "This event requires provenance " + def.provenances.join(" or ") + ".");
+  if (!Number.isSafeInteger(record.revision) || record.revision < 0 || record.revision !== command.expectedRevision) return fail("stale_revision", "Stale or invalid revision.");
+  const owned = ownHistory(record);
+  if (!owned.ok) return owned;
+  if (def.state && record.state !== def.state) return fail("forbidden_transition", "Event not permitted in state " + record.state + ".");
+  if (!def.roles.includes(command.role)) return fail("unauthorized_role", "Independent verification requires a verifier or administrator.");
+  if (!isText(command.reason)) return fail("missing_reason", "A bounded reason is required.");
+  if (command.reason.length > table.reasonMaxLength) return fail("reason_too_long", "A bounded reason is required.");
+  if (typeof command.occurredAt !== "string" || !isInstant(command.occurredAt)) return fail("invalid_timestamp", "Timestamp required.");
+  return ok({ provenance: actor.value, history: owned.value });
+}
+
+/**
+ * Record an inconclusive (flaky/environmental) verification run (VIT-VER-010). It is an
+ * append-only event, not a transition: the defect stays awaiting-verification, it is not a
+ * failure for the repair budget, and another run of the same attempt remains possible.
+ */
+export function recordInconclusive(table, record, command, options = {}) {
+  const def = table.events["verification-inconclusive"];
+  const pre = eventPrelude(table, record, command, def, options);
+  if (!pre.ok) return pre;
+  const fields = isObject(command.fields) ? command.fields : {};
+  for (const f of def.requiredFields) {
+    if (!checkField(table.fields[f], fields[f])) return fail("missing_field", "Verification results require the attemptId and candidateRevision of the submitted candidate.");
+  }
+  const evidence = checkEvidence(table, command.evidence);
+  if (!evidence.ok) return evidence;
+  if (!evidence.value.some(e => def.evidenceAnyOf.includes(e.kind))) return fail("missing_evidence", "Independent verification evidence is required.");
+  const latest = verificationCycle(pre.value.history).latestSubmission;
+  if (latest && (latest.attemptId !== fields.attemptId || latest.candidateRevision !== fields.candidateRevision)) {
+    return fail("attempt_mismatch", "Verification results must name the submitted candidate (latest attemptId and candidateRevision).");
+  }
+  const event = deepFreeze({
+    type: "verification", machine: record.kind, state: record.state,
+    fields: { attemptId: fields.attemptId, candidateRevision: fields.candidateRevision, verificationOutcome: "inconclusive" },
+    evidence: evidence.value, actor: command.actor, provenance: pre.value.provenance, role: command.role,
+    reason: command.reason.trim(), occurredAt: command.occurredAt, sequence: record.revision + 1
+  });
+  return ok(Object.freeze({ record: Object.freeze({ ...record, revision: record.revision + 1, history: Object.freeze([...pre.value.history, event]) }), event }));
+}
+
+/** A human escalation decision; it opens a new autonomous repair budget (VIT-VER-011). */
+export function recordEscalation(table, record, command, options = {}) {
+  const def = table.events.escalation;
+  const pre = eventPrelude(table, record, command, def, options);
+  if (!pre.ok) return pre;
+  const event = deepFreeze({
+    type: "escalation", machine: record.kind, state: record.state, actor: command.actor,
+    provenance: pre.value.provenance, role: command.role, reason: command.reason.trim(),
+    occurredAt: command.occurredAt, sequence: record.revision + 1
+  });
+  return ok(Object.freeze({ record: Object.freeze({ ...record, revision: record.revision + 1, history: Object.freeze([...pre.value.history, event]) }), event }));
+}
+
+/**
+ * "Reopen and resume" (VIT-LCY-011): apply -> reopened, then -> in-progress | reproducing,
+ * each through every guard, all-or-nothing. Both events are recorded; the reopened state is
+ * never skipped. `resume.expectedRevision` is derived (reopen's revision + 1).
+ */
+export function reopenAndResume(table, record, reopen, resume, options = {}) {
+  if (!isObject(reopen) || !isObject(resume)) return fail("invalid_payload", "Invalid reopen-and-resume payload.");
+  if (reopen.to !== undefined && reopen.to !== "reopened") return fail("invalid_payload", "The first step must reopen.");
+  if (!["in-progress", "reproducing"].includes(resume.to)) return fail("invalid_payload", "The second step must resume in-progress or reproducing.");
+  const first = evaluateTransition(table, record, { ...reopen, to: "reopened" }, options);
+  if (!first.ok) return first;
+  const second = evaluateTransition(table, first.value.record, { ...resume, expectedRevision: first.value.record.revision }, options);
+  if (!second.ok) return fail(second.error.code, second.error.message, { step: "resume" });
+  return ok(Object.freeze({ record: second.value.record, events: Object.freeze([first.value.event, second.value.event]) }));
 }

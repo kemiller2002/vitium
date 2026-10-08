@@ -5,94 +5,523 @@
   "description": "Structure of schemas/lifecycle/transitions.v1.json. Semantic integrity (unique states, known roles/fields/evidence kinds, no duplicate pairs) is additionally enforced by loadTable in service/lifecycle.mjs and Table.parse in domain/Vitium.Domain.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "id", "tableVersion", "authority", "ordoAuthorized", "roles", "provenances", "commandProvenances", "evidenceKinds", "evidenceRule", "fields", "reasonMaxLength", "machines", "promotion", "facts"],
+  "required": [
+    "schemaVersion",
+    "id",
+    "tableVersion",
+    "authority",
+    "ordoAuthorized",
+    "roles",
+    "provenances",
+    "commandProvenances",
+    "evidenceKinds",
+    "evidenceRule",
+    "fields",
+    "reasonMaxLength",
+    "machines",
+    "promotion",
+    "facts",
+    "policy",
+    "events"
+  ],
   "properties": {
-    "$schema": { "type": "string" },
-    "schemaVersion": { "const": "1.0" },
-    "id": { "const": "vitium.lifecycle.transitions" },
-    "tableVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
-    "authority": { "const": "vitium-domain-candidate" },
-    "ordoAuthorized": { "const": false },
-    "decisionRecord": { "type": "string" },
-    "description": { "type": "string" },
-    "evidenceRule": { "type": "string" },
-    "roles": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z][a-z-]*$" } },
-    "provenances": { "type": "array", "uniqueItems": true, "items": { "enum": ["anonymous-human", "authenticated-human", "application", "ci", "agent"] } },
-    "commandProvenances": { "type": "array", "uniqueItems": true, "items": { "enum": ["anonymous-human", "authenticated-human", "application", "ci", "agent"] } },
+    "$schema": {
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "id": {
+      "const": "vitium.lifecycle.transitions"
+    },
+    "tableVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "authority": {
+      "const": "vitium-domain-candidate"
+    },
+    "ordoAuthorized": {
+      "const": false
+    },
+    "decisionRecord": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "evidenceRule": {
+      "type": "string"
+    },
+    "roles": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z-]*$"
+      }
+    },
+    "provenances": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "anonymous-human",
+          "authenticated-human",
+          "application",
+          "ci",
+          "agent"
+        ]
+      }
+    },
+    "commandProvenances": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "anonymous-human",
+          "authenticated-human",
+          "application",
+          "ci",
+          "agent"
+        ]
+      }
+    },
     "evidenceKinds": {
       "type": "object",
-      "additionalProperties": { "type": "object", "additionalProperties": false, "required": ["label"], "properties": { "label": { "type": "string" } } }
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "label"
+        ],
+        "properties": {
+          "label": {
+            "type": "string"
+          }
+        }
+      }
     },
     "fields": {
       "type": "object",
       "additionalProperties": {
-        "type": "object", "additionalProperties": false, "required": ["type"],
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type"
+        ],
         "properties": {
-          "type": { "enum": ["text", "enum", "pattern"] },
-          "maxLength": { "type": "integer", "minimum": 1 },
-          "values": { "type": "array", "items": { "type": "string" } },
-          "pattern": { "type": "string" }
+          "type": {
+            "enum": [
+              "text",
+              "enum",
+              "pattern"
+            ]
+          },
+          "maxLength": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "pattern": {
+            "type": "string"
+          }
         }
       }
     },
-    "reasonMaxLength": { "type": "integer", "minimum": 1 },
+    "reasonMaxLength": {
+      "type": "integer",
+      "minimum": 1
+    },
     "machines": {
-      "type": "object", "additionalProperties": false, "required": ["observation", "defect"],
-      "properties": { "observation": { "$ref": "#/$defs/machine" }, "defect": { "$ref": "#/$defs/machine" } }
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "observation",
+        "defect"
+      ],
+      "properties": {
+        "observation": {
+          "$ref": "#/$defs/machine"
+        },
+        "defect": {
+          "$ref": "#/$defs/machine"
+        }
+      }
     },
     "promotion": {
-      "type": "object", "additionalProperties": false,
-      "required": ["fromMachine", "fromState", "toMachine", "toState", "roles", "reasonRequired", "requiredFields", "defectIdPattern"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fromMachine",
+        "fromState",
+        "toMachine",
+        "toState",
+        "roles",
+        "reasonRequired",
+        "requiredFields",
+        "defectIdPattern"
+      ],
       "properties": {
-        "description": { "type": "string" },
-        "fromMachine": { "const": "observation" },
-        "fromState": { "type": "string" },
-        "toMachine": { "const": "defect" },
-        "toState": { "type": "string" },
-        "roles": { "type": "array", "items": { "type": "string" } },
-        "reasonRequired": { "const": true },
-        "requiredFields": { "type": "array", "items": { "type": "string" } },
-        "defectIdPattern": { "type": "string" }
+        "description": {
+          "type": "string"
+        },
+        "fromMachine": {
+          "const": "observation"
+        },
+        "fromState": {
+          "type": "string"
+        },
+        "toMachine": {
+          "const": "defect"
+        },
+        "toState": {
+          "type": "string"
+        },
+        "roles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "reasonRequired": {
+          "const": true
+        },
+        "requiredFields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "defectIdPattern": {
+          "type": "string"
+        }
       }
     },
     "facts": {
-      "type": "object", "additionalProperties": false, "required": ["machine", "kinds"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "machine",
+        "kinds"
+      ],
       "properties": {
-        "description": { "type": "string" },
-        "machine": { "const": "defect" },
+        "description": {
+          "type": "string"
+        },
+        "machine": {
+          "const": "defect"
+        },
         "kinds": {
           "type": "object",
           "additionalProperties": {
-            "type": "object", "additionalProperties": false, "required": ["roles", "evidenceAnyOf"],
-            "properties": { "roles": { "type": "array", "items": { "type": "string" } }, "evidenceAnyOf": { "type": "array", "items": { "type": "string" } } }
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "roles",
+              "evidenceAnyOf"
+            ],
+            "properties": {
+              "roles": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "evidenceAnyOf": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maxAutonomousFailedAttempts",
+        "independentVerification"
+      ],
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "maxAutonomousFailedAttempts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "provisional"
+          ],
+          "properties": {
+            "value": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "provisional": {
+              "const": true
+            },
+            "description": {
+              "type": "string"
+            }
+          }
+        },
+        "independentVerification": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "required",
+            "appliesTo",
+            "provisional"
+          ],
+          "properties": {
+            "required": {
+              "enum": [
+                true,
+                false
+              ]
+            },
+            "appliesTo": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "passed",
+                  "failed"
+                ]
+              }
+            },
+            "provisional": {
+              "const": true
+            },
+            "description": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "events": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "verification-inconclusive",
+        "escalation"
+      ],
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "verification-inconclusive": {
+          "$ref": "#/$defs/event"
+        },
+        "escalation": {
+          "$ref": "#/$defs/event"
+        }
+      }
+    },
+    "errorCodes": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string"
       }
     }
   },
   "$defs": {
     "machine": {
-      "type": "object", "additionalProperties": false, "required": ["states", "initial", "terminal", "transitions"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "states",
+        "initial",
+        "terminal",
+        "transitions"
+      ],
       "properties": {
-        "states": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z][a-z-]*$" } },
-        "initial": { "type": "string" },
-        "terminal": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
-        "dispositions": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
-        "transitions": { "type": "array", "items": { "$ref": "#/$defs/transition" } }
+        "states": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z-]*$"
+          }
+        },
+        "initial": {
+          "type": "string"
+        },
+        "terminal": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        },
+        "dispositions": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        },
+        "transitions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/transition"
+          }
+        }
       }
     },
     "transition": {
-      "type": "object", "additionalProperties": false,
-      "required": ["from", "to", "roles", "reasonRequired", "requiredFields", "optionalFields", "evidenceAnyOf"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from",
+        "to",
+        "roles",
+        "reasonRequired",
+        "requiredFields",
+        "optionalFields",
+        "evidenceAnyOf"
+      ],
       "properties": {
-        "from": { "type": "string" },
-        "to": { "type": "string" },
-        "roles": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
-        "roleRationale": { "type": "string" },
-        "reasonRequired": { "const": true },
-        "requiredFields": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
-        "optionalFields": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
-        "evidenceAnyOf": { "type": "array", "uniqueItems": true, "items": { "type": "string" } }
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "roles": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        },
+        "roleRationale": {
+          "type": "string"
+        },
+        "reasonRequired": {
+          "const": true
+        },
+        "requiredFields": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        },
+        "optionalFields": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        },
+        "evidenceAnyOf": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        },
+        "attempt": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "enum": [
+                "submission",
+                "result",
+                "rework"
+              ]
+            },
+            "outcome": {
+              "enum": [
+                "passed",
+                "failed"
+              ]
+            },
+            "independent": {
+              "const": true
+            },
+            "matchLatestSubmission": {
+              "const": true
+            }
+          }
+        },
+        "messages": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "missing_field": {
+              "type": "string"
+            },
+            "missing_evidence": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "machine",
+        "roles",
+        "reasonRequired"
+      ],
+      "properties": {
+        "machine": {
+          "const": "defect"
+        },
+        "state": {
+          "type": "string"
+        },
+        "roles": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        },
+        "provenances": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        },
+        "requiredFields": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        },
+        "evidenceAnyOf": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        },
+        "reasonRequired": {
+          "const": true
+        }
       }
     }
   }

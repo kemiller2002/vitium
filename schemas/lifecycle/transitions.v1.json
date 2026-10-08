@@ -2,7 +2,7 @@
   "$schema": "./transitions.schema.v1.json",
   "schemaVersion": "1.0",
   "id": "vitium.lifecycle.transitions",
-  "tableVersion": "1.1.0",
+  "tableVersion": "1.2.0",
   "authority": "vitium-domain-candidate",
   "ordoAuthorized": false,
   "decisionRecord": "docs/decisions/DOM-001-lifecycle-and-identities.md",
@@ -52,6 +52,9 @@
     },
     "unspecified": {
       "label": "Unspecified (legacy, untyped)"
+    },
+    "verification-request": {
+      "label": "Verification request"
     }
   },
   "fields": {
@@ -104,6 +107,34 @@
     "workItemRef": {
       "type": "text",
       "maxLength": 512
+    },
+    "attemptId": {
+      "type": "pattern",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    },
+    "candidateRevision": {
+      "type": "pattern",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/+-]{0,255}$"
+    },
+    "verificationOutcome": {
+      "type": "enum",
+      "values": [
+        "passed",
+        "failed",
+        "inconclusive"
+      ]
+    },
+    "workItemId": {
+      "type": "text",
+      "maxLength": 256
+    },
+    "affectedRelease": {
+      "type": "text",
+      "maxLength": 128
+    },
+    "author": {
+      "type": "pattern",
+      "pattern": "^[A-Za-z0-9._:/+=,@-]{1,256}$"
     }
   },
   "reasonMaxLength": 1000,
@@ -534,9 +565,24 @@
             "administrator"
           ],
           "reasonRequired": true,
-          "requiredFields": [],
-          "optionalFields": [],
-          "evidenceAnyOf": []
+          "requiredFields": [
+            "attemptId",
+            "candidateRevision"
+          ],
+          "optionalFields": [
+            "author",
+            "workItemId"
+          ],
+          "evidenceAnyOf": [
+            "verification-request"
+          ],
+          "attempt": {
+            "kind": "submission"
+          },
+          "messages": {
+            "missing_field": "Submitting for verification requires attemptId, candidateRevision and a verification request.",
+            "missing_evidence": "Submitting for verification requires attemptId, candidateRevision and a verification request."
+          }
         },
         {
           "from": "in-progress",
@@ -560,23 +606,50 @@
           "roleRationale": "Independent verification requires a verifier or administrator.",
           "reasonRequired": true,
           "requiredFields": [],
-          "optionalFields": [],
+          "optionalFields": [
+            "attemptId",
+            "candidateRevision",
+            "verificationOutcome"
+          ],
           "evidenceAnyOf": [
             "verification-run"
-          ]
+          ],
+          "attempt": {
+            "kind": "result",
+            "outcome": "passed",
+            "independent": true,
+            "matchLatestSubmission": true
+          },
+          "messages": {
+            "missing_field": "Verification results require the attemptId and candidateRevision of the submitted candidate."
+          }
         },
         {
           "from": "awaiting-verification",
           "to": "in-progress",
           "roles": [
-            "triager",
             "verifier",
             "administrator"
           ],
           "reasonRequired": true,
           "requiredFields": [],
-          "optionalFields": [],
-          "evidenceAnyOf": []
+          "optionalFields": [
+            "attemptId",
+            "candidateRevision",
+            "verificationOutcome"
+          ],
+          "evidenceAnyOf": [
+            "verification-run"
+          ],
+          "roleRationale": "Independent verification requires a verifier or administrator.",
+          "attempt": {
+            "kind": "result",
+            "outcome": "failed",
+            "matchLatestSubmission": true
+          },
+          "messages": {
+            "missing_field": "Verification results require the attemptId and candidateRevision of the submitted candidate."
+          }
         },
         {
           "from": "resolved",
@@ -604,11 +677,16 @@
           ],
           "reasonRequired": true,
           "requiredFields": [],
-          "optionalFields": [],
+          "optionalFields": [
+            "affectedRelease"
+          ],
           "evidenceAnyOf": [
             "new-occurrence",
             "triage-correction"
-          ]
+          ],
+          "messages": {
+            "missing_evidence": "Reopening a resolved or closed defect requires recurrence evidence (new-occurrence or triage-correction)."
+          }
         },
         {
           "from": "closed",
@@ -619,11 +697,16 @@
           ],
           "reasonRequired": true,
           "requiredFields": [],
-          "optionalFields": [],
+          "optionalFields": [
+            "affectedRelease"
+          ],
           "evidenceAnyOf": [
             "new-occurrence",
             "triage-correction"
-          ]
+          ],
+          "messages": {
+            "missing_evidence": "Reopening a resolved or closed defect requires recurrence evidence (new-occurrence or triage-correction)."
+          }
         },
         {
           "from": "duplicate",
@@ -634,7 +717,9 @@
           ],
           "reasonRequired": true,
           "requiredFields": [],
-          "optionalFields": [],
+          "optionalFields": [
+            "affectedRelease"
+          ],
           "evidenceAnyOf": [
             "new-occurrence",
             "triage-correction"
@@ -649,7 +734,9 @@
           ],
           "reasonRequired": true,
           "requiredFields": [],
-          "optionalFields": [],
+          "optionalFields": [
+            "affectedRelease"
+          ],
           "evidenceAnyOf": [
             "new-occurrence",
             "triage-correction"
@@ -664,7 +751,9 @@
           ],
           "reasonRequired": true,
           "requiredFields": [],
-          "optionalFields": [],
+          "optionalFields": [
+            "affectedRelease"
+          ],
           "evidenceAnyOf": [
             "new-occurrence",
             "triage-correction"
@@ -679,7 +768,9 @@
           ],
           "reasonRequired": true,
           "requiredFields": [],
-          "optionalFields": [],
+          "optionalFields": [
+            "affectedRelease"
+          ],
           "evidenceAnyOf": [
             "new-occurrence",
             "triage-correction"
@@ -694,7 +785,9 @@
           ],
           "reasonRequired": true,
           "requiredFields": [],
-          "optionalFields": [],
+          "optionalFields": [
+            "affectedRelease"
+          ],
           "evidenceAnyOf": [
             "new-occurrence",
             "triage-correction"
@@ -726,8 +819,33 @@
           ],
           "reasonRequired": true,
           "requiredFields": [],
-          "optionalFields": [],
+          "optionalFields": [
+            "workItemId"
+          ],
           "evidenceAnyOf": []
+        },
+        {
+          "from": "reopened",
+          "to": "in-progress",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [
+            "attemptId",
+            "workItemId"
+          ],
+          "optionalFields": [
+            "owner"
+          ],
+          "evidenceAnyOf": [],
+          "attempt": {
+            "kind": "rework"
+          },
+          "messages": {
+            "missing_field": "Resuming work requires a new work attempt (attemptId and workItemId)."
+          }
         }
       ]
     }
@@ -816,5 +934,58 @@
       }
     }
   },
-  "evidenceRule": "evidenceAnyOf: the command must carry at least one evidence item whose kind is listed. An empty list means no evidence is required. Kind \"unspecified\" (legacy untyped evidence) never satisfies a non-empty requirement."
+  "evidenceRule": "evidenceAnyOf: the command must carry at least one evidence item whose kind is listed. An empty list means no evidence is required. Kind \"unspecified\" (legacy untyped evidence) never satisfies a non-empty requirement.",
+  "policy": {
+    "description": "Provisional policy values (DOM-001 sections 18-22). Not Ordo-authorized; every value here is a reversible engineering default awaiting an owner decision (VIT-OQ-012, VIT-VER-011).",
+    "maxAutonomousFailedAttempts": {
+      "value": 3,
+      "provisional": true,
+      "description": "Failed verification results in the current open cycle after which a verification submission by an actor of provenance 'agent' is refused with escalation_required until a human records an escalation event. A parameter of the policy function; this is only its default."
+    },
+    "independentVerification": {
+      "required": true,
+      "appliesTo": [
+        "passed"
+      ],
+      "provisional": true,
+      "description": "A passing verification result may not be recorded by the author of the submitted attempt (VIT-VER-006, VIT-AC-036). The author is the submission's 'author' field; the strict API defaults it to the submitting actor, the legacy call shape records it only when supplied."
+    }
+  },
+  "events": {
+    "description": "Append-only events that never change state. 'verification-inconclusive' records a flaky/environmental run against the latest submission and leaves the defect awaiting verification; it never counts as a failure (VIT-VER-010). 'escalation' is a human decision that resets the autonomous repair budget for the open cycle (VIT-VER-011).",
+    "verification-inconclusive": {
+      "machine": "defect",
+      "state": "awaiting-verification",
+      "roles": [
+        "verifier",
+        "administrator"
+      ],
+      "requiredFields": [
+        "attemptId",
+        "candidateRevision"
+      ],
+      "evidenceAnyOf": [
+        "verification-run"
+      ],
+      "reasonRequired": true
+    },
+    "escalation": {
+      "machine": "defect",
+      "roles": [
+        "triager",
+        "administrator"
+      ],
+      "provenances": [
+        "authenticated-human"
+      ],
+      "reasonRequired": true
+    }
+  },
+  "errorCodes": [
+    "outcome_mismatch",
+    "attempt_mismatch",
+    "duplicate_attempt",
+    "independence_required",
+    "escalation_required"
+  ]
 }
