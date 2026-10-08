@@ -5,7 +5,21 @@
   "type": "module",
   "description": "Public defect intake for Echelon Foundry",
   "scripts": {
-    "test": "node --test tests/*.test.mjs"
+    "test": "node --test tests/*.test.mjs",
+    "test:integration": "node --test --test-concurrency=1 tests/integration/*.test.mjs",
+    "test:adversarial": "node --test tests/adversarial/*.test.mjs",
+    "test:browser": "playwright test --config tests/browser/playwright.config.mjs"
   },
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-dynamodb": "3.1139.0",
+    "@playwright/test": "1.63.0",
+    "ajv": "8.18.0",
+    "ajv-formats": "3.0.1",
+    "axe-core": "4.13.0",
+    "dynalite": "4.0.0",
+    "js-yaml": "4.3.2"
+  }
 }

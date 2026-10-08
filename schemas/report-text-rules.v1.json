@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "1.0",
+  "id": "vitium.report-text-rules",
+  "description": "Report text rules shared by service/report-domain.mjs (source of truth: TEXT_PATTERNS and friends), schemas/intake-request.schema.json (patterns copied literally) and the F# core (domain/Vitium.Domain/Report.fs compiles these). tests/domain-report-contract.test.mjs fails if any copy differs. Lengths are Unicode code points. Lone surrogates are refused by a well-formedness check in each runtime; the schema pattern expresses this with \\ud800-\\udfff, which ECMAScript 'u'-mode regexes (ajv) apply to lone surrogates only.",
+  "whitespaceClass": "\\t\\n\\u000b\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff",
+  "unsafeClass": "\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069",
+  "credentialPattern": "-----[Bb][Ee][Gg][Ii][Nn] (?:[Rr][Ss][Aa] |[Ee][Cc] |[Oo][Pp][Ee][Nn][Ss][Ss][Hh] )?[Pp][Rr][Ii][Vv][Aa][Tt][Ee] [Kk][Ee][Yy]-----|[Gg][Hh][pousrPOUSR]_[A-Za-z0-9_]{15,}|(?<![A-Za-z0-9_])[Ss][Kk]-[A-Za-z0-9_-]{18,}|(?:[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd]|[Aa][Pp][Ii][_ -]?[Kk][Ee][Yy])[\\t\\n\\u000b\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]*[:=][\\t\\n\\u000b\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]*[^\\t\\n\\u000b\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]{4,}",
+  "patterns": {
+    "required": "^(?![\\s\\S]*(?:-----[Bb][Ee][Gg][Ii][Nn] (?:[Rr][Ss][Aa] |[Ee][Cc] |[Oo][Pp][Ee][Nn][Ss][Ss][Hh] )?[Pp][Rr][Ii][Vv][Aa][Tt][Ee] [Kk][Ee][Yy]-----|[Gg][Hh][pousrPOUSR]_[A-Za-z0-9_]{15,}|(?<![A-Za-z0-9_])[Ss][Kk]-[A-Za-z0-9_-]{18,}|(?:[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd]|[Aa][Pp][Ii][_ -]?[Kk][Ee][Yy])[\\t\\n\\u000b\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]*[:=][\\t\\n\\u000b\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]*[^\\t\\n\\u000b\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]{4,}))(?=[\\s\\S]*[^\\t\\n\\u000b\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff\\p{Cf}])[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*$",
+    "optional": "^(?![\\s\\S]*(?:-----[Bb][Ee][Gg][Ii][Nn] (?:[Rr][Ss][Aa] |[Ee][Cc] |[Oo][Pp][Ee][Nn][Ss][Ss][Hh] )?[Pp][Rr][Ii][Vv][Aa][Tt][Ee] [Kk][Ee][Yy]-----|[Gg][Hh][pousrPOUSR]_[A-Za-z0-9_]{15,}|(?<![A-Za-z0-9_])[Ss][Kk]-[A-Za-z0-9_-]{18,}|(?:[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd]|[Aa][Pp][Ii][_ -]?[Kk][Ee][Yy])[\\t\\n\\u000b\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]*[:=][\\t\\n\\u000b\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]*[^\\t\\n\\u000b\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]{4,}))[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*$",
+    "pageUrl": "^(?:|[Hh][Tt][Tt][Pp][Ss]?://[^\\t\\n\\u000b\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff/?#\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]+(?:[/?#][^\\t\\n\\u000b\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*)?)$"
+  },
+  "limits": {
+    "title": 120,
+    "actual": 1200,
+    "expected": 1200,
+    "steps": 900,
+    "pageUrl": 2000
+  },
+  "impactCodes": {
+    "Cannot use the feature": "cannot-use",
+    "Can use it with a workaround": "workaround",
+    "Minor inconvenience or display problem": "minor",
+    "Not sure": "unknown"
+  }
+}

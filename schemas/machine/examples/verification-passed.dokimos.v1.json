@@ -1,0 +1,40 @@
+{
+  "schemaVersion": "1.0",
+  "eventId": "c569494f-74d6-47f8-84e8-fd9b0f7383c9",
+  "eventType": "verification.passed",
+  "source": {
+    "system": "dokimos",
+    "repository": "kemiller2002/summa",
+    "installationId": "example-dokimos-binding",
+    "version": "example-binding-version"
+  },
+  "subject": {
+    "workItemId": "WI-0043",
+    "commit": "2a6d1c8e3f1b5c9d0e4f7a8b9c0d1e2f3a4b5c6d",
+    "runId": "verify-run-131",
+    "runAttempt": 1,
+    "checkId": "regression-routing-contract",
+    "environment": "ci"
+  },
+  "finding": {
+    "category": "regression",
+    "summary": "Targeted regression test passes on the candidate revision",
+    "expected": "Route matches verified binding",
+    "observed": "Route matches verified binding",
+    "classification": "untriaged",
+    "confidence": "observed"
+  },
+  "evidence": [
+    {
+      "kind": "test-result",
+      "uri": "https://github.com/kemiller2002/summa/actions/runs/131",
+      "sha256": "95012955b7bd1b7eade45f2858ece32ea57766287af94e01df2bf09bcabce436"
+    }
+  ],
+  "correlation": {
+    "defectId": "DEF-0042",
+    "verificationAttemptId": "VA-0042-2",
+    "causationEventId": null
+  },
+  "observedAt": "2026-10-08T15:00:00Z"
+}

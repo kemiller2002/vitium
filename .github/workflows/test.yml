@@ -3,6 +3,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -10,9 +11,40 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
+      - run: npm ci
       - run: npm test
+      - name: Adversarial contract tests
+        run: npm run test:adversarial
+      - name: Repository credential scan (VIT-NFR-004, VIT-AC-015)
+        run: node scripts/secret-scan.mjs .
+
+  domain-fsharp:
+    # Typed F# domain core: builds offline against the SDK-bundled FSharp.Core
+    # (domain/nuget.config clears remote feeds) and runs the console test runner,
+    # which exits non-zero on any failure.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: '8.0.x'
+      # Run from domain/ so domain/global.json pins SDK 8 (the project targets net8.0);
+      # without it the runner's newest SDK is selected and its compiler applies
+      # different nullness rules than the SDK the core is verified against.
+      - name: Build domain tests
+        working-directory: domain
+        run: dotnet build Vitium.Domain.Tests --configuration Release
+      - name: Run domain tests
+        working-directory: domain
+        run: dotnet run --project Vitium.Domain.Tests --configuration Release --no-build

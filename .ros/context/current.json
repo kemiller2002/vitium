@@ -4,7 +4,7 @@
   "repository": "vitium",
   "actor": "ros-bootstrap",
   "startedAt": "2026-10-08T12:51:23.048Z",
-  "updatedAt": "2026-10-08T12:57:26.000Z",
+  "updatedAt": "2026-10-08T21:34:58.000Z",
   "baselineDirtyPaths": [],
   "workItems": [
     {
@@ -30,6 +30,83 @@
       "updatedAt": "2026-10-08T12:57:26.000Z",
       "telemetryExecutionIds": [
         "EXE-20261008T125753191Z-b0366397"
+      ]
+    },
+    {
+      "id": "VIT-P0-DOM-001",
+      "type": "task",
+      "state": "active",
+      "semanticState": "active",
+      "evidence": [],
+      "updatedAt": "2026-10-08T16:19:39.000Z",
+      "telemetryExecutionIds": [
+        "EXE-20261008T161939952Z-20dc51c9"
+      ]
+    },
+    {
+      "id": "VIT-P0-INT-001",
+      "type": "task",
+      "state": "active",
+      "semanticState": "active",
+      "evidence": [],
+      "updatedAt": "2026-10-08T16:19:41.000Z",
+      "telemetryExecutionIds": [
+        "EXE-20261008T161942052Z-aa6beee0"
+      ]
+    },
+    {
+      "id": "VIT-P0-UX-001",
+      "type": "task",
+      "state": "active",
+      "semanticState": "active",
+      "evidence": [],
+      "updatedAt": "2026-10-08T16:19:44.000Z",
+      "telemetryExecutionIds": [
+        "EXE-20261008T161944455Z-f9fd90fb"
+      ]
+    },
+    {
+      "id": "VIT-P0-OPS-001",
+      "type": "task",
+      "state": "active",
+      "semanticState": "active",
+      "evidence": [],
+      "updatedAt": "2026-10-08T16:19:46.000Z",
+      "telemetryExecutionIds": [
+        "EXE-20261008T161946590Z-0a9ee613"
+      ]
+    },
+    {
+      "id": "VIT-P0-VER-001",
+      "type": "task",
+      "state": "active",
+      "semanticState": "active",
+      "evidence": [],
+      "updatedAt": "2026-10-08T16:19:48.000Z",
+      "telemetryExecutionIds": [
+        "EXE-20261008T161948759Z-05bba466"
+      ]
+    },
+    {
+      "id": "VIT-P0-INTEG-001",
+      "type": "task",
+      "state": "active",
+      "semanticState": "active",
+      "evidence": [],
+      "updatedAt": "2026-10-08T16:19:56.000Z",
+      "telemetryExecutionIds": [
+        "EXE-20261008T161956824Z-c4f09644"
+      ]
+    },
+    {
+      "id": "VIT-P0-MACH-001",
+      "type": "task",
+      "state": "active",
+      "semanticState": "active",
+      "evidence": [],
+      "updatedAt": "2026-10-08T21:34:58.000Z",
+      "telemetryExecutionIds": [
+        "EXE-20261008T213458395Z-009de545"
       ]
     }
   ]

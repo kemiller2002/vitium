@@ -1,0 +1,40 @@
+{
+  "schemaVersion": "1.0",
+  "eventId": "516ea04a-2c14-422f-8d12-31f7d93e11e3",
+  "eventType": "verification.inconclusive",
+  "source": {
+    "system": "ci",
+    "repository": "kemiller2002/summa",
+    "installationId": "example-ci-binding",
+    "version": "example-binding-version"
+  },
+  "subject": {
+    "workItemId": "WI-0043",
+    "commit": "2a6d1c8e3f1b5c9d0e4f7a8b9c0d1e2f3a4b5c6d",
+    "runId": "verify-run-130",
+    "runAttempt": 2,
+    "checkId": "regression-routing-contract",
+    "environment": "ci"
+  },
+  "finding": {
+    "category": "infrastructure-error",
+    "summary": "Verification runner lost its network before the test completed",
+    "expected": "Regression test completes",
+    "observed": "Runner terminated before a result was produced",
+    "classification": "untriaged",
+    "confidence": "observed"
+  },
+  "evidence": [
+    {
+      "kind": "build-log-reference",
+      "uri": "https://github.com/kemiller2002/summa/actions/runs/130",
+      "sha256": "0bd2f8e0ca4368cf179d45db22b0c92e64ee3a253b48da68610446d004f54abf"
+    }
+  ],
+  "correlation": {
+    "defectId": "DEF-0042",
+    "verificationAttemptId": "VA-0042-2-inconclusive",
+    "causationEventId": null
+  },
+  "observedAt": "2026-10-08T14:30:00Z"
+}

@@ -1,0 +1,779 @@
+{
+  "schemaVersion": "1.0",
+  "rules": "schemas/report-text-rules.v1.json",
+  "description": "Shared report normalisation cases. tests/domain-report-contract.test.mjs runs them against service/report-domain.mjs AND checks the schema verdict agrees; domain/Vitium.Domain.Tests runs them against Report.normalise. Accepted cases carry the exact normalised value both runtimes must produce. Credential-shaped canaries use JSON \\u escapes so the file holds no scanner-matching literal.",
+  "cases": [
+    {
+      "name": "baseline",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "Save fails",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": true
+      },
+      "expect": {
+        "ok": true,
+        "value": {
+          "schemaVersion": "1.0",
+          "product": "Forma",
+          "impact": "Not sure",
+          "title": "Save fails",
+          "actual": "Nothing happens.",
+          "expected": "It saves.",
+          "steps": "",
+          "pageUrl": ""
+        }
+      }
+    },
+    {
+      "name": "title trimmed and NFC-normalised",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "  Café crash \t",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": true
+      },
+      "expect": {
+        "ok": true,
+        "value": {
+          "schemaVersion": "1.0",
+          "product": "Forma",
+          "impact": "Not sure",
+          "title": "Café crash",
+          "actual": "Nothing happens.",
+          "expected": "It saves.",
+          "steps": "",
+          "pageUrl": ""
+        }
+      }
+    },
+    {
+      "name": "NFD and NFC inputs normalise identically",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "Café crash",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": true
+      },
+      "expect": {
+        "ok": true,
+        "value": {
+          "schemaVersion": "1.0",
+          "product": "Forma",
+          "impact": "Not sure",
+          "title": "Café crash",
+          "actual": "Nothing happens.",
+          "expected": "It saves.",
+          "steps": "",
+          "pageUrl": ""
+        }
+      }
+    },
+    {
+      "name": "120 astral code points accepted",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": true
+      },
+      "expect": {
+        "ok": true,
+        "value": {
+          "schemaVersion": "1.0",
+          "product": "Forma",
+          "impact": "Not sure",
+          "title": "🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲🪲",
+          "actual": "Nothing happens.",
+          "expected": "It saves.",
+          "steps": "",
+          "pageUrl": ""
+        }
+      }
+    },
+    {
+      "name": "121 code points refused",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": true
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "name": "raw length counts: 1 space + 120 chars refused (no trim-then-measure)",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": " aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": true
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "name": "whitespace-only title refused",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "   ",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": true
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "name": "zero-width-only title refused",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "​​",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": true
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "name": "word-joiner-only title refused",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "⁠",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": true
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "name": "BOM-only title refused",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "﻿",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": true
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "name": "RTL override refused",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "invoice‮gnp.exe",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": true
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "name": "bidi isolate refused",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "⁦abc⁩",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": true
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "name": "C1 control refused",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "31mred",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": true
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "name": "NUL refused",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "a\u0000b",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": true
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "name": "lone surrogate refused",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "a\ud800b",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": true
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "name": "line breaks allowed in actual",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "Save fails",
+        "actual": "Line 1\nLine 2\r\n\tIndented",
+        "expected": "It saves.",
+        "privacyAcknowledged": true
+      },
+      "expect": {
+        "ok": true,
+        "value": {
+          "schemaVersion": "1.0",
+          "product": "Forma",
+          "impact": "Not sure",
+          "title": "Save fails",
+          "actual": "Line 1\nLine 2\r\n\tIndented",
+          "expected": "It saves.",
+          "steps": "",
+          "pageUrl": ""
+        }
+      }
+    },
+    {
+      "name": "null steps refused",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "Save fails",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": true,
+        "steps": null
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "name": "absent steps becomes empty",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "Save fails",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": true
+      },
+      "expect": {
+        "ok": true,
+        "value": {
+          "schemaVersion": "1.0",
+          "product": "Forma",
+          "impact": "Not sure",
+          "title": "Save fails",
+          "actual": "Nothing happens.",
+          "expected": "It saves.",
+          "steps": "",
+          "pageUrl": ""
+        }
+      }
+    },
+    {
+      "name": "whitespace-only steps becomes empty",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "Save fails",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": true,
+        "steps": "   "
+      },
+      "expect": {
+        "ok": true,
+        "value": {
+          "schemaVersion": "1.0",
+          "product": "Forma",
+          "impact": "Not sure",
+          "title": "Save fails",
+          "actual": "Nothing happens.",
+          "expected": "It saves.",
+          "steps": "",
+          "pageUrl": ""
+        }
+      }
+    },
+    {
+      "name": "empty pageUrl accepted as not provided",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "Save fails",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": true,
+        "pageUrl": ""
+      },
+      "expect": {
+        "ok": true,
+        "value": {
+          "schemaVersion": "1.0",
+          "product": "Forma",
+          "impact": "Not sure",
+          "title": "Save fails",
+          "actual": "Nothing happens.",
+          "expected": "It saves.",
+          "steps": "",
+          "pageUrl": ""
+        }
+      }
+    },
+    {
+      "name": "null pageUrl refused",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "Save fails",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": true,
+        "pageUrl": null
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "name": "https URL stripped of userinfo, query, fragment",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "Save fails",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": true,
+        "pageUrl": "https://u:p\u0040example.com/a?b=c#d"
+      },
+      "expect": {
+        "ok": true,
+        "value": {
+          "schemaVersion": "1.0",
+          "product": "Forma",
+          "impact": "Not sure",
+          "title": "Save fails",
+          "actual": "Nothing happens.",
+          "expected": "It saves.",
+          "steps": "",
+          "pageUrl": "https://example.com/a"
+        }
+      }
+    },
+    {
+      "name": "javascript URL refused",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "Save fails",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": true,
+        "pageUrl": "javascript:alert(1)"
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "name": "data URL refused",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "Save fails",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": true,
+        "pageUrl": "data:text/html,x"
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "name": "URL with leading space refused",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "Save fails",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": true,
+        "pageUrl": " https://example.com/"
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "name": "VF-011: 990 x 2-byte chars expand past 2000 after encoding, refused",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "Save fails",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": true,
+        "pageUrl": "https://example.com/éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+      },
+      "expect": {
+        "ok": false
+      },
+      "schemaExpect": true,
+      "schemaGap": "Schema measures the raw URL (1010 code points); the runtime also bounds the stored, percent-encoded form (5960 characters). Not expressible in JSON Schema."
+    },
+    {
+      "name": "VF-011: 300 x 2-byte chars encode to 1820 chars, accepted",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "Save fails",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": true,
+        "pageUrl": "https://example.com/éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+      },
+      "expect": {
+        "ok": true,
+        "value": {
+          "schemaVersion": "1.0",
+          "product": "Forma",
+          "impact": "Not sure",
+          "title": "Save fails",
+          "actual": "Nothing happens.",
+          "expected": "It saves.",
+          "steps": "",
+          "pageUrl": "https://example.com/%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9%C3%A9"
+        }
+      }
+    },
+    {
+      "name": "VF-011: long query stripped then within limit",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "Save fails",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": true,
+        "pageUrl": "https://example.com/a?qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"
+      },
+      "expect": {
+        "ok": true,
+        "value": {
+          "schemaVersion": "1.0",
+          "product": "Forma",
+          "impact": "Not sure",
+          "title": "Save fails",
+          "actual": "Nothing happens.",
+          "expected": "It saves.",
+          "steps": "",
+          "pageUrl": "https://example.com/a"
+        }
+      }
+    },
+    {
+      "name": "VF-011: ascii path at the limit accepted",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "Save fails",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": true,
+        "pageUrl": "https://example.com/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expect": {
+        "ok": true,
+        "value": {
+          "schemaVersion": "1.0",
+          "product": "Forma",
+          "impact": "Not sure",
+          "title": "Save fails",
+          "actual": "Nothing happens.",
+          "expected": "It saves.",
+          "steps": "",
+          "pageUrl": "https://example.com/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      }
+    },
+    {
+      "name": "VF-011: braces and quotes percent-encoded",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "Save fails",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": true,
+        "pageUrl": "https://example.com/a{b}c\"d`e"
+      },
+      "expect": {
+        "ok": true,
+        "value": {
+          "schemaVersion": "1.0",
+          "product": "Forma",
+          "impact": "Not sure",
+          "title": "Save fails",
+          "actual": "Nothing happens.",
+          "expected": "It saves.",
+          "steps": "",
+          "pageUrl": "https://example.com/a%7Bb%7Dc%22d%60e"
+        }
+      }
+    },
+    {
+      "name": "padded product refused (no remapping)",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": " Forma ",
+        "impact": "Not sure",
+        "title": "Save fails",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": true
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "name": "product alias refused at v1 transport",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "SDE",
+        "impact": "Not sure",
+        "title": "Save fails",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": true
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "name": "impact id refused at v1 transport (labels only)",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "unknown",
+        "title": "Save fails",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": true
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "name": "hyphenated sk- word is not a key (D-06)",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "The task-management-dashboard-widget is blank",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": true
+      },
+      "expect": {
+        "ok": true,
+        "value": {
+          "schemaVersion": "1.0",
+          "product": "Forma",
+          "impact": "Not sure",
+          "title": "The task-management-dashboard-widget is blank",
+          "actual": "Nothing happens.",
+          "expected": "It saves.",
+          "steps": "",
+          "pageUrl": ""
+        }
+      }
+    },
+    {
+      "name": "sk- key refused",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "Save fails",
+        "actual": "key sk-aaaaaaaaaaaaaaaaaaaaaaaa",
+        "expected": "It saves.",
+        "privacyAcknowledged": true
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "name": "gh token refused",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "Save fails",
+        "actual": "ghp_aaaaaaaaaaaaaaaaaaaa",
+        "expected": "It saves.",
+        "privacyAcknowledged": true
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "name": "password assignment refused",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "Save fails",
+        "actual": "password: hunter2hunter2",
+        "expected": "It saves.",
+        "privacyAcknowledged": true
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "name": "PEM header refused",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "Save fails",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": true,
+        "steps": "\u002d----BEGIN PRIVATE KEY-----"
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "name": "unknown field refused",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "Save fails",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": true,
+        "severity": "critical"
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "name": "schemaVersion 2.0 refused",
+      "input": {
+        "schemaVersion": "2.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "Save fails",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": true
+      },
+      "expect": {
+        "ok": false
+      }
+    },
+    {
+      "name": "privacy not acknowledged refused",
+      "input": {
+        "schemaVersion": "1.0",
+        "product": "Forma",
+        "impact": "Not sure",
+        "title": "Save fails",
+        "actual": "Nothing happens.",
+        "expected": "It saves.",
+        "privacyAcknowledged": false
+      },
+      "expect": {
+        "ok": false
+      }
+    }
+  ]
+}

@@ -26,6 +26,167 @@
       },
       "source": "mission",
       "sourceReference": "VIT-P0-2026-10-08"
+    },
+    {
+      "id": "VIT-P0-DOM-001",
+      "title": "Typed domain: identities, product registry, table-driven lifecycle, F# core",
+      "description": "VIT-DOM-001..006, VIT-LCY-001..004; VIT-AC-010..012; issue #8",
+      "tags": [
+        "vit-p0"
+      ],
+      "priority": "high",
+      "status": "ready",
+      "attachments": [],
+      "createdAt": "2026-10-08T16:19:38.000Z",
+      "updatedAt": "2026-10-08T16:19:39.000Z",
+      "createdBy": "principal-integrator",
+      "createdByActor": {
+        "kind": "agent",
+        "id": "principal-integrator",
+        "provider": "anthropic",
+        "model": "unknown",
+        "runtime": "claude-code"
+      },
+      "source": "mission",
+      "sourceReference": "VIT-P0-2026-10-08"
+    },
+    {
+      "id": "VIT-P0-INT-001",
+      "title": "Private intake: typed failures, redaction/quarantine, idempotent replay, adapters, SAM hardening",
+      "description": "VIT-API-001..005/007, VIT-NFR-004; VIT-AC-003..009/015; issue #1",
+      "tags": [
+        "vit-p0"
+      ],
+      "priority": "high",
+      "status": "ready",
+      "attachments": [],
+      "createdAt": "2026-10-08T16:19:40.000Z",
+      "updatedAt": "2026-10-08T16:19:41.000Z",
+      "createdBy": "principal-integrator",
+      "createdByActor": {
+        "kind": "agent",
+        "id": "principal-integrator",
+        "provider": "anthropic",
+        "model": "unknown",
+        "runtime": "claude-code"
+      },
+      "source": "mission",
+      "sourceReference": "VIT-P0-2026-10-08"
+    },
+    {
+      "id": "VIT-P0-UX-001",
+      "title": "Reporter UX: pure state machine, review/edit/cancel, accessible errors, gated private client",
+      "description": "VIT-UX-001..007, VIT-INT-001; VIT-AC-001/002/004/015; issues #2 #6",
+      "tags": [
+        "vit-p0"
+      ],
+      "priority": "high",
+      "status": "ready",
+      "attachments": [],
+      "createdAt": "2026-10-08T16:19:43.000Z",
+      "updatedAt": "2026-10-08T16:19:43.000Z",
+      "createdBy": "principal-integrator",
+      "createdByActor": {
+        "kind": "agent",
+        "id": "principal-integrator",
+        "provider": "anthropic",
+        "model": "unknown",
+        "runtime": "claude-code"
+      },
+      "source": "mission",
+      "sourceReference": "VIT-P0-2026-10-08"
+    },
+    {
+      "id": "VIT-P0-OPS-001",
+      "title": "Release/ops: fail-closed Pages pipeline, pinned actions, secret scan, site verifier, runbooks",
+      "description": "VIT-NFR-003..005, VIT-API-006/007; VIT-AC-014/015; issues #7 #13",
+      "tags": [
+        "vit-p0"
+      ],
+      "priority": "high",
+      "status": "ready",
+      "attachments": [],
+      "createdAt": "2026-10-08T16:19:45.000Z",
+      "updatedAt": "2026-10-08T16:19:45.000Z",
+      "createdBy": "principal-integrator",
+      "createdByActor": {
+        "kind": "agent",
+        "id": "principal-integrator",
+        "provider": "anthropic",
+        "model": "unknown",
+        "runtime": "claude-code"
+      },
+      "source": "mission",
+      "sourceReference": "VIT-P0-2026-10-08"
+    },
+    {
+      "id": "VIT-P0-VER-001",
+      "title": "Independent verification: browser/axe harness, adversarial suite, mutation appraisal, threat matrix",
+      "description": "VIT-AC-001..015 evidence, VIT-VER-003; issue #2",
+      "tags": [
+        "vit-p0"
+      ],
+      "priority": "high",
+      "status": "ready",
+      "attachments": [],
+      "createdAt": "2026-10-08T16:19:47.000Z",
+      "updatedAt": "2026-10-08T16:19:47.000Z",
+      "createdBy": "principal-integrator",
+      "createdByActor": {
+        "kind": "agent",
+        "id": "principal-integrator",
+        "provider": "anthropic",
+        "model": "unknown",
+        "runtime": "claude-code"
+      },
+      "source": "mission",
+      "sourceReference": "VIT-P0-2026-10-08"
+    },
+    {
+      "id": "VIT-P0-INTEG-001",
+      "title": "Principal integration of VIT-P0 specialist branches",
+      "description": "Dependency-ordered merges, lockfile regeneration, fix-round coordination, p0-contract behavioural retarget, traceability and current-state evidence",
+      "tags": [
+        "vit-p0"
+      ],
+      "priority": "high",
+      "status": "ready",
+      "attachments": [],
+      "createdAt": "2026-10-08T16:19:55.000Z",
+      "updatedAt": "2026-10-08T16:19:55.000Z",
+      "createdBy": "principal-integrator",
+      "createdByActor": {
+        "kind": "agent",
+        "id": "principal-integrator",
+        "provider": "anthropic",
+        "model": "unknown",
+        "runtime": "claude-code"
+      },
+      "source": "mission",
+      "sourceReference": "VIT-P0-2026-10-08"
+    },
+    {
+      "id": "VIT-P0-MACH-001",
+      "title": "Machine-observation contract: authenticated envelope, principal port, idempotency, outbox policy",
+      "description": "VIT-INT-013 (P0) + INT-014..017 groundwork; VIT-AC-032/035/036; issue #14",
+      "tags": [
+        "vit-p0"
+      ],
+      "priority": "high",
+      "status": "ready",
+      "attachments": [],
+      "createdAt": "2026-10-08T21:34:57.000Z",
+      "updatedAt": "2026-10-08T21:34:57.000Z",
+      "createdBy": "principal-integrator",
+      "createdByActor": {
+        "kind": "agent",
+        "id": "principal-integrator",
+        "provider": "anthropic",
+        "model": "unknown",
+        "runtime": "claude-code"
+      },
+      "source": "mission",
+      "sourceReference": "VIT-P0-2026-10-08"
     }
   ]
 }

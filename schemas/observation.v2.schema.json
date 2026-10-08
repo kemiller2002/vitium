@@ -1,0 +1,364 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://echelonfoundry.com/schemas/vitium/observation/2.0",
+  "title": "Vitium private observation (v2)",
+  "description": "Private, unverified observation. Never a defect: promotion creates a separate defect identity and only adds a link here (VIT-LCY-002). Migration from observation/1.0 (schemas/observation.schema.json) is explicit: service/domain-records.mjs migrateObservationV1, which retains the original record under migration.original.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "observationId",
+    "externalReference",
+    "report",
+    "product",
+    "reportedImpact",
+    "source",
+    "visibility",
+    "state",
+    "revision",
+    "history",
+    "triage",
+    "links",
+    "receivedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "2.0"
+    },
+    "kind": {
+      "const": "observation"
+    },
+    "observationId": {
+      "type": "string",
+      "pattern": "^OBS-[a-f0-9]{32}$",
+      "description": "Internal identity; never shown to reporters."
+    },
+    "externalReference": {
+      "type": "string",
+      "pattern": "^VIT-[A-F0-9]{32}$",
+      "description": "Opaque receipt reference; independent of GitHub issue numbers (VIT-DOM-002)."
+    },
+    "requestKey": {
+      "type": "string",
+      "pattern": "^REQUEST#[a-f0-9]{64}$"
+    },
+    "payloadHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "report": {
+      "$ref": "#/$defs/reportV1"
+    },
+    "product": {
+      "$ref": "#/$defs/productResolution"
+    },
+    "reportedImpact": {
+      "enum": [
+        "cannot-use",
+        "workaround",
+        "minor",
+        "unknown",
+        null
+      ],
+      "description": "What the reporter said. Never a severity or priority."
+    },
+    "source": {
+      "$ref": "#/$defs/source"
+    },
+    "visibility": {
+      "enum": [
+        "private"
+      ]
+    },
+    "state": {
+      "enum": [
+        "received",
+        "quarantined",
+        "accepted-for-triage",
+        "classified",
+        "rejected"
+      ]
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "history": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "triage": {
+      "$ref": "#/$defs/triage"
+    },
+    "links": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "defectIds"
+      ],
+      "properties": {
+        "defectIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^DEF-[0-9]{4,}$"
+          }
+        }
+      }
+    },
+    "receivedAt": {
+      "type": "string",
+      "minLength": 20
+    },
+    "reviewQueuePk": {
+      "enum": [
+        "QUEUE#pending",
+        "QUEUE#quarantined"
+      ]
+    },
+    "reviewQueueSk": {
+      "type": "string"
+    },
+    "migration": {
+      "$ref": "#/$defs/migration"
+    },
+    "disposition": {
+      "enum": [
+        "received",
+        "quarantined"
+      ]
+    },
+    "screening": {
+      "$ref": "#/$defs/screening"
+    }
+  },
+  "$defs": {
+    "reportV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "product",
+        "impact",
+        "title",
+        "actual",
+        "expected",
+        "steps",
+        "pageUrl"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "1.0"
+        },
+        "product": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "impact": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "actual": {
+          "type": "string",
+          "maxLength": 1200
+        },
+        "expected": {
+          "type": "string",
+          "maxLength": 1200
+        },
+        "steps": {
+          "type": "string",
+          "maxLength": 900
+        },
+        "pageUrl": {
+          "type": "string",
+          "maxLength": 2000
+        }
+      }
+    },
+    "productResolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "productId",
+        "reportedText"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "resolved",
+            "unmapped"
+          ]
+        },
+        "productId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+        },
+        "reportedText": {
+          "type": "string",
+          "maxLength": 100
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "provenance"
+      ],
+      "properties": {
+        "channel": {
+          "enum": [
+            "public-api",
+            "public-github",
+            "manual",
+            "ci",
+            "agent",
+            "dokimos",
+            "application"
+          ]
+        },
+        "provenance": {
+          "enum": [
+            "anonymous-human",
+            "authenticated-human",
+            "application",
+            "ci",
+            "agent",
+            "unrecorded"
+          ],
+          "description": "'unrecorded' only for migrated records whose source did not establish a class."
+        }
+      }
+    },
+    "triage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Independent triage judgements (VIT-DOM-006). Absent means not assessed; none is inferred from another or from reportedImpact.",
+      "properties": {
+        "classification": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "severity": {
+          "enum": [
+            "critical",
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "priority": {
+          "enum": [
+            "urgent",
+            "high",
+            "normal",
+            "low"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "productId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+        },
+        "owner": {
+          "type": "string",
+          "maxLength": 200
+        }
+      }
+    },
+    "migration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from",
+        "id",
+        "original"
+      ],
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "original": {
+          "type": "object"
+        }
+      }
+    },
+    "screening": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "flags",
+        "redactions",
+        "escalation",
+        "disposition"
+      ],
+      "description": "Intake screening result (service/redaction.mjs + intake.mjs prepareReport). Records only the kinds found, never secret values.",
+      "properties": {
+        "flags": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "credential-redacted",
+              "possible-vulnerability",
+              "agent-instruction"
+            ]
+          }
+        },
+        "redactions": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "private-key",
+              "url-credentials",
+              "url-secret-parameter",
+              "authorization-header",
+              "jwt",
+              "github-token",
+              "aws-access-key-id",
+              "slack-token",
+              "api-secret-key",
+              "credential-assignment",
+              "payment-card"
+            ]
+          }
+        },
+        "escalation": {
+          "enum": [
+            "security",
+            null
+          ]
+        },
+        "disposition": {
+          "enum": [
+            "received",
+            "quarantined"
+          ]
+        }
+      }
+    }
+  }
+}

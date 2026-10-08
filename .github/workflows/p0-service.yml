@@ -6,12 +6,18 @@ on:
       - 'service/**'
       - 'infra/aws/**'
       - 'tests/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
       - '.github/workflows/p0-service.yml'
   pull_request:
     paths:
       - 'service/**'
       - 'infra/aws/**'
       - 'tests/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
       - '.github/workflows/p0-service.yml'
   workflow_dispatch:
 
@@ -23,21 +29,30 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
+      - name: Install locked dependencies
+        run: npm ci
       - name: Contract and adversarial tests
         run: npm test
-      - name: Validate service module syntax
+      - name: Integration tests (local DynamoDB-compatible store, no AWS)
+        run: npm run test:integration
+      - name: Validate module syntax
         shell: bash
         run: |
           set -euo pipefail
-          for module in service/*.mjs site/*.mjs; do
+          shopt -s nullglob
+          for module in service/*.mjs service/adapters/*.mjs site/*.mjs scripts/*.mjs scripts/lib/*.mjs; do
             node --check "$module"
           done
-      - uses: aws-actions/setup-sam@v2
+      - uses: aws-actions/setup-sam@f84ec7d548307efafe33230528756de3c5841a17 # v2
       - name: Validate AWS infrastructure
         run: sam validate --lint --template-file infra/aws/template.yaml
       - name: Build the AWS service candidate (no deploy)
         run: sam build --template-file infra/aws/template.yaml
+      - name: Credential scan of the built Lambda artifact (VIT-NFR-004)
+        run: node scripts/secret-scan.mjs .aws-sam/build

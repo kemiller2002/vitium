@@ -1,28 +1,30 @@
 <!doctype html>
-<html lang="en" data-ef-skin="comfortable">
+<html lang="en" data-ef-skin="comfortable" data-vitium-phase="draft" data-vitium-channel="github">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
   <meta name="description" content="Report a problem with Echelon Foundry software.">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' https://cdn.jsdelivr.net https://challenges.cloudflare.com; script-src 'self' https://challenges.cloudflare.com; img-src 'self' data: https://challenges.cloudflare.com; connect-src 'self' https://intake.vitium.echelonfoundry.com https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; object-src 'none'; base-uri 'self'; form-action https://github.com">
   <link rel="canonical" href="https://vitium.echelonfoundry.com/">
   <meta property="og:url" content="https://vitium.echelonfoundry.com/">
   <meta property="og:title" content="Report a defect · Vitium">
   <title>Report a defect · Vitium</title>
-  <!-- Pinned Forma release; app-specific layout lives in styles.css. -->
+  <!-- Pinned Forma release (exact version in the URL); app-specific layout lives in styles.css.
+       SRI status and upgrade evidence: docs/decisions/UX-0001-forma-pin-and-integrity.md -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@echelon-foundry/design-system@0.3.0/dist/all.css">
   <link rel="stylesheet" href="./styles.css">
   <script type="module" src="./app.mjs"></script>
 </head>
 <body>
-  <a class="skip-link" href="#report">Skip to reporting form</a>
+  <a class="skip-link" href="#report" data-testid="skip-link">Skip to reporting form</a>
   <header class="masthead">
     <a class="wordmark" href="./" aria-label="Vitium reporting home">
       <span aria-hidden="true" class="wordmark-icon">V</span>
       <span>Vitium <small>by Echelon Foundry</small></span>
     </a>
-    <a class="nav-link" href="https://github.com/kemiller2002/vitium/issues" target="_blank" rel="noopener noreferrer">View existing reports <span aria-hidden="true">↗</span></a>
+    <a class="nav-link" id="existing-reports-link" data-testid="existing-reports-link" href="https://github.com/kemiller2002/vitium/issues" target="_blank" rel="noopener noreferrer">View existing reports <span aria-hidden="true">↗</span><span class="visually-hidden"> (opens in a new tab)</span></a>
   </header>
   <main class="layout">
     <aside class="intro" aria-labelledby="intro-title">
@@ -39,19 +41,25 @@
       </div>
       <div class="privacy-note"><span aria-hidden="true">ⓘ</span><p><strong id="privacy-heading">Public reports</strong><br><span id="privacy-description">GitHub Issues in this repository are public. Do not include passwords, private customer data, access tokens, or sensitive screenshots.</span></p></div>
     </aside>
-    <section class="report-shell" id="report" aria-labelledby="form-title">
+    <section class="report-shell" id="report" aria-labelledby="form-title" data-testid="report-shell">
       <div class="report-head">
-        <span class="overline" id="progress">Step 1 of 2 · Describe the problem</span>
-        <h2 id="form-title">Report a defect</h2>
+        <span class="overline" id="progress" data-testid="progress">Step 1 of 2 · Describe the problem</span>
+        <h2 id="form-title" tabindex="-1">Report a defect</h2>
         <p>Only the fields marked <strong>*</strong> are required.</p>
       </div>
       <noscript><p class="alert">JavaScript is needed for the guided form. You can <a href="https://github.com/kemiller2002/vitium/issues/new">report directly through GitHub</a> instead.</p></noscript>
-      <div class="alert" id="feedback" role="alert" tabindex="-1" hidden></div>
-      <form id="defect-form" method="post" autocomplete="on">
+      <!-- Polite live region: every state change is announced here (VIT-UX-006). -->
+      <p id="status" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true" data-testid="status"></p>
+      <!-- Error summary: receives focus after failed validation and links to each field. -->
+      <div class="alert error-summary" id="feedback" role="alert" tabindex="-1" aria-labelledby="error-summary-title" data-testid="error-summary" hidden>
+        <h3 id="error-summary-title" class="error-summary__title">There is a problem with your report</h3>
+        <ul id="error-list" class="error-summary__list"></ul>
+      </div>
+      <form id="defect-form" method="post" autocomplete="on" novalidate data-testid="report-form">
         <div class="form-grid">
           <div class="field">
             <label for="product">Which application? <span aria-hidden="true">*</span></label>
-            <select id="product" name="product" required data-testid="product">
+            <select id="product" name="product" required aria-required="true" data-testid="product">
               <option value="">Select an application</option>
               <option>Arca</option><option>Chrona</option><option>Dokimos</option>
               <option>Fides</option><option>Folio</option><option>Forma</option>
@@ -59,88 +67,119 @@
               <option>Praxis</option><option>Signal</option><option>Summa</option>
               <option>Other / not sure</option>
             </select>
+            <p class="field-error" id="product-error" data-testid="product-error" hidden></p>
           </div>
           <div class="field">
             <label for="impact">How much does it affect you? <span aria-hidden="true">*</span></label>
-            <select id="impact" name="impact" required data-testid="impact">
+            <select id="impact" name="impact" required aria-required="true" data-testid="impact">
               <option value="">Select an impact</option>
               <option>Cannot use the feature</option>
               <option>Can use it with a workaround</option>
               <option>Minor inconvenience or display problem</option>
               <option>Not sure</option>
             </select>
+            <p class="field-error" id="impact-error" data-testid="impact-error" hidden></p>
           </div>
         </div>
         <div class="field">
           <label for="title">Short summary <span aria-hidden="true">*</span></label>
-          <input id="title" name="title" type="text" required maxlength="120" placeholder="e.g. Save button does nothing on my phone" data-testid="title">
-          <p class="hint">A short description is enough. No technical terms needed.</p>
+          <input id="title" name="title" type="text" required aria-required="true" placeholder="e.g. Save button does nothing on my phone" data-testid="title" data-hint="title-hint" aria-describedby="title-hint">
+          <p class="hint" id="title-hint">A short description is enough. No technical terms needed. Up to 120 characters.</p>
+          <p class="field-error" id="title-error" data-testid="title-error" hidden></p>
         </div>
         <div class="field">
           <label for="actual">What happened? <span aria-hidden="true">*</span></label>
-          <textarea id="actual" name="actual" required rows="3" maxlength="1200" placeholder="I tapped Save, but nothing changed." data-testid="actual"></textarea>
+          <textarea id="actual" name="actual" required aria-required="true" rows="3" placeholder="I tapped Save, but nothing changed." data-testid="actual" data-hint="actual-hint" aria-describedby="actual-hint"></textarea>
+          <p class="hint" id="actual-hint">Up to 1200 characters.</p>
+          <p class="field-error" id="actual-error" data-testid="actual-error" hidden></p>
         </div>
         <div class="field">
           <label for="expected">What did you expect? <span aria-hidden="true">*</span></label>
-          <textarea id="expected" name="expected" required rows="3" maxlength="1200" placeholder="I expected my changes to be saved." data-testid="expected"></textarea>
+          <textarea id="expected" name="expected" required aria-required="true" rows="3" placeholder="I expected my changes to be saved." data-testid="expected" data-hint="expected-hint" aria-describedby="expected-hint"></textarea>
+          <p class="hint" id="expected-hint">Up to 1200 characters.</p>
+          <p class="field-error" id="expected-error" data-testid="expected-error" hidden></p>
         </div>
-        <details class="optional">
-          <summary>Additional details <span>Optional</span></summary>
+        <details class="optional" id="optional-details" data-testid="optional-details">
+          <summary data-testid="optional-summary">Additional details <span>Optional</span></summary>
           <div class="optional-fields">
             <div class="field">
               <label for="steps">How can we reproduce it?</label>
-              <textarea id="steps" name="steps" rows="4" maxlength="900" placeholder="1. Open the application&#10;2. Select an item&#10;3. Tap Save" data-testid="steps"></textarea>
+              <textarea id="steps" name="steps" rows="4" placeholder="1. Open the application&#10;2. Select an item&#10;3. Tap Save" data-testid="steps" data-hint="steps-hint" aria-describedby="steps-hint"></textarea>
+              <p class="hint" id="steps-hint">Up to 900 characters.</p>
+              <p class="field-error" id="steps-error" data-testid="steps-error" hidden></p>
             </div>
             <div class="field">
               <label for="pageUrl">Page URL</label>
-              <input id="pageUrl" name="pageUrl" type="url" maxlength="2000" placeholder="https://example.com/page" data-testid="page-url">
-              <p class="hint">We remove query parameters and fragments to protect sensitive data.</p>
+              <input id="pageUrl" name="pageUrl" type="url" inputmode="url" placeholder="https://example.com/page" data-testid="page-url" data-hint="pageUrl-hint" aria-describedby="pageUrl-hint">
+              <p class="hint" id="pageUrl-hint">We remove query parameters and fragments to protect sensitive data.</p>
+              <p class="field-error" id="pageUrl-error" data-testid="page-url-error" hidden></p>
             </div>
           </div>
         </details>
-        <label class="consent">
-          <input type="checkbox" name="privacyAcknowledged" id="privacyAcknowledged" required data-testid="privacy">
-          <span>I've removed passwords, account details, private information, and secrets from this report. <strong>*</strong></span>
-        </label>
-        <button class="primary-button" type="submit" data-testid="review-button">Review my report <span aria-hidden="true">→</span></button>
+        <div class="consent">
+          <input type="checkbox" name="privacyAcknowledged" id="privacyAcknowledged" required aria-required="true" data-testid="privacy">
+          <label for="privacyAcknowledged">I've removed passwords, account details, private information, and secrets from this report. <strong aria-hidden="true">*</strong></label>
+          <p class="field-error" id="privacyAcknowledged-error" data-testid="privacy-error" hidden></p>
+        </div>
+        <button class="primary-button" id="review-button" type="submit" data-testid="review-button">Review my report <span aria-hidden="true">→</span></button>
       </form>
-      <section id="review" class="review" tabindex="-1" aria-labelledby="review-title" hidden>
+      <section id="review" class="review" tabindex="-1" aria-labelledby="review-title" aria-busy="false" data-testid="review" hidden>
         <span class="overline" id="review-overline">Review before publishing</span>
-        <h3 id="review-title">Does this look right?</h3>
-        <dl class="report-preview">
-          <div><dt>Application</dt><dd id="preview-product"></dd></div>
-          <div><dt>Impact</dt><dd id="preview-impact"></dd></div>
-          <div><dt>Summary</dt><dd id="preview-title"></dd></div>
-          <div><dt>What happened</dt><dd id="preview-actual"></dd></div>
-          <div><dt>Expected behavior</dt><dd id="preview-expected"></dd></div>
-          <div id="preview-steps-row" hidden><dt>Steps to reproduce</dt><dd id="preview-steps"></dd></div>
-          <div id="preview-url-row" hidden><dt>Page URL</dt><dd id="preview-pageUrl"></dd></div>
+        <h3 id="review-title" tabindex="-1" data-testid="review-title">Does this look right?</h3>
+        <p class="review-lead">This is exactly what will be sent.</p>
+        <dl class="report-preview" data-testid="report-preview">
+          <div><dt>Application</dt><dd id="preview-product" data-testid="preview-product"></dd></div>
+          <div><dt>Impact</dt><dd id="preview-impact" data-testid="preview-impact"></dd></div>
+          <div><dt>Summary</dt><dd id="preview-title" data-testid="preview-title"></dd></div>
+          <div><dt>What happened</dt><dd id="preview-actual" data-testid="preview-actual"></dd></div>
+          <div><dt>Expected behavior</dt><dd id="preview-expected" data-testid="preview-expected"></dd></div>
+          <div id="preview-steps-row" hidden><dt>Steps to reproduce</dt><dd id="preview-steps" data-testid="preview-steps"></dd></div>
+          <div id="preview-url-row" hidden><dt>Page URL</dt><dd id="preview-pageUrl" data-testid="preview-page-url"></dd></div>
         </dl>
-        <div class="destination-note" id="github-destination">
+        <div class="notice-list" data-testid="data-notice">
+          <p><strong>Who can see it:</strong> <span id="visibility-notice" data-testid="visibility-notice">Public. Once you submit it on GitHub, anyone can read this report.</span></p>
+          <p><strong>How long it is kept:</strong> <span id="retention-notice" data-testid="retention-notice">Vitium has not yet published a retention and deletion policy for reports. Removing a public GitHub issue depends on the repository maintainers.</span></p>
+        </div>
+        <div class="destination-note" id="github-destination" data-testid="github-destination">
           <strong>Next: GitHub</strong>
           <p>Selecting Continue opens GitHub with your report filled in. You must sign in to GitHub and select <strong>Submit new issue</strong> there to finish. The report is not yet submitted.</p>
         </div>
-        <div class="destination-note" id="private-destination" hidden>
+        <div id="private-slot"></div>
+        <div class="review-actions">
+          <button type="button" class="secondary-button" id="edit" data-testid="edit-button">← Edit report</button>
+          <button type="button" class="secondary-button" id="cancel-review" data-testid="cancel-button">Cancel</button>
+          <a class="primary-button" id="submit-link" data-testid="github-submit" href="https://github.com/kemiller2002/vitium/issues/new" target="_blank" rel="noopener noreferrer">Continue to GitHub <span aria-hidden="true">↗</span><span class="visually-hidden"> (opens in a new tab)</span></a>
+          <button type="button" class="primary-button" id="submit-private" data-testid="private-submit" hidden><span id="submit-private-label">Send</span> <span aria-hidden="true">→</span></button>
+        </div>
+      </section>
+      <div id="private-result-slot"></div>
+      <div class="report-foot" id="github-foot" data-testid="github-foot">No account needed to fill out this form. <strong>A GitHub account is currently required to submit.</strong></div>
+      <!-- Private intake UI. Inert until site/public-config.mjs is enabled with an approved
+           endpoint and site key; while disabled it is never inserted into the document. -->
+      <template id="private-review-template">
+        <div class="destination-note" id="private-destination" data-testid="private-destination">
           <strong>Private report submission</strong>
           <p>This report will be stored privately for Echelon triage, not published to GitHub. Please complete the anti-abuse verification below. Submission does not guarantee a fix or personal response.</p>
-          <div id="turnstile-challenge" aria-label="Human verification"></div>
+          <div id="turnstile-challenge" aria-label="Human verification" data-testid="challenge"></div>
         </div>
-        <div class="review-actions">
-          <button type="button" class="secondary-button" id="edit">← Edit report</button>
-          <a class="primary-button" id="submit-link" data-testid="github-submit" href="https://github.com/kemiller2002/vitium/issues/new" target="_blank" rel="noopener noreferrer">Continue to GitHub <span aria-hidden="true">↗</span></a>
-          <button type="button" class="primary-button" id="submit-private" data-testid="private-submit" hidden>Send private report <span aria-hidden="true">→</span></button>
+        <p id="review-status" class="review-status" tabindex="-1" data-testid="review-status" hidden></p>
+        <div class="alert submit-error" id="submit-error" tabindex="-1" data-testid="submit-error" hidden>
+          <p class="submit-error__title"><strong>Not sent.</strong> <span id="submit-error-message" data-testid="submit-error-message"></span></p>
+          <p class="hint" id="submit-error-detail" data-testid="submit-error-detail" hidden></p>
         </div>
-      </section>
-      <section id="private-success" class="review" aria-labelledby="success-title" tabindex="-1" hidden>
-        <span class="overline">Report received</span>
-        <h3 id="success-title">Thank you for reporting this.</h3>
-        <p>We have durably received your report for triage. This does not mean the defect has been verified or fixed.</p>
-        <p><strong>Keep this reference:</strong> <code id="report-reference"></code></p>
-        <p class="hint">This receipt does not provide access to private status information. No fix date or reply is guaranteed.</p>
-        <button type="button" class="secondary-button" id="report-another">Report another problem</button>
-      </section>
-      <div class="report-foot" id="github-foot">No account needed to fill out this form. <strong>A GitHub account is currently required to submit.</strong></div>
-      <div class="report-foot" id="private-foot" hidden>Private submission does not require a GitHub account. Never include credentials or sensitive personal data.</div>
+      </template>
+      <template id="private-result-template">
+        <section id="private-success" class="review" aria-labelledby="success-title" data-testid="private-success" hidden>
+          <span class="overline" id="success-overline">Report received</span>
+          <h3 id="success-title" tabindex="-1" data-testid="success-title">Thank you for reporting this.</h3>
+          <p id="result-explanation">We have durably received your report for triage. This does not mean the defect has been verified or fixed.</p>
+          <p class="destination-note" id="redaction-notice" role="note" data-testid="redaction-notice" hidden></p>
+          <p><strong>Keep this reference:</strong> <code id="report-reference" data-testid="report-reference"></code></p>
+          <p class="hint">Received at <span id="report-received-at" data-testid="report-received-at"></span>. This receipt does not provide access to private status information. No fix date or reply is guaranteed.</p>
+          <button type="button" class="secondary-button" id="report-another" data-testid="report-another">Report another problem</button>
+        </section>
+        <div class="report-foot" id="private-foot">Private submission does not require a GitHub account. Never include credentials or sensitive personal data.</div>
+      </template>
     </section>
   </main>
   <footer class="footer"><span>Vitium · Echelon Foundry</span><span>Better reports. Better fixes.</span></footer>

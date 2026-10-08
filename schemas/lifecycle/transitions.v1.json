@@ -1,0 +1,996 @@
+{
+  "$schema": "./transitions.schema.v1.json",
+  "schemaVersion": "1.0",
+  "id": "vitium.lifecycle.transitions",
+  "tableVersion": "1.3.1",
+  "authority": "vitium-domain-candidate",
+  "ordoAuthorized": false,
+  "decisionRecord": "docs/decisions/DOM-001-lifecycle-and-identities.md",
+  "description": "Candidate legal transition table for Vitium observations and defects (VIT-LCY-001..004). NOT Ordo-authorized: Ordo must refine guards, invariants and evidence before this becomes executable authority. Any (from, to) pair not listed here is forbidden and fails closed.",
+  "roles": [
+    "triager",
+    "verifier",
+    "administrator"
+  ],
+  "provenances": [
+    "anonymous-human",
+    "authenticated-human",
+    "application",
+    "ci",
+    "agent"
+  ],
+  "commandProvenances": [
+    "authenticated-human",
+    "application",
+    "ci",
+    "agent"
+  ],
+  "evidenceKinds": {
+    "reproduction": {
+      "label": "Reproduction"
+    },
+    "reproduction-attempt": {
+      "label": "Reproduction attempt"
+    },
+    "verification-run": {
+      "label": "Independent verification"
+    },
+    "specification-reference": {
+      "label": "Specification reference"
+    },
+    "decision-record": {
+      "label": "Decision record"
+    },
+    "new-occurrence": {
+      "label": "New occurrence"
+    },
+    "triage-correction": {
+      "label": "Triage correction"
+    },
+    "supporting": {
+      "label": "Supporting"
+    },
+    "unspecified": {
+      "label": "Unspecified (legacy, untyped)"
+    },
+    "verification-request": {
+      "label": "Verification request"
+    }
+  },
+  "fields": {
+    "classification": {
+      "type": "text",
+      "maxLength": 200
+    },
+    "severity": {
+      "type": "enum",
+      "values": [
+        "critical",
+        "high",
+        "medium",
+        "low"
+      ]
+    },
+    "priority": {
+      "type": "enum",
+      "values": [
+        "urgent",
+        "high",
+        "normal",
+        "low"
+      ]
+    },
+    "confidence": {
+      "type": "enum",
+      "values": [
+        "high",
+        "medium",
+        "low"
+      ]
+    },
+    "productId": {
+      "type": "pattern",
+      "pattern": "^[a-z][a-z0-9-]{0,63}$"
+    },
+    "owner": {
+      "type": "text",
+      "maxLength": 200
+    },
+    "duplicateOf": {
+      "type": "pattern",
+      "pattern": "^DEF-[0-9]{4,}$"
+    },
+    "supersededBy": {
+      "type": "pattern",
+      "pattern": "^DEF-[0-9]{4,}$"
+    },
+    "workItemRef": {
+      "type": "text",
+      "maxLength": 512
+    },
+    "attemptId": {
+      "type": "pattern",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    },
+    "candidateRevision": {
+      "type": "pattern",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/+-]{0,255}$"
+    },
+    "verificationOutcome": {
+      "type": "enum",
+      "values": [
+        "passed",
+        "failed",
+        "inconclusive"
+      ]
+    },
+    "workItemId": {
+      "type": "text",
+      "maxLength": 256
+    },
+    "affectedRelease": {
+      "type": "text",
+      "maxLength": 128
+    },
+    "author": {
+      "type": "pattern",
+      "pattern": "^[A-Za-z0-9._:/+=,@-]{1,256}$"
+    }
+  },
+  "reasonMaxLength": 1000,
+  "machines": {
+    "observation": {
+      "states": [
+        "received",
+        "quarantined",
+        "accepted-for-triage",
+        "classified",
+        "rejected"
+      ],
+      "initial": "received",
+      "terminal": [
+        "classified",
+        "rejected"
+      ],
+      "transitions": [
+        {
+          "from": "received",
+          "to": "quarantined",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [],
+          "optionalFields": [],
+          "evidenceAnyOf": []
+        },
+        {
+          "from": "received",
+          "to": "accepted-for-triage",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [],
+          "optionalFields": [],
+          "evidenceAnyOf": []
+        },
+        {
+          "from": "received",
+          "to": "rejected",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [],
+          "optionalFields": [],
+          "evidenceAnyOf": []
+        },
+        {
+          "from": "quarantined",
+          "to": "accepted-for-triage",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [],
+          "optionalFields": [],
+          "evidenceAnyOf": []
+        },
+        {
+          "from": "quarantined",
+          "to": "rejected",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [],
+          "optionalFields": [],
+          "evidenceAnyOf": []
+        },
+        {
+          "from": "accepted-for-triage",
+          "to": "classified",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [
+            "classification"
+          ],
+          "optionalFields": [
+            "severity",
+            "priority",
+            "confidence",
+            "productId",
+            "owner"
+          ],
+          "evidenceAnyOf": []
+        },
+        {
+          "from": "accepted-for-triage",
+          "to": "quarantined",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [],
+          "optionalFields": [],
+          "evidenceAnyOf": []
+        },
+        {
+          "from": "accepted-for-triage",
+          "to": "rejected",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [],
+          "optionalFields": [],
+          "evidenceAnyOf": []
+        }
+      ]
+    },
+    "defect": {
+      "states": [
+        "new",
+        "triaged",
+        "reproducing",
+        "confirmed",
+        "in-progress",
+        "awaiting-verification",
+        "resolved",
+        "closed",
+        "reopened",
+        "duplicate",
+        "not-reproducible",
+        "expected-behavior",
+        "declined",
+        "superseded"
+      ],
+      "initial": "new",
+      "terminal": [
+        "closed",
+        "duplicate",
+        "not-reproducible",
+        "expected-behavior",
+        "declined",
+        "superseded"
+      ],
+      "dispositions": [
+        "resolved",
+        "closed",
+        "duplicate",
+        "not-reproducible",
+        "expected-behavior",
+        "declined",
+        "superseded"
+      ],
+      "transitions": [
+        {
+          "from": "new",
+          "to": "triaged",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [],
+          "optionalFields": [
+            "severity",
+            "priority",
+            "confidence",
+            "productId",
+            "owner"
+          ],
+          "evidenceAnyOf": []
+        },
+        {
+          "from": "new",
+          "to": "not-reproducible",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [],
+          "optionalFields": [],
+          "evidenceAnyOf": [
+            "reproduction-attempt"
+          ]
+        },
+        {
+          "from": "new",
+          "to": "duplicate",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [
+            "duplicateOf"
+          ],
+          "optionalFields": [],
+          "evidenceAnyOf": []
+        },
+        {
+          "from": "triaged",
+          "to": "reproducing",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [],
+          "optionalFields": [],
+          "evidenceAnyOf": []
+        },
+        {
+          "from": "triaged",
+          "to": "confirmed",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [],
+          "optionalFields": [
+            "severity",
+            "priority",
+            "confidence"
+          ],
+          "evidenceAnyOf": [
+            "reproduction"
+          ]
+        },
+        {
+          "from": "triaged",
+          "to": "duplicate",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [
+            "duplicateOf"
+          ],
+          "optionalFields": [],
+          "evidenceAnyOf": []
+        },
+        {
+          "from": "triaged",
+          "to": "not-reproducible",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [],
+          "optionalFields": [],
+          "evidenceAnyOf": [
+            "reproduction-attempt"
+          ]
+        },
+        {
+          "from": "triaged",
+          "to": "expected-behavior",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [],
+          "optionalFields": [],
+          "evidenceAnyOf": [
+            "specification-reference"
+          ]
+        },
+        {
+          "from": "triaged",
+          "to": "declined",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [],
+          "optionalFields": [],
+          "evidenceAnyOf": [
+            "decision-record"
+          ]
+        },
+        {
+          "from": "triaged",
+          "to": "superseded",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [
+            "supersededBy"
+          ],
+          "optionalFields": [],
+          "evidenceAnyOf": []
+        },
+        {
+          "from": "reproducing",
+          "to": "confirmed",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [],
+          "optionalFields": [
+            "severity",
+            "priority",
+            "confidence"
+          ],
+          "evidenceAnyOf": [
+            "reproduction"
+          ]
+        },
+        {
+          "from": "reproducing",
+          "to": "triaged",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [],
+          "optionalFields": [],
+          "evidenceAnyOf": []
+        },
+        {
+          "from": "reproducing",
+          "to": "not-reproducible",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [],
+          "optionalFields": [],
+          "evidenceAnyOf": [
+            "reproduction-attempt"
+          ]
+        },
+        {
+          "from": "reproducing",
+          "to": "expected-behavior",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [],
+          "optionalFields": [],
+          "evidenceAnyOf": [
+            "specification-reference"
+          ]
+        },
+        {
+          "from": "confirmed",
+          "to": "in-progress",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [],
+          "optionalFields": [
+            "workItemRef",
+            "owner",
+            "priority"
+          ],
+          "evidenceAnyOf": []
+        },
+        {
+          "from": "confirmed",
+          "to": "duplicate",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [
+            "duplicateOf"
+          ],
+          "optionalFields": [],
+          "evidenceAnyOf": []
+        },
+        {
+          "from": "confirmed",
+          "to": "declined",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [],
+          "optionalFields": [],
+          "evidenceAnyOf": [
+            "decision-record"
+          ]
+        },
+        {
+          "from": "confirmed",
+          "to": "superseded",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [
+            "supersededBy"
+          ],
+          "optionalFields": [],
+          "evidenceAnyOf": []
+        },
+        {
+          "from": "in-progress",
+          "to": "awaiting-verification",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [
+            "attemptId",
+            "candidateRevision"
+          ],
+          "optionalFields": [
+            "author",
+            "workItemId"
+          ],
+          "evidenceAnyOf": [
+            "verification-request"
+          ],
+          "attempt": {
+            "kind": "submission"
+          },
+          "messages": {
+            "missing_field": "Submitting for verification requires attemptId, candidateRevision and a verification request.",
+            "missing_evidence": "Submitting for verification requires attemptId, candidateRevision and a verification request."
+          }
+        },
+        {
+          "from": "in-progress",
+          "to": "triaged",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [],
+          "optionalFields": [],
+          "evidenceAnyOf": []
+        },
+        {
+          "from": "awaiting-verification",
+          "to": "resolved",
+          "roles": [
+            "verifier",
+            "administrator"
+          ],
+          "roleRationale": "Independent verification requires a verifier or administrator.",
+          "reasonRequired": true,
+          "requiredFields": [],
+          "optionalFields": [
+            "attemptId",
+            "candidateRevision",
+            "verificationOutcome"
+          ],
+          "evidenceAnyOf": [
+            "verification-run"
+          ],
+          "attempt": {
+            "kind": "result",
+            "outcome": "passed",
+            "independent": true,
+            "matchLatestSubmission": true
+          },
+          "messages": {
+            "missing_field": "Verification results require the attemptId and candidateRevision of the submitted candidate."
+          }
+        },
+        {
+          "from": "awaiting-verification",
+          "to": "in-progress",
+          "roles": [
+            "verifier",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [],
+          "optionalFields": [
+            "attemptId",
+            "candidateRevision",
+            "verificationOutcome"
+          ],
+          "evidenceAnyOf": [
+            "verification-run"
+          ],
+          "roleRationale": "Independent verification requires a verifier or administrator.",
+          "attempt": {
+            "kind": "result",
+            "outcome": "failed",
+            "matchLatestSubmission": true
+          },
+          "messages": {
+            "missing_field": "Verification results require the attemptId and candidateRevision of the submitted candidate."
+          }
+        },
+        {
+          "from": "resolved",
+          "to": "closed",
+          "roles": [
+            "triager",
+            "verifier",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [],
+          "optionalFields": [],
+          "evidenceAnyOf": [
+            "verification-run",
+            "decision-record"
+          ]
+        },
+        {
+          "from": "resolved",
+          "to": "reopened",
+          "roles": [
+            "triager",
+            "verifier",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [],
+          "optionalFields": [
+            "affectedRelease"
+          ],
+          "evidenceAnyOf": [
+            "new-occurrence",
+            "triage-correction"
+          ],
+          "messages": {
+            "missing_evidence": "Reopening a resolved or closed defect requires recurrence evidence (new-occurrence or triage-correction)."
+          }
+        },
+        {
+          "from": "closed",
+          "to": "reopened",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [],
+          "optionalFields": [
+            "affectedRelease"
+          ],
+          "evidenceAnyOf": [
+            "new-occurrence",
+            "triage-correction"
+          ],
+          "messages": {
+            "missing_evidence": "Reopening a resolved or closed defect requires recurrence evidence (new-occurrence or triage-correction)."
+          }
+        },
+        {
+          "from": "duplicate",
+          "to": "reopened",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [],
+          "optionalFields": [
+            "affectedRelease"
+          ],
+          "evidenceAnyOf": [
+            "new-occurrence",
+            "triage-correction"
+          ]
+        },
+        {
+          "from": "not-reproducible",
+          "to": "reopened",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [],
+          "optionalFields": [
+            "affectedRelease"
+          ],
+          "evidenceAnyOf": [
+            "new-occurrence",
+            "triage-correction"
+          ]
+        },
+        {
+          "from": "expected-behavior",
+          "to": "reopened",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [],
+          "optionalFields": [
+            "affectedRelease"
+          ],
+          "evidenceAnyOf": [
+            "new-occurrence",
+            "triage-correction"
+          ]
+        },
+        {
+          "from": "declined",
+          "to": "reopened",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [],
+          "optionalFields": [
+            "affectedRelease"
+          ],
+          "evidenceAnyOf": [
+            "new-occurrence",
+            "triage-correction"
+          ]
+        },
+        {
+          "from": "superseded",
+          "to": "reopened",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [],
+          "optionalFields": [
+            "affectedRelease"
+          ],
+          "evidenceAnyOf": [
+            "new-occurrence",
+            "triage-correction"
+          ]
+        },
+        {
+          "from": "reopened",
+          "to": "triaged",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [],
+          "optionalFields": [
+            "severity",
+            "priority",
+            "confidence",
+            "owner"
+          ],
+          "evidenceAnyOf": []
+        },
+        {
+          "from": "reopened",
+          "to": "reproducing",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [],
+          "optionalFields": [
+            "workItemId"
+          ],
+          "evidenceAnyOf": []
+        },
+        {
+          "from": "reopened",
+          "to": "in-progress",
+          "roles": [
+            "triager",
+            "administrator"
+          ],
+          "reasonRequired": true,
+          "requiredFields": [
+            "attemptId",
+            "workItemId"
+          ],
+          "optionalFields": [
+            "owner"
+          ],
+          "evidenceAnyOf": [],
+          "attempt": {
+            "kind": "rework"
+          },
+          "messages": {
+            "missing_field": "Resuming work requires a new work attempt (attemptId and workItemId)."
+          }
+        }
+      ]
+    }
+  },
+  "promotion": {
+    "description": "Explicit authorized action that creates a NEW defect identity linked to the observation (VIT-LCY-002). The observation keeps its own identity and state; it gains only a link event.",
+    "fromMachine": "observation",
+    "fromState": "classified",
+    "toMachine": "defect",
+    "toState": "new",
+    "roles": [
+      "triager",
+      "administrator"
+    ],
+    "reasonRequired": true,
+    "requiredFields": [
+      "defectId"
+    ],
+    "defectIdPattern": "^DEF-[0-9]{4,}$"
+  },
+  "facts": {
+    "description": "Fix facts are separate append-only events, never lifecycle states (VIT-VER-005 groundwork, P1). Recording a fact never changes state.",
+    "machine": "defect",
+    "kinds": {
+      "fix-proposed": {
+        "roles": [
+          "triager",
+          "administrator"
+        ],
+        "evidenceAnyOf": []
+      },
+      "code-merged": {
+        "roles": [
+          "triager",
+          "administrator"
+        ],
+        "evidenceAnyOf": [
+          "supporting"
+        ]
+      },
+      "build-passed": {
+        "roles": [
+          "triager",
+          "verifier",
+          "administrator"
+        ],
+        "evidenceAnyOf": [
+          "supporting"
+        ]
+      },
+      "release-published": {
+        "roles": [
+          "triager",
+          "administrator"
+        ],
+        "evidenceAnyOf": [
+          "supporting"
+        ]
+      },
+      "deployment-observed": {
+        "roles": [
+          "verifier",
+          "administrator"
+        ],
+        "evidenceAnyOf": [
+          "supporting"
+        ]
+      },
+      "verified-resolved": {
+        "roles": [
+          "verifier",
+          "administrator"
+        ],
+        "evidenceAnyOf": [
+          "verification-run"
+        ]
+      },
+      "reporter-confirmed": {
+        "roles": [
+          "triager",
+          "administrator"
+        ],
+        "evidenceAnyOf": [
+          "supporting"
+        ]
+      }
+    }
+  },
+  "evidenceRule": "evidenceAnyOf: the command must carry at least one evidence item whose kind is listed. An empty list means no evidence is required. Kind \"unspecified\" (legacy untyped evidence) never satisfies a non-empty requirement.",
+  "policy": {
+    "description": "Provisional policy values (DOM-001 sections 18-28). Not Ordo-authorized; every value here is a reversible engineering default awaiting an owner decision (VIT-OQ-012, VIT-VER-006/011). passRequiresHumanVerifier (provisional, integrator decision VF-028): a passing verification result needs provenance authenticated-human; agent, application and ci actors may record failed and inconclusive results only.",
+    "maxAutonomousFailedAttempts": {
+      "value": 3,
+      "provisional": true,
+      "description": "Failed verification results in the current open cycle after which a verification submission by an actor of provenance 'agent' is refused with escalation_required until a human records an escalation event. A parameter of the policy function; this is only its default."
+    },
+    "independentVerification": {
+      "required": true,
+      "appliesTo": [
+        "passed"
+      ],
+      "provisional": true,
+      "description": "A passing verification result may not be recorded by the submitter of the attempt. The attempt's author IS the submitting actor; an explicit 'author' is accepted only when it canonically equals that actor (VF-025). Actor identities are compared canonically: NFKC, trimmed, lower-cased (VF-026)."
+    },
+    "passRequiresHumanVerifier": true
+  },
+  "events": {
+    "description": "Append-only events that never change state. 'verification-inconclusive' records a flaky/environmental run against the latest submission and leaves the defect awaiting verification; it never counts as a failure (VIT-VER-010). 'escalation' is a human decision that resets the autonomous repair budget for the open cycle (VIT-VER-011).",
+    "verification-inconclusive": {
+      "machine": "defect",
+      "state": "awaiting-verification",
+      "roles": [
+        "verifier",
+        "administrator"
+      ],
+      "requiredFields": [
+        "attemptId",
+        "candidateRevision"
+      ],
+      "evidenceAnyOf": [
+        "verification-run"
+      ],
+      "reasonRequired": true
+    },
+    "escalation": {
+      "machine": "defect",
+      "roles": [
+        "triager",
+        "administrator"
+      ],
+      "provenances": [
+        "authenticated-human"
+      ],
+      "reasonRequired": true
+    }
+  },
+  "errorCodes": [
+    "outcome_mismatch",
+    "attempt_mismatch",
+    "duplicate_attempt",
+    "independence_required",
+    "escalation_required",
+    "author_mismatch",
+    "provenance_conflict",
+    "human_verifier_required",
+    "unverified_resolution"
+  ]
+}

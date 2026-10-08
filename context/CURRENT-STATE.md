@@ -4,35 +4,31 @@ Date: 2026-10-08
 
 **Canonical domain:** https://vitium.echelonfoundry.com/ (configured in source; DNS/Pages/HTTPS not verified).
 
-## Implemented in the repository
+## Implemented in the repository (as of mission VIT-P0-2026-10-08, branch `p0/integration`)
 
-- Public, responsive, two-step reporting form in `site/index.html`.
-- Deterministic validation, normalization, sanitized page URL and GitHub issue prefill in `site/submission.mjs`.
-- Review-before-GitHub step; form explicitly states that submission happens on GitHub.
-- Pinned Forma 0.3.0 CSS consumption via CDN.
-- A versioned internal defect JSON Schema.
-- Node unit tests for the report normalization/link contract.
-- GitHub Actions files for CI tests and GitHub Pages deployment.
-- Conditor lifecycle manifest declared, not installed or verified.
-- Echelon governance and migration contract documented.
+Local evidence only unless a CI run is cited. Full matrix: `docs/requirements/P0-TRACEABILITY.md`.
+
+- **Genuine Conditor lifecycle installation** (Conditor 0.5.0; Praxis 3.7.2, Ordo 1.5.0, Visual Engineering 1.0.1, Communication Engineering 1.0.0) produced by real `conditor init`; `.conditor/lock.json` schema 4. CI-verified on `a8532cb`: [Conditor governance verification 37813042099](https://github.com/kemiller2002/vitium/actions/runs/37813042099) (attestation-verified installs, verify/doctor/status, no-drift) and [Praxis validation 37813042172](https://github.com/kemiller2002/vitium/actions/runs/37813042172).
+- Reporter rebuilt on a pure state machine (`site/state.mjs`, `site/view.mjs`, `site/private-intake.mjs`): review/edit/cancel, accessible error summary, no silent truncation, credential guard before the GitHub handoff, private client gated off.
+- Single machine-readable lifecycle table (`schemas/lifecycle/transitions.v1.json` 1.3.1, `ordoAuthorized: false`) enforced by JS (`service/lifecycle.mjs`, `service/triage.mjs`) and a pure F# core (`domain/`, FSharp.Core only); failed-verification rework loop, reopen-and-resume, provisional agent repair budget, human-verifier rule.
+- Private intake hardened: typed failures, redaction + quarantine, NFC-hashed idempotent replay, challenge before conflict, 24 KiB cap, least-privilege SAM template candidate, operator CLI with fail-closed human-role classification and transactional observation→defect promotion.
+- Proposed authenticated machine-observation contract (`service/machine/`, `schemas/machine/`), separate from the Turnstile route; no endpoint deployed.
+- Release tooling: fail-closed Pages workflow, SHA-pinned actions, git-aware secret scan, read-only public-site verifier, runbooks and an operator decision register.
+- Independent verification harness: Playwright/axe browser suite, adversarial suite, mutation appraisal (114 mutants).
 
 ## Not confirmed or not implemented
 
-- GitHub Pages Settings must configure custom domain `vitium.echelonfoundry.com` and GitHub Actions as source. DNS CNAME and HTTPS still require setup/verification.
-- Conditor needs a real tool-run installation and verified lock; no lifecycle installation is evidenced.
-- Forma 0.3.0 CSS in the current frontend has not yet been proved a valid pinned deployed asset or upgraded to the Echelon 0.4.1 target. The JavaScript form must migrate to the Conditor-managed F#/Limen application baseline.
-- Node quality gates and the P0 AWS SAM validation/build workflow have been observed successful; this is **not** a live deployment.
-- The Conditor read-only plan and isolated installation preview were verified in CI; the preview's generated governance state has not been committed to the repository.
-- Browser automation, axe a11y verification and screenshots are not yet executed.
-- Direct submission without GitHub has a **feature-gated implementation candidate**, not a deployed or enabled service (issue #1).
-- Full browser and assistive-tech verification (issue #2).
-- Maintainer triage application (issue #3).
-- Safe attachments (issue #4).
-- Arca storage, Fides internal login, Dokimos intake, Praxis remediation and Ordo lifecycle integration.
+- **Not live.** `vitium.echelonfoundry.com` and `intake.vitium.echelonfoundry.com` return NXDOMAIN (witnessed 2026-10-08); repository `has_pages: false`; the Pages domain-verification TXT record is absent.
+- No AWS deployment, real DynamoDB, Turnstile, IAM principal or log-redaction evidence; concurrency evidence is from the dynalite emulator only (and dynalite lacks TransactWriteItems).
+- Lifecycle transitions are not under Ordo authority; F#/Limen/Forma 0.4.1 application migration (#6) not started (needs qualified Limen release set; NuGet blocked in the mission sandbox).
+- Praxis work items are attributed but not checkpointed or completed (requires the pushed, reviewed state).
+- Browser and axe checks passed in CI on PR #19 head `6be6d02` ([run 37856574275](https://github.com/kemiller2002/vitium/actions/runs/37856574275), real Forma CDN and blocked legs); a manual screen-reader session and a run against the canonical live site are outstanding.
+- Open findings: VF-034 (needs a user decision, DOM-001 §29) and VF-018 (Forma SRI).
+- Maintainer dashboard (#3), attachments (#4), machine producers (#14 P1), Arca/Fides integration.
 
 ## Immediate next action
 
-Execute and verify Conditor installation from the manifest, follow the scaffold migration plan in `docs/GOVERNANCE.md`, configure `vitium.echelonfoundry.com` per `DEPLOYMENT.md`, and pass all tests before calling the site live. For reporting without GitHub accounts, implement issue #1 first.
+Review and merge the P0 PRs; decide VF-034; then the operator gates in `docs/operations/OPERATOR-DECISIONS.md` (Pages/DNS/TLS D-01..D-05 first, then AWS staging, Turnstile, owners, retention, D-25 human operator roles). `site/public-config.mjs` stays `enabled: false` until those are evidenced.
 
 
 ## Observed automation evidence (2026-10-08)
@@ -80,3 +76,11 @@ Execute and verify Conditor installation from the manifest, follow the scaffold 
 - Actual CI [run 37817505596](https://github.com/kemiller2002/vitium/actions/runs/37817505596) **succeeded**, including build, typed transport checks, both `.nupkg` artifacts, and restoration/compilation from packages in an unrelated F# consumer.
 - Packages are **not published** to NuGet.org or deployed to any application. MIT has been approved and added to the repository `LICENSE` and both F# NuGet project files. The NuGet package owner is `Kevin.m.miller` with Trusted Publishing policy `kemiller2002/vitium`, `nuget-publish.yml`, environment `nuget-release`, glob `EchelonFoundry.Vitium.*`. Publication still needs a matching immutable version tag, GitHub environment setup/protection, and a real successful OIDC publishing run. See `docs/NUGET-PACKAGES.md`.
 - The client models machine observation and verification submission with short-lived bearer credentials, but a live machine intake server, durable producer outbox, approved service identity and actual Praxis integration remain open (#14, #15).
+
+## Mission VIT-P0-2026-10-08 results (2026-10-08)
+
+- Seven specialist agents (governance, domain, intake/security, UX, release/ops, independent verification, build-system integrations) worked in isolated worktrees; the principal integrator merged in dependency order on `p0/integration` and attributed every specialist commit to Praxis work items VIT-P0-{GOV,DOM,INT,UX,OPS,VER,MACH,INTEG}-001.
+- Local results at `a8a95f7`: `npm test` 310/310; adversarial 146 pass / 0 fail / 2 open findings; emulator integration 30/30; F# 25/25; browser 66/66 per CSS mode with 0 axe violations; secret scan 0; Conditor/Praxis/Ordo verification exit 0.
+- The independent verifier raised VF-001..VF-036; 34 closed with failing-before/passing-after evidence, VF-034 contained pending user decision, VF-018 blocked.
+- CI on PR #19 head `6be6d02`: quality gates, browser/adversarial, P0 service, Conditor governance, Praxis validation and NuGet build all succeeded (see `docs/requirements/P0-TRACEABILITY.md`).
+- No acceptance scenario is `verified-passed`; P0 is an **engineering candidate**, not shipped.

@@ -1,0 +1,36 @@
+{
+  "pk": "REQUEST#3b8acc3c16bcfcfe4e00ce04a212961c875f3e4eb56f5a9620d881352e38e4eb",
+  "reference": "VIT-00112233445566778899AABBCCDDEEFF",
+  "payloadHash": "7a243ddc704189516da415b5a998353aa83679d99a3b8e6f572f288a228c8bfc",
+  "report": {
+    "schemaVersion": "1.0",
+    "product": "Forma Studio",
+    "impact": "Can use it with a workaround",
+    "title": "Palette resets after reload",
+    "actual": "Custom palette is lost.",
+    "expected": "Palette persists.",
+    "steps": "Choose palette.\nReload.",
+    "pageUrl": "https://example.com/studio"
+  },
+  "source": "public-api",
+  "visibility": "private",
+  "kind": "observation",
+  "status": "received",
+  "state": "accepted-for-triage",
+  "revision": 1,
+  "history": [
+    {
+      "from": "received",
+      "to": "accepted-for-triage",
+      "actor": "arn:aws:iam::123456789012:user/operator",
+      "role": "triager",
+      "reason": "Plausible report",
+      "evidenceId": null,
+      "classification": null,
+      "occurredAt": "2026-10-08T13:00:00.000Z",
+      "sequence": 1
+    }
+  ],
+  "reviewQueuePk": "QUEUE#pending",
+  "receivedAt": "2026-10-08T12:00:00.000Z"
+}

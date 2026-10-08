@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Console test runner: exits non-zero when any test fails. No test framework
+       packages (NuGet is unavailable); plain assertion helpers in Program.fs. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Vitium.Domain/Vitium.Domain.fsproj" />
+  </ItemGroup>
+
+</Project>
