@@ -68,7 +68,7 @@ for (const [name, payload, finding] of DIVERGENT_CASES) {
   });
 }
 
-test("VIT-DOM-003: an observation produced by makeIntake validates against observation.schema.json", { todo: "finding VF-021" }, async () => {
+test("VIT-DOM-003: an observation produced by makeIntake validates against observation.schema.json", async () => {
   const store = memoryStore();
   const intake = makeIntake({ store, verifyChallenge: async () => true, now: () => "2026-10-08T12:00:00.000Z" });
   await intake.submit(validRequest(), { idempotencyKey: IDEMPOTENCY_KEY, challengeToken: CHALLENGE });

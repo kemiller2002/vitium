@@ -105,7 +105,7 @@ const INVISIBLE = Object.freeze({
   "word joiner only": "⁠"
 });
 
-test("VIT-API-002 / VIT-AC-004: visually empty or bidi-spoofing summaries are refused or neutralised", { todo: "finding VF-008" }, async () => {
+test("VIT-API-002 / VIT-AC-004: visually empty or bidi-spoofing summaries are refused or neutralised", async () => {
   const unsafe = /[\u200b-\u200f\u202a-\u202e\u2060-\u2069\u0080-\u009f\ud800-\udfff]/;
   for (const [name, title] of Object.entries(INVISIBLE)) {
     const { result, stored } = await submitOnce(validRequest({ title }));
@@ -117,7 +117,7 @@ test("VIT-API-002: BOM/whitespace-only summary is refused (control for the unico
   for (const title of ["﻿", " ", " \t\n "]) assert.equal(runtime(validRequest({ title })).ok, false, JSON.stringify(title));
 });
 
-test("VIT-AC-004: payload hash is stable across Unicode normalisation forms (NFC vs NFD replay)", { todo: "finding VF-008" }, async () => {
+test("VIT-AC-004: payload hash is stable across Unicode normalisation forms (NFC vs NFD replay)", async () => {
   const h = harness();
   const first = await submitOnce(validRequest({ title: "Caf\u00e9 crash" }), { h });
   assert.equal(first.result.ok, true, "precondition: first submission accepted");
@@ -127,7 +127,7 @@ test("VIT-AC-004: payload hash is stable across Unicode normalisation forms (NFC
   assert.equal(h.store.records.size, 1);
 });
 // ---------- credential guardrail ----------
-test("VIT-AC-008 / VIT-NFR-004: common credential formats never reach storage or the reply, and the record is quarantined (SEC-001)", { todo: "finding VF-009" }, async () => {
+test("VIT-AC-008 / VIT-NFR-004: common credential formats never reach storage or the reply, and the record is quarantined (SEC-001)", async () => {
   const samples = {
     "fine-grained GitHub PAT": CANARY.githubFineGrained,
     "AWS access key id": CANARY.awsAccessKeyId,
@@ -168,7 +168,7 @@ test("VIT-API-002: URL sanitisation strips userinfo, query and fragment for ever
   }
 });
 
-test("VIT-AC-008: path-parameter session ids (;jsessionid=) never reach storage", { todo: "finding VF-009" }, async () => {
+test("VIT-AC-008: path-parameter session ids (;jsessionid=) never reach storage", async () => {
   const { result, stored } = await submitOnce(validRequest({ pageUrl: "http://example.com/x;jsessionid=SECRETSESSION42" }));
   assert.ok(!leaks(stored, "SECRETSESSION42"), "session id persisted");
   assert.ok(!JSON.stringify(result).includes("SECRETSESSION42"));
@@ -206,7 +206,7 @@ test("VIT-API-004: idempotency key is case-insensitive (same UUID upper/lower ca
   assert.equal(store.records.size, 1);
 });
 
-test("VIT-AC-006 / VIT-AC-009: replay response does not reveal the original receivedAt to a different challenger beyond the reference", { todo: "finding VF-020" }, async () => {
+test("VIT-AC-006 / VIT-AC-009: replay response does not reveal the original receivedAt to a different challenger beyond the reference", async () => {
   const { handle } = harness();
   const a = parse(await handle(httpEvent(validRequest())));
   const b = parse(await handle(httpEvent(validRequest())));
@@ -269,7 +269,7 @@ test("VIT-API-004 / VIT-AC-006 (control): retry with the same key and body but a
   assert.equal(store.records.size, 1);
 });
 
-test("VIT-API-004 / VIT-AC-006: an identical retry after a lost response succeeds even though the challenge token is single-use", { todo: "finding VF-010" }, async () => {
+test("VIT-API-004 / VIT-AC-006: an identical retry after a lost response succeeds even though the challenge token is single-use", async () => {
   // Client sends, server stores, response is lost; browser retries the SAME request
   // (same Idempotency-Key, same body, same token because the UI had no reply).
   const { store, handle } = harness({ verifyChallenge: singleUseVerifier() });

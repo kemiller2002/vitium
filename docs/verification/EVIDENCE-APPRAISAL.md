@@ -150,3 +150,101 @@ Control: `npm test` exit 1 with 7 pre-existing failures; adversarial exit 0.
 - **VF-020** (medium, VIT-AC-009, SEC-001 point 5, owner intake): the receipt exposes `disposition` and `notices`, an oracle for the screening detectors. Repro: `node --test --test-name-pattern="replay response does not reveal" tests/adversarial/intake-abuse.test.mjs` (marked todo).
 - **VF-021** (medium, VIT-DOM-003, owner domain): `observation.schema.json` refuses the observation shape makeIntake produces. Repro: `node --test --test-name-pattern="observation produced by makeIntake" tests/adversarial/schema-runtime.test.mjs` (marked todo).
 - **VF-022** (low, VIT-NFR-004, owner ops): `scripts/secret-scan.mjs` scans the gitignored `tests/browser/.output/`. Playwright's `error-context.md` and HTML report contain the runtime-assembled canary from the VF-004 test, so a local or CI scan after a browser run reports about 10 false positives. Add `.output` (or honour `.gitignore`) in `EXCLUDED_DIRS`, and do not run the scanner over browser artifacts.
+
+## Fix round 2: final independent verification pass (branch `p0/fix2-verify` from `p0/integration` @ `25ce853`)
+
+Environment for every run below: local sandbox, Node v22.22.0, npm registry reachable. Browser: Chromium 153.0.8010.0 from npm `@sparticuz/chromium@153.0.0` (installed `--no-save`), driven by `@playwright/test@1.63.0`. Forma CDN (jsDelivr) is **blocked**. `test:integration` runs against the dynalite emulator (not real DynamoDB). **These are local results. The CI legs (`test.yml`, `p0-service.yml`, `browser.yml` cdn/blocked) are pending until the integrator reports CI run IDs.**
+
+### Coordinator numbers re-run independently on `25ce853` (before any change here)
+
+| Command | Observed |
+|---|---|
+| `npm test` | 207 tests, 207 pass, 0 fail, 0 todo |
+| `npm run test:adversarial` | 101 tests, 87 pass, 0 fail, 14 todo |
+| `npm run test:integration` | 20 tests, 20 pass |
+| `node scripts/secret-scan.mjs` | 293 text files, 0 blocked |
+
+All match the coordinator's report. I did not re-run the F# suite or `conditor`/`praxis`/`ordo` verification in this pass (outside the harness scope; not re-witnessed here).
+
+### Marker adjudication
+
+Each remaining marker was run **unmarked**. A marker was removed only if the test passed with its assertion unchanged.
+
+| Finding | Unmarked result on `25ce853` | Closing commit | Action |
+|---|---|---|---|
+| VF-004 (site/service credential parity, adversarial + browser `test.fail`) | pass (adversarial; browser at 3 viewports) | 9e5ac50 (`site/credential-guard.mjs`) | markers removed |
+| VF-005 (browser wire body accepted by service + schema) | pass (2 tests) | 9e5ac50 (client omits blanks) + 9bb1467 (schema) | markers removed |
+| VF-008 (invisible/bidi; NFC replay) | pass (2 tests) | 06af070 + 9bb1467 | markers removed |
+| VF-009 (credential formats; `;jsessionid=`) | pass (2 tests) | 06af070 | markers removed |
+| VF-010 (lost-response retry) | pass | 06af070 | marker removed |
+| VF-012 (defect states; impact mapping) | pass (2 tests) | 9bb1467 | markers removed |
+| VF-020 (receipt exposes screening verdict) | pass | 189fc60 | marker removed |
+| VF-021 (observation schema vs makeIntake) | pass | 9bb1467 | marker removed |
+| VF-006, VF-007, VF-015, VF-016, VF-017 | pass (the integrator had already removed these markers; re-run unmarked here) | 9bb1467 / 8993af7 | confirmed closed |
+| **VF-011** page URL | **fail**, see adjudication | n/a | kept, test strengthened |
+| **VF-018** SRI | **fail** (no `integrity` attribute) | n/a | kept; blocked on a CDN byte check (UX-0001 gap UX-G1) |
+
+**VF-011 adjudication.** The UX claim is correct for the site. `site/submission.mjs` now measures the **sanitised** URL and refuses it with an actionable message ("3,960 characters after removing the query and fragment…"). VIT-UX-007 allows that, so the original single-input test was asking for the wrong thing: it required the site to accept. I rewrote the test as the actual invariant over a 6-input corpus: *if the site accepts a URL, the service accepts it; and the service never stores a page URL over 2,000 characters*. The site half passes. The service half fails. `service/report-domain.mjs` checks `codePoints(raw.pageUrl) > 2000` **before** sanitising, so `https://example.com/` followed by 990 × `é` (1,010 code points) is accepted and stored as a **5,960-character** `pageUrl` (each `é` becomes `%C3%A9`). This is a real defect in the service (owner domain/intake). It also breaks the schema/runtime agreement for stored observations. Repro: `node --test --test-name-pattern="accepted by the site" tests/adversarial/contract-divergence.test.mjs` (todo VF-011).
+
+**Browser "empty submit keeps partial content" vs VF-001 adjudication.** UX is right that the two tests contradicted each other. VIT-AC-001 ("actionable error focus") and VF-001 require focus on the error summary, so the baseline "first invalid control" expectation is superseded. The test now requires focus on `#feedback`, the summary to be visible and a link to `#product`. This is the stricter behaviour, and both tests now agree.
+
+**VF-022 (ops, low): still open.** `scripts/lib/secret-scan.mjs` `EXCLUDED_DIRS` is `[".git","node_modules",".aws-sam"]`; it does not exclude gitignored output. Repro: after `npm run test:browser`, write any runtime-assembled canary into `tests/browser/.output/x.md` and run `node scripts/secret-scan.mjs`. Result: `1 blocked … tests/browser/.output/vf022-probe.md`. A clean browser run currently leaves no text match, because the VF-004 test now passes and Playwright writes no error-context, so the scan is 0. Any future browser failure involving canaries will re-trigger it. `test.yml` scans `.` after checkout (no browser output there), so CI is unaffected today.
+
+### Code review of the integrated replay path and related modules
+
+Read in full: `service/intake.mjs`, `service/http.mjs`, `service/errors.mjs`, `service/redaction.mjs`, `service/report-domain.mjs`, `service/adapters/{dynamodb-store,turnstile-challenge,safe-log}.mjs`, `service/lifecycle.mjs`, `service/triage.mjs`, `service/triage-cli.mjs`, `site/state.mjs`, `site/private-intake.mjs`, `site/credential-guard.mjs`, `site/submission.mjs`, plus `infra/aws/template.yaml` (GetItem policy). Probe: `scratchpad/verif/probe-replay.mjs`. The resulting tests are in `tests/adversarial/replay-path.test.mjs`.
+
+| Question | Finding |
+|---|---|
+| Can replay bypass the challenge for a NEW record? | **No.** An unknown key with no token gives 403 `challenge_required`. An unknown key with a spent token gives 403 `challenge_failed`. A fresh key with an identical body is a new request and also gets 403. The record count stays at 1. Replay never calls `putOnce` and never calls the verifier (asserted: 5 replays, 0 verifier calls). |
+| Does replay echo stored content? | **No.** The replay body has exactly `{schemaVersion, reference, receivedAt, status, replayed}`. The conflict body has exactly `{code, category, retryable, message}`. Stored text never appears. The DynamoDB replay read projects 4 attributes, and the IAM `dynamodb:Attributes` condition restricts GetItem to them (integration test I-07 kills mutant M55). |
+| Is the receipt a bearer credential? | **No.** There is no read or status route (template: `POST /api/v1/reports` only; http adapter: every other method/path gets the same 404). Replaying requires the full body **and** the idempotency key; the reference alone grants nothing. |
+| Can an attacker without the body learn anything? | **Yes, finding VF-023 (medium, owner intake).** With only an idempotency key and **no challenge**: unknown key → **403** `challenge_required` (121 bytes); known key + any other body → **409** `request_conflict` (174 bytes); known key + exact body → **200** with the receipt. That is an existence oracle for a key, reachable without solving a challenge. Keys are client-side v4 UUIDs, so the risk depends on the key leaking (shared device, logs, a proxy), but the contract requires that a conflict "leaks nothing". Fix direction: when the key is known and the hash differs, require a valid challenge before answering, or answer `challenge_required` until one is supplied. Same-hash replay can stay unchallenged, because the caller already proves possession of the body. Test: `replay-path.test.mjs` "unchallenged caller cannot tell…" (todo VF-023). Timing: the unknown-key path makes one store read and then returns before the verifier call; the known-key path also makes one store read. Timing alone does not separate them beyond the status code; the status difference is the leak. |
+| Unchallenged storage reads (cost amplification) | **Observation, VF-024 (low, owner intake/ops).** Every syntactically valid request with a fresh key costs one strongly consistent GetItem **before** any challenge (probe: 20 fresh-key unchallenged requests gave 20 store reads and 0 verifier calls). The API Gateway throttle (2 rps / burst 4) and Lambda concurrency 4 bound it. SEC-001 already records that per-source throttling is not enforced. Acceptable at P0 if recorded; consider checking the token **shape** (already done) plus a cheap pre-filter before the read. |
+| Regex DoS in redaction / site guard | Not found. The worst case among 6 adversarial 1.2 KB inputs (PEM without END, digit runs, `b:` repetitions, long Bearer) is ≤ 2 ms in both `redaction.mjs` and `credential-guard.mjs`. |
+| Lifecycle / triage CLI | No new defects. `ownHistory` deep-clones and checks the event count against the revision; instants are range-checked; the CLI uses the strict provenance path and `UpdateItem` with a revision + state condition. Note: the CLI treats every IAM principal allowed on the table as `triager` (documented as provisional, Fides pending); that is not a new finding. |
+
+### Mutation appraisal on `25ce853`
+
+Command: `node tests/verification/mutation-appraisal.mjs --scratch=<scratch> --suites=unit,adversarial`, then `--suites=integration --only=<survivors>`, then `VITIUM_LOCAL_CHROMIUM=sparticuz … --suites=browser --only=M01,M02,M12,M17,M18,M20,M42,M43,M52,M53`. 55 mutants (8 re-anchored to moved code; M46–M56 new for the round-1 fixes). Kills are differential: the control was green for unit, adversarial, integration and browser.
+
+- `npm test` alone kills **47 / 55**; `test:adversarial` alone kills **32 / 55**. Unit + adversarial together kill **50 / 55**.
+- Adding `test:integration` kills M55 (replay projection). Adding the browser suite kills M01, M02, M17, M18 and M20, which are already killed by unit.
+- **Final survivors (4), all equivalent mutants** (the guard is enforced again by an independent layer on the same input):
+  - **M23**: intake's C1/bidi refusal removed. `report-domain.mjs` `UNSAFE_CLASS` refuses the same characters.
+  - **M48**: intake's NFC normalisation removed. `report-domain.mjs` NFC-normalises accepted text before hashing.
+  - **M38**: reducer's receipt re-validation removed. `classifyOutcome` already runs `parseReceipt` on the same raw outcome.
+  - **M43**: reducer's challenge check removed. `buildPrivateRequest` refuses a missing or short token with the same code.
+- These survivors are recorded, not findings. If one of the duplicate layers is later deleted, the corresponding test suite still catches the remaining one.
+
+### Browser suite on `25ce853` (after the marker and focus updates on this branch)
+
+| Mode | Command | Result |
+|---|---|---|
+| CDN blocked | `VITIUM_LOCAL_CHROMIUM=sparticuz npm run test:browser` | **66 passed**, 0 failed, 0 flaky, 0 `test.fail` remaining (1.8 min) |
+| Forma 0.3.0 CSS from the npm tarball at the pinned URL | `… VITIUM_FORMA_CSS_FILE=<tarball>/package/dist/all.css npm run test:browser` | **66 passed**, 0 failed (1.8 min) |
+
+In both modes:
+- axe-core 4.13.0: **0 violations** (initial and review, 320, 375 and 1280). `incomplete`: `color-contrast` on 1–2 `aria-hidden` decorative glyphs, which still needs manual review.
+- scrollWidth equals clientWidth in every state at every width.
+- No request reached github.com, the intake host or Cloudflare (all aborted and logged).
+
+### Findings summary after round 2
+
+- **Closed (with closing commit):**
+  - VF-001, VF-002, VF-003: 6d2be13 / 281655e
+  - VF-004: 9e5ac50
+  - VF-005: 9e5ac50 + 9bb1467
+  - VF-006, VF-007, VF-012, VF-021: 9bb1467
+  - VF-008, VF-009, VF-010: 06af070
+  - VF-013: fa59123
+  - VF-014: 76fd040
+  - VF-015, VF-016, VF-017: 8993af7
+  - VF-020: 189fc60
+  - VF-019 (suite sensitivity): unit-suite survivors fell from 10/20 to 8/55, and every non-equivalent mutant is now killed by some suite.
+- **Open:**
+  - **VF-011**: service measures page-URL length before sanitising and stores up to about 6,000 characters. Owner domain (`service/report-domain.mjs`).
+  - **VF-018**: no SRI. Owner ux/ops; blocked on a jsDelivr byte check from an unblocked network (UX-0001 UX-G1).
+  - **VF-022**: scanner covers gitignored output. Owner ops.
+  - **VF-023 (new)**: unchallenged key-existence oracle on the replay path. Owner intake.
+  - **VF-024 (new, low)**: unchallenged store read per request. Owner intake/ops; record in SEC-001 or add a pre-filter.
