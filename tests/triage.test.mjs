@@ -20,9 +20,9 @@ test("authorization, stale writes and missing rationale fail closed",()=>{
 });
 test("defect must be independently verified to reach resolution",()=>{
   const prior=caseOf("defect","awaiting-verification");
-  assert.throws(()=>transition(prior,cmd("resolved",{evidenceId:"test-123"})),/Independent verification/);
-  assert.throws(()=>transition(prior,cmd("resolved",{role:"verifier"})),/Independent verification/);
-  const ok=transition(prior,cmd("resolved",{role:"verifier",evidenceId:"test-123"}));
+  assert.throws(()=>transition(prior,cmd("resolved",{evidenceId:"test-123",attemptId:"attempt-1",candidateRevision:"commit-1",verificationOutcome:"passed"})),/Independent verification/);
+  assert.throws(()=>transition(prior,cmd("resolved",{role:"verifier",attemptId:"attempt-1",candidateRevision:"commit-1",verificationOutcome:"passed"})),/Independent verification/);
+  const ok=transition(prior,cmd("resolved",{role:"verifier",evidenceId:"test-123",attemptId:"attempt-1",candidateRevision:"commit-1",verificationOutcome:"passed"}));
   assert.equal(ok.state,"resolved");
   assert.equal(ok.history[0].evidenceId,"test-123");
   assert.equal(prior.state,"awaiting-verification");
@@ -31,11 +31,77 @@ test("reproduction and closure dispositions require evidence and retain history"
   assert.throws(()=>transition(caseOf("defect","triaged"),cmd("confirmed")),/Reproduction/);
   const verified=transition(caseOf("defect","triaged"),cmd("confirmed",{evidenceId:"repro-1"}));
   assert.equal(verified.history.length,1);
-  const reopened=transition(caseOf("defect","closed"),cmd("reopened",{reason:"Regression on a new release"}));
+  const reopened=transition(caseOf("defect","closed"),cmd("reopened",{reason:"Regression on a new release",evidenceId:"failing-run-8",affectedRelease:"v2.1"}));
   assert.equal(reopened.state,"reopened");
   assert.equal(reopened.history[0].from,"closed");
 });
 test("invalid cross-kind transitions are rejected",()=>{
   assert.throws(()=>transition(caseOf("observation","quarantined"),cmd("in-progress")),TransitionError);
   assert.throws(()=>transition(caseOf("defect","resolved"),cmd("accepted-for-triage")),TransitionError);
+});
+
+test("verification failure loops back to rework and preserves each attempt",()=>{
+  let defect=caseOf("defect","in-progress");
+  const apply=(to,overrides={})=>{
+    defect=transition(defect,cmd(to,{expectedRevision:defect.revision,...overrides}));
+  };
+  apply("awaiting-verification",{attemptId:"fix-1",candidateRevision:"sha1",evidenceId:"submitted-run-1"});
+  assert.throws(()=>transition(defect,cmd("in-progress",{
+    expectedRevision:defect.revision,role:"verifier",attemptId:"fix-1",candidateRevision:"sha1",
+    verificationOutcome:"failed"
+  })),/evidence/);
+  assert.throws(()=>transition(defect,cmd("in-progress",{
+    expectedRevision:defect.revision,role:"triager",attemptId:"fix-1",candidateRevision:"sha1",
+    verificationOutcome:"failed",evidenceId:"failed-test-1"
+  })),/Independent verifier/);
+  apply("in-progress",{role:"verifier",attemptId:"fix-1",candidateRevision:"sha1",
+    evidenceId:"failed-test-1",verificationOutcome:"failed",reason:"Route contract still fails"});
+  assert.equal(defect.state,"in-progress");
+  assert.equal(defect.history[1].verificationOutcome,"failed");
+  apply("awaiting-verification",{attemptId:"fix-2",candidateRevision:"sha2",evidenceId:"submitted-run-2"});
+  assert.throws(()=>transition(defect,cmd("resolved",{
+    expectedRevision:defect.revision,role:"verifier",attemptId:"fix-2",
+    candidateRevision:"sha2",evidenceId:"passed-test-2",verificationOutcome:"failed"
+  })),/outcome/);
+  assert.throws(()=>transition(defect,cmd("resolved",{
+    expectedRevision:defect.revision,role:"verifier",attemptId:"fix-1",
+    candidateRevision:"sha1",evidenceId:"passed-test-2",verificationOutcome:"passed"
+  })),/submitted candidate/);
+  apply("resolved",{role:"verifier",attemptId:"fix-2",candidateRevision:"sha2",
+    evidenceId:"passed-test-2",verificationOutcome:"passed"});
+  assert.equal(defect.state,"resolved");
+  assert.deepEqual(defect.history.map(x=>x.sequence),[1,2,3,4]);
+  assert.equal(defect.history[0].attemptId,"fix-1");
+  assert.equal(defect.history[1].evidenceId,"failed-test-1");
+  assert.equal(defect.history[3].evidenceId,"passed-test-2");
+});
+
+test("resolved regression is reopened before rework, preserving old passing evidence",()=>{
+  const old=caseOf("defect","resolved");
+  old.history=[{from:"awaiting-verification",to:"resolved",
+    attemptId:"fix-original",evidenceId:"passing-test-original",
+    candidateRevision:"original-commit",verificationOutcome:"passed",sequence:0}];
+  assert.throws(()=>transition(old,cmd("in-progress")),/Transition not permitted/);
+  assert.throws(()=>transition(old,cmd("reopened")),/recurrence evidence/);
+  const reopened=transition(old,cmd("reopened",{evidenceId:"new-failing-run",affectedRelease:"v2.0",
+    reason:"Same regression in new release"}));
+  assert.throws(()=>transition(reopened,cmd("in-progress",{expectedRevision:1})),/new work attempt/);
+  const working=transition(reopened,cmd("in-progress",{expectedRevision:1,
+    attemptId:"fix-regression-1",workItemId:"WI-303",
+    reason:"Resume repair under linked Praxis work item"}));
+  assert.equal(working.state,"in-progress");
+  assert.equal(working.history.length,3);
+  assert.equal(working.history[0].evidenceId,"passing-test-original");
+  assert.equal(working.history[1].affectedRelease,"v2.0");
+  assert.equal(working.history[2].workItemId,"WI-303");
+  assert.equal(old.state,"resolved");
+});
+
+test("a stale concurrent verifier result cannot overwrite a new work attempt",()=>{
+  const submitted=transition(caseOf("defect","in-progress"),
+    cmd("awaiting-verification",{attemptId:"attempt-1",candidateRevision:"commit-a",evidenceId:"request-run-1"}));
+  const failed=transition(submitted,cmd("in-progress",{expectedRevision:1,role:"verifier",
+    attemptId:"attempt-1",candidateRevision:"commit-a",evidenceId:"failure-1",verificationOutcome:"failed"}));
+  assert.throws(()=>transition(failed,cmd("resolved",{expectedRevision:1,role:"verifier",
+    attemptId:"attempt-1",candidateRevision:"commit-a",evidenceId:"old-pass",verificationOutcome:"passed"})),/Stale/);
 });
