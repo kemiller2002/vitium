@@ -98,6 +98,10 @@ Delivery stages (priority is product-sequencing, **not** defect severity):
 | VIT-LCY-007 | P1 | Duplicate consolidation MUST retain every reporter, occurrence, distinct evidence reference and original timeline; it must not erase historical reports. |
 | VIT-LCY-008 | P1 | Reopened/regressed defects MUST keep prior resolution evidence, newly observed manifestation and release lineage rather than rewriting the original lifecycle. |
 | VIT-LCY-009 | P1 | Status promises, owner assignment, escalation and aging thresholds MUST be configurable by product or policy and audited, not made up as universal SLAs. |
+| VIT-LCY-010 | P0 | A failed qualified verification attempt MUST be able to transition awaiting-verification back to in-progress with a failed result, verifier, attempt ID, test/run evidence, candidate revision and explicit rework reason, without closing the defect. |
+| VIT-LCY-011 | P0 | A resolved or closed defect MUST be reopenable through an auditable reopened state, then may resume in-progress work or reproduction with a new attempt while preserving old resolution and recurrence evidence; a UI shortcut MUST preserve both legal events. |
+| VIT-LCY-012 | P1 | Fail/rework/verify/reopen cycles MUST be repeatable with incrementing revisions and distinct attempts; concurrent stale transitions and unauthorized shortcuts MUST be refused. |
+| VIT-LCY-013 | P1 | Every rework attempt MUST preserve its linked Praxis work identity, commits, verification runs and final disposition instead of replacing earlier attempts. |
 
 ### E. Echelon integrations and automation
 
@@ -115,6 +119,12 @@ Delivery stages (priority is product-sequencing, **not** defect severity):
 | VIT-INT-010 | P1 | Arca MUST be used behind a provider-neutral record port when its versioned binding is ready; migration and reconciliation must be tested. |
 | VIT-INT-011 | P2 | Signal MAY supply shared feedback primitives only where boundaries are compatible; integration MUST not create competing reporter or survey authorities. |
 | VIT-INT-012 | P2 | External integrations MUST expose capability/version compatibility, schema negotiation and explicit unsupported behavior rather than guess formats. |
+| VIT-INT-013 | P0 | A stable versioned, authenticated machine-observation contract MUST be defined separately from anonymous public/Turnstile intake, with source system/repository identity, correlation, run/work/version identity, safe evidence and idempotency. |
+| VIT-INT-014 | P1 | Praxis, Ordo, Conditor, Dokimos, Tutela, Aegis and CI producers MUST be able to submit structured observations via reusable, compatible adapters, preserving provenance without treating raw failures as confirmed defects. |
+| VIT-INT-015 | P1 | Machine reporting MUST support bounded outbox/retry, offline/failure visibility, idempotency, out-of-order delivery and echo suppression, without overwriting the originating build/test outcome. |
+| VIT-INT-016 | P1 | Machine intake MUST authenticate and authorize sender identity/repository scope via short-lived credentials or attested workload identity; caller-supplied source names MUST NOT be trusted as proof. |
+| VIT-INT-017 | P1 | Reports, failed verification attempts, passing verification attempts, inconclusive tests and governance violations MUST be distinct event kinds and MUST preserve immutable artifacts plus causal links. |
+| VIT-INT-018 | P1 | Shared producer bindings SHOULD be installed/upgraded through Conditor and contract tested in at least one Praxis and one CI/Dokimos consumer before broader deployment. |
 
 ### F. Reproduction, correction, independent verification
 
@@ -128,6 +138,9 @@ Delivery stages (priority is product-sequencing, **not** defect severity):
 | VIT-VER-006 | P1 | Independent verification MUST have an actor/evidence authority distinct from the implementation self-report where risk policy requires it. |
 | VIT-VER-007 | P1 | Git commits, PRs, test runs, release artifacts, deployed versions and evidence digests MUST be linked immutably; history MUST NOT be rewritten when a regression occurs. |
 | VIT-VER-008 | P2 | For recurrence, the system SHOULD correlate original and reintroduced defects, failed safeguard, intervening changes, architectural rules and confidence; suspected AI drift is a hypothesis, not an automatic conclusion. |
+| VIT-VER-009 | P0 | Failed verification MUST NOT resolve a defect and MUST return it to work with recorded failing evidence, a new attempt and preserved prior history; passing verification MUST require authoritative independent proof. |
+| VIT-VER-010 | P1 | Flaky, inconclusive, environmental and legitimate regression failures MUST be distinguishable so an inconclusive run cannot automatically create a rework or recurrence decision. |
+| VIT-VER-011 | P1 | Automatic agent rework SHOULD use explicit finite retry/budget limits and escalation, maintaining independent verification and prohibiting self-reported green tests from bypassing closure guards. |
 
 ### G. Internal interface, communication and intelligence
 
