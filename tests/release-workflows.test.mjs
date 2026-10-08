@@ -77,6 +77,10 @@ test("no workflow other than the Pages deploy job requests write scopes", () => 
     const writes = [...text.matchAll(/^\s+([a-z-]+):\s*write\s*$/gm)].map(m => m[1]);
     if (file.endsWith("pages.yml")) {
       assert.deepEqual([...new Set(writes)].sort(), ["id-token", "pages"], file);
+    } else if (file.endsWith("nuget-publish.yml")) {
+      // Owner-approved NuGet Trusted Publishing (docs/NUGET-PACKAGES.md) needs an OIDC
+      // token and nothing else: exactly one id-token grant, no other write scope.
+      assert.deepEqual(writes, ["id-token"], file);
     } else {
       assert.deepEqual(writes, [], `${file} must be read-only`);
     }

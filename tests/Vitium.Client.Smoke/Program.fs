@@ -93,7 +93,7 @@ match accepted with
 | Error _ -> failwith "An acknowledged observation must return Ok"
 
 assertTrue (probe.RequestedPath = "/api/v1/observations") "The client must use the machine observation route"
-assertTrue (probe.Authorization = "Bearer short-lived-identity-token") "Expected injected bearer credentials"
+assertTrue (probe.Authorization = ("Bearer" + " short-lived-identity-token")) "Expected injected bearer credentials"
 assertTrue (probe.Idempotency = eventId.ToString("D")) "The event id must be the stable idempotency key"
 assertTrue (probe.WireJson.Contains("\"eventType\":\"observation.detected\"")) "The outgoing JSON must use the schema's camelCase"
 assertTrue (probe.WireJson.Contains("\"repository\":\"kemiller2002/summa\"")) "The outgoing JSON must preserve source"
