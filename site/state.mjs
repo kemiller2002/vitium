@@ -14,7 +14,7 @@
 //   accepted       private path: ONLY after a validated server receipt (status received)
 //   under-review   private path: ONLY after a validated server receipt (quarantined)
 //   rejected       private path: typed error; values and request id retained
-import { validateReport, tryBuildIssueUrl, FIELD_ORDER } from "./submission.mjs";
+import { validateReport, tryBuildIssueUrl, lengthError, FIELD_ORDER } from "./submission.mjs";
 import {
   validatePrivateReport, buildPrivateRequest, classifyOutcome, parseReceipt,
   IDEMPOTENCY_KEY_PATTERN
@@ -90,7 +90,7 @@ function requestReview(state, event) {
     return result(update(state, {
       phase: "handoff-ready", values, fieldErrors: freeze([]), report: checked.value,
       handoffUrl: link.value, error: null,
-      focus: focusOn(state, "review-title"),
+      focus: focusOn(state, "review"),
       announcement: "Review your report. It has not been submitted."
     }));
   }
@@ -109,7 +109,7 @@ function requestReview(state, event) {
     attempt: freeze({ idempotencyKey: key, fingerprint }),
     challenge: freeze({ status: "pending", token: "" }),
     error: null,
-    focus: focusOn(state, "review-title"),
+    focus: focusOn(state, "review"),
     announcement: "Review your report. It has not been sent."
   }), [freeze({ kind: "RenderChallenge" })]);
 }
@@ -184,6 +184,7 @@ function submitCompleted(state, event) {
     // Defence in depth: re-validate the receipt from the raw outcome.
     const receipt = parseReceipt(event.outcome?.status, event.outcome?.body);
     if (!receipt || receipt.reference !== outcome.receipt.reference) return unchanged(state);
+    const redacted = receipt.notices.includes("credential-redacted");
     return result(update(state, {
       phase: outcome.kind,
       // The draft must not persist after authoritative acceptance.
@@ -191,9 +192,10 @@ function submitCompleted(state, event) {
       challenge: freeze({ status: "idle", token: "" }),
       receipt, error: null,
       focus: focusOn(state, "result-title"),
-      announcement: outcome.kind === "accepted"
+      announcement: (outcome.kind === "accepted"
         ? "Report received. Your reference is " + receipt.reference + "."
-        : "Report received and held for review. Your reference is " + receipt.reference + "."
+        : "Report received and held for review before triage. Your reference is " + receipt.reference + ".") +
+        (redacted ? " Something that looked like a secret was removed before storage." : "")
     }));
   }
   const error = outcome.error;
@@ -216,9 +218,18 @@ function fieldChanged(state, event) {
   if (state.phase !== "draft") return unchanged(state);
   if (event.field !== "privacyAcknowledged" && !TEXT_FIELDS.includes(event.field)) return unchanged(state);
   const values = mergeValues(state.values, { [event.field]: event.value });
-  // Clear the stale error for the edited field only; keep the rest visible.
-  const fieldErrors = freeze(state.fieldErrors.filter(e => e.field !== event.field));
-  return result(update(state, { values, fieldErrors }));
+  // Clear the stale error for the edited field only; keep the rest visible. An
+  // over-limit value is reported immediately and kept intact: nothing is ever
+  // truncated (VF-003, VIT-UX-007).
+  const others = state.fieldErrors.filter(e => e.field !== event.field);
+  const tooLong = event.field === "privacyAcknowledged" ? null : lengthError(event.field, values[event.field]);
+  const previous = state.fieldErrors.find(e => e.field === event.field && e.code === "too_long");
+  const fieldErrors = freeze(tooLong
+    ? [...others, tooLong].sort((a, b) => FIELD_ORDER.indexOf(a.field) - FIELD_ORDER.indexOf(b.field))
+    : others);
+  const announcement = tooLong && !previous ? tooLong.message
+    : !tooLong && previous ? "That answer is now within the length limit." : state.announcement;
+  return result(update(state, { values, fieldErrors, announcement }));
 }
 
 function handoffOpened(state) {

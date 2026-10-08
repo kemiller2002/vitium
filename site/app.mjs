@@ -81,8 +81,10 @@ export function startReporter({ doc, win, config, effects }) {
     if (details) details.open = true;
     control.focus();
   });
+  // Bound on both channels: on the GitHub channel the button is hidden and the
+  // reducer refuses SubmitRequested, so a forced click fails closed.
+  doc.getElementById("submit-private").addEventListener("click", () => dispatch({ type: "SubmitRequested" }));
   if (channel === "private") {
-    doc.getElementById("submit-private").addEventListener("click", () => dispatch({ type: "SubmitRequested" }));
     doc.getElementById("report-another").addEventListener("click", () => dispatch({ type: "ResetRequested" }));
   }
 
@@ -98,7 +100,6 @@ function mountPrivateUi(doc) {
     if (template && slot) slot.replaceWith(template.content.cloneNode(true));
   };
   insert("private-review-template", "private-slot");
-  insert("private-submit-template", "private-submit-slot");
   insert("private-result-template", "private-result-slot");
   doc.getElementById("github-foot").hidden = true;
   doc.getElementById("existing-reports-link").hidden = true;

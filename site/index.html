@@ -83,34 +83,34 @@
         </div>
         <div class="field">
           <label for="title">Short summary <span aria-hidden="true">*</span></label>
-          <input id="title" name="title" type="text" required aria-required="true" maxlength="120" placeholder="e.g. Save button does nothing on my phone" data-testid="title" data-hint="title-hint" aria-describedby="title-hint">
+          <input id="title" name="title" type="text" required aria-required="true" placeholder="e.g. Save button does nothing on my phone" data-testid="title" data-hint="title-hint" aria-describedby="title-hint">
           <p class="hint" id="title-hint">A short description is enough. No technical terms needed. Up to 120 characters.</p>
           <p class="field-error" id="title-error" data-testid="title-error" hidden></p>
         </div>
         <div class="field">
           <label for="actual">What happened? <span aria-hidden="true">*</span></label>
-          <textarea id="actual" name="actual" required aria-required="true" rows="3" maxlength="1200" placeholder="I tapped Save, but nothing changed." data-testid="actual" data-hint="actual-hint" aria-describedby="actual-hint"></textarea>
+          <textarea id="actual" name="actual" required aria-required="true" rows="3" placeholder="I tapped Save, but nothing changed." data-testid="actual" data-hint="actual-hint" aria-describedby="actual-hint"></textarea>
           <p class="hint" id="actual-hint">Up to 1200 characters.</p>
           <p class="field-error" id="actual-error" data-testid="actual-error" hidden></p>
         </div>
         <div class="field">
           <label for="expected">What did you expect? <span aria-hidden="true">*</span></label>
-          <textarea id="expected" name="expected" required aria-required="true" rows="3" maxlength="1200" placeholder="I expected my changes to be saved." data-testid="expected" data-hint="expected-hint" aria-describedby="expected-hint"></textarea>
+          <textarea id="expected" name="expected" required aria-required="true" rows="3" placeholder="I expected my changes to be saved." data-testid="expected" data-hint="expected-hint" aria-describedby="expected-hint"></textarea>
           <p class="hint" id="expected-hint">Up to 1200 characters.</p>
           <p class="field-error" id="expected-error" data-testid="expected-error" hidden></p>
         </div>
         <details class="optional" id="optional-details" data-testid="optional-details">
-          <summary id="optional-summary" data-testid="optional-summary">Additional details <span>Optional</span></summary>
+          <summary data-testid="optional-summary">Additional details <span>Optional</span></summary>
           <div class="optional-fields">
             <div class="field">
               <label for="steps">How can we reproduce it?</label>
-              <textarea id="steps" name="steps" rows="4" maxlength="900" placeholder="1. Open the application&#10;2. Select an item&#10;3. Tap Save" data-testid="steps" data-hint="steps-hint" aria-describedby="steps-hint"></textarea>
+              <textarea id="steps" name="steps" rows="4" placeholder="1. Open the application&#10;2. Select an item&#10;3. Tap Save" data-testid="steps" data-hint="steps-hint" aria-describedby="steps-hint"></textarea>
               <p class="hint" id="steps-hint">Up to 900 characters.</p>
               <p class="field-error" id="steps-error" data-testid="steps-error" hidden></p>
             </div>
             <div class="field">
               <label for="pageUrl">Page URL</label>
-              <input id="pageUrl" name="pageUrl" type="url" inputmode="url" maxlength="2000" placeholder="https://example.com/page" data-testid="page-url" data-hint="pageUrl-hint" aria-describedby="pageUrl-hint">
+              <input id="pageUrl" name="pageUrl" type="url" inputmode="url" placeholder="https://example.com/page" data-testid="page-url" data-hint="pageUrl-hint" aria-describedby="pageUrl-hint">
               <p class="hint" id="pageUrl-hint">We remove query parameters and fragments to protect sensitive data.</p>
               <p class="field-error" id="pageUrl-error" data-testid="page-url-error" hidden></p>
             </div>
@@ -123,7 +123,7 @@
         </div>
         <button class="primary-button" id="review-button" type="submit" data-testid="review-button">Review my report <span aria-hidden="true">→</span></button>
       </form>
-      <section id="review" class="review" aria-labelledby="review-title" aria-busy="false" data-testid="review" hidden>
+      <section id="review" class="review" tabindex="-1" aria-labelledby="review-title" aria-busy="false" data-testid="review" hidden>
         <span class="overline" id="review-overline">Review before publishing</span>
         <h3 id="review-title" tabindex="-1" data-testid="review-title">Does this look right?</h3>
         <p class="review-lead">This is exactly what will be sent.</p>
@@ -149,7 +149,7 @@
           <button type="button" class="secondary-button" id="edit" data-testid="edit-button">← Edit report</button>
           <button type="button" class="secondary-button" id="cancel-review" data-testid="cancel-button">Cancel</button>
           <a class="primary-button" id="submit-link" data-testid="github-submit" href="https://github.com/kemiller2002/vitium/issues/new" target="_blank" rel="noopener noreferrer">Continue to GitHub <span aria-hidden="true">↗</span><span class="visually-hidden"> (opens in a new tab)</span></a>
-          <span id="private-submit-slot"></span>
+          <button type="button" class="primary-button" id="submit-private" data-testid="private-submit" hidden><span id="submit-private-label">Send</span> <span aria-hidden="true">→</span></button>
         </div>
       </section>
       <div id="private-result-slot"></div>
@@ -168,14 +168,12 @@
           <p class="hint" id="submit-error-detail" data-testid="submit-error-detail" hidden></p>
         </div>
       </template>
-      <template id="private-submit-template">
-        <button type="button" class="primary-button" id="submit-private" data-testid="private-submit"><span id="submit-private-label">Send private report</span> <span aria-hidden="true">→</span></button>
-      </template>
       <template id="private-result-template">
         <section id="private-success" class="review" aria-labelledby="success-title" data-testid="private-success" hidden>
           <span class="overline" id="success-overline">Report received</span>
           <h3 id="success-title" tabindex="-1" data-testid="success-title">Thank you for reporting this.</h3>
           <p id="result-explanation">We have durably received your report for triage. This does not mean the defect has been verified or fixed.</p>
+          <p class="destination-note" id="redaction-notice" role="note" data-testid="redaction-notice" hidden></p>
           <p><strong>Keep this reference:</strong> <code id="report-reference" data-testid="report-reference"></code></p>
           <p class="hint">Received at <span id="report-received-at" data-testid="report-received-at"></span>. This receipt does not provide access to private status information. No fix date or reply is guaranteed.</p>
           <button type="button" class="secondary-button" id="report-another" data-testid="report-another">Report another problem</button>

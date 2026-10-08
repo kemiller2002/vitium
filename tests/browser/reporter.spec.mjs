@@ -209,7 +209,6 @@ test.describe("VIT-AC-004 / VIT-UX-007 validation", () => {
   });
 
   test("empty submit focuses an error summary whose entries link to aria-describedby field errors", async ({ page }) => {
-    test.fail(true, "VF-001: baseline relies on native reportValidity bubbles; no focusable error summary, no aria-invalid/aria-describedby field errors (VIT-UX-007, VIT-AC-001)");
     await page.locator("#title").fill("Partially typed summary");
     await page.locator("[data-testid=review-button]").click();
     const summary = await page.evaluate(() => {
@@ -232,7 +231,6 @@ test.describe("VIT-AC-004 / VIT-UX-007 validation", () => {
   });
 
   test("hint text is programmatically associated with its field", async ({ page }) => {
-    test.fail(true, "VF-002: .hint paragraphs for #title and #pageUrl are not referenced by aria-describedby (VIT-UX-006)");
     for (const id of ["title", "pageUrl"]) {
       const describedBy = await page.locator("#" + id).getAttribute("aria-describedby");
       expect(describedBy, id).toBeTruthy();
@@ -242,7 +240,6 @@ test.describe("VIT-AC-004 / VIT-UX-007 validation", () => {
 
 test.describe("VIT-AC-004 / VIT-UX-007 long text", () => {
   test("pasting 10,000 characters is never silently truncated", async ({ page }) => {
-    test.fail(true, "VF-003: maxlength silently truncates a 10k paste to 1200 chars with no message (VIT-UX-007 'never silently truncate')");
     const long = "x".repeat(10_000);
     await page.locator("#actual").focus();
     await page.keyboard.insertText(long);
@@ -308,7 +305,6 @@ test.describe("VIT-AC-004 / VIT-AC-008 / VIT-AC-015 hostile input", () => {
   }
 
   test("credential-looking text is refused or redacted before the public GitHub link is built", async ({ page }) => {
-    test.fail(true, "VF-004: legacy client accepts ghp_/sk-/password=/PRIVATE KEY text and places it in the public GitHub issue URL; the service refuses the same text (VIT-AC-008, VIT-AC-015, VIT-NFR-004)");
     const token = "ghp_" + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8";
     await fillValid(page, { actualLines: ["My token is " + token] });
     await page.locator("[data-testid=review-button]").click();

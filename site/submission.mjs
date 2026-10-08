@@ -1,4 +1,5 @@
 // Pure reporting contract. No browser APIs, network effects or persisted drafts.
+import { credentialKinds, CREDENTIAL_MESSAGE, CREDENTIAL_URL_MESSAGE } from "./credential-guard.mjs";
 export const ISSUE_REPOSITORY = "kemiller2002/vitium";
 // PRODUCTS and IMPACTS are the display names of schemas/products.v1.json (canonical
 // registry, VIT-DOM-004). Pages serves only site/, so they are constants here;
@@ -20,20 +21,36 @@ export const IMPACTS = Object.freeze([
 export const FIELD_ORDER = Object.freeze([
   "product", "impact", "title", "actual", "expected", "steps", "pageUrl", "privacyAcknowledged"
 ]);
+export const SCHEMA_VERSION = "1.0";
 export const LEGACY_LIMITS = Object.freeze({ title: 120, actual: 1200, expected: 1200, steps: 900, pageUrl: 2000 });
 
 const text = value => String(value ?? "").trim();
+// Lengths are Unicode code points, matching the service and JSON Schema semantics.
+export const lengthOf = value => [...value].length;
 const fieldError = (field, code, message) => Object.freeze({ field, code, message });
 
-const textRule = (field, max, label, requiredLabel) => value => {
-  if (value.length > max) return fieldError(field, "too_long", label + " must be " + max + " characters or less.");
+/** Over-limit message for one field, or null. Used live while typing (VF-003). */
+export function lengthError(field, value) {
+  const max = LEGACY_LIMITS[field];
+  if (!max || typeof value !== "string") return null;
+  const length = lengthOf(value.trim());
+  if (length <= max) return null;
+  const labels = { title: "The summary", actual: "What happened", expected: "What you expected", steps: "Steps to reproduce", pageUrl: "The page URL" };
+  return fieldError(field, "too_long", labels[field] + " must be " + max.toLocaleString("en-US") + " characters or less. It is " +
+    length.toLocaleString("en-US") + " characters now; shorten it by " + (length - max).toLocaleString("en-US") + ". Nothing has been cut.");
+}
+
+const textRule = (field, requiredLabel) => value => {
+  const tooLong = lengthError(field, value);
+  if (tooLong) return tooLong;
   if (requiredLabel && !value) return fieldError(field, "required", "Please enter " + requiredLabel + ".");
+  if (credentialKinds(value).length) return fieldError(field, "credential", CREDENTIAL_MESSAGE);
   return null;
 };
 
-function checkUrl(value) {
+/** Sanitise first, then check the length of what will actually be sent (VF-011). */
+export function checkUrl(value) {
   if (!value) return { ok: true, value: "" };
-  if (value.length > LEGACY_LIMITS.pageUrl) return { ok: false, error: fieldError("pageUrl", "too_long", "The page URL is too long.") };
   let parsed;
   try { parsed = new URL(value); }
   catch { return { ok: false, error: fieldError("pageUrl", "invalid_url", "Enter a valid page URL or leave it blank.") }; }
@@ -41,7 +58,15 @@ function checkUrl(value) {
     return { ok: false, error: fieldError("pageUrl", "url_scheme", "The page URL must start with http or https.") };
   }
   // Drop credentials, query parameters and fragments: they may contain secrets.
-  return { ok: true, value: parsed.origin + parsed.pathname };
+  const sanitized = parsed.origin + parsed.pathname;
+  if (lengthOf(sanitized) > LEGACY_LIMITS.pageUrl) {
+    return { ok: false, error: fieldError("pageUrl", "too_long",
+      "The page URL is too long (" + lengthOf(sanitized).toLocaleString("en-US") + " characters after removing the query and fragment; the limit is 2,000). Shorten it or leave it blank.") };
+  }
+  if (credentialKinds(sanitized).length) {
+    return { ok: false, error: fieldError("pageUrl", "credential", CREDENTIAL_URL_MESSAGE) };
+  }
+  return { ok: true, value: sanitized };
 }
 
 /**
@@ -61,16 +86,23 @@ export function validateReport(raw) {
   const errors = [
     PRODUCTS.includes(values.product) ? null : fieldError("product", "required", "Please select the affected application."),
     IMPACTS.includes(values.impact) ? null : fieldError("impact", "required", "Please select how the defect affects you."),
-    textRule("title", LEGACY_LIMITS.title, "The summary", "a short summary")(values.title),
-    textRule("actual", LEGACY_LIMITS.actual, "What happened", "what happened")(values.actual),
-    textRule("expected", LEGACY_LIMITS.expected, "What you expected", "what you expected")(values.expected),
-    textRule("steps", LEGACY_LIMITS.steps, "Steps to reproduce", null)(values.steps),
+    textRule("title", "a short summary")(values.title),
+    textRule("actual", "what happened")(values.actual),
+    textRule("expected", "what you expected")(values.expected),
+    textRule("steps", null)(values.steps),
     url.ok ? null : url.error,
     raw.privacyAcknowledged === true ? null
       : fieldError("privacyAcknowledged", "unacknowledged", "Please confirm you removed passwords and private information.")
   ].filter(Boolean);
   if (errors.length) return { ok: false, errors: Object.freeze(errors) };
-  return { ok: true, value: Object.freeze({ ...values, pageUrl: url.value }) };
+  // The normalized report is the v1.0 intake payload shape (minus the challenge
+  // token): schemaVersion included, blank optional fields OMITTED (VF-005).
+  const { steps, ...required } = values;
+  return { ok: true, value: Object.freeze({
+    schemaVersion: SCHEMA_VERSION, ...required,
+    ...(steps ? { steps } : {}),
+    ...(url.value ? { pageUrl: url.value } : {})
+  }) };
 }
 
 /** Compatibility wrapper: throws the first validation message (legacy contract). */
@@ -104,6 +136,10 @@ export const MAX_ISSUE_URL_LENGTH = 7500;
 
 /** Total variant of buildIssueUrl for the UI reducer. */
 export function tryBuildIssueUrl(report) {
+  // Defence in depth (VF-004): never place credential-looking text in a public URL,
+  // even if a caller skipped validateReport.
+  const unsafe = ["title", "actual", "expected", "steps", "pageUrl"].find(f => credentialKinds(report[f]).length);
+  if (unsafe) return { ok: false, error: fieldError(unsafe, "credential", unsafe === "pageUrl" ? CREDENTIAL_URL_MESSAGE : CREDENTIAL_MESSAGE) };
   const url = new URL("https://github.com/" + ISSUE_REPOSITORY + "/issues/new");
   url.searchParams.set("title", "[" + report.product + "] " + report.title);
   url.searchParams.set("body", formatIssueBody(report));

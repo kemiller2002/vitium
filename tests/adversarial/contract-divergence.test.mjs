@@ -53,13 +53,13 @@ test("VIT-DOM-004: product names that differ only by case/whitespace/homoglyph a
   }
 });
 
-test("VIT-AC-003 / VIT-API-001: the request the browser would send is accepted by the service runtime", { todo: "finding VF-005" }, () => {
+test("VIT-AC-003 / VIT-API-001: the request the browser would send is accepted by the service runtime", () => {
   const body = clientWireBody(formInput);
   const result = serviceNormalize(body);
   assert.ok(result.ok, "service refused the client's own payload: " + JSON.stringify(result.error));
 });
 
-test("VIT-DOM-003 / VIT-AC-010: the request the browser would send validates against intake-request.schema.json", { todo: "finding VF-005" }, () => {
+test("VIT-DOM-003 / VIT-AC-010: the request the browser would send validates against intake-request.schema.json", () => {
   const body = clientWireBody(formInput);
   const result = validateRequest(body);
   assert.ok(result.ok, "schema refused the client's payload: " + JSON.stringify(result.error));
@@ -75,7 +75,7 @@ test("VIT-API-002 / VIT-UX-007: a page URL accepted by the site is accepted by t
   assert.ok(serviceNormalize({ ...draft, schemaVersion: "1.0", privacyAcknowledged: true }).ok);
 });
 
-test("VIT-AC-008 / VIT-NFR-004: site and service agree on refusing credential-looking text", { todo: "finding VF-004" }, () => {
+test("VIT-AC-008 / VIT-NFR-004: site and service agree on refusing credential-looking text", () => {
   for (const secret of ["sk-abcdefghijklmnopqrstuvwxyz", "password: hunter2hunter2", "ghp_abcdefghijklmnopqrstuvwxyz0123"]) {
     const server = serviceNormalize({ schemaVersion: "1.0", ...formInput, actual: secret });
     assert.equal(server.ok, false, "precondition: service refuses " + secret.slice(0, 6));

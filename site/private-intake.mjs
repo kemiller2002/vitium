@@ -6,18 +6,19 @@
 // one-time challenge token and a random idempotency key. Report text never
 // enters a URL.
 //
-// Limits mirror service/report-domain.mjs and service/http.mjs. They are NOT
-// imported from service/ at runtime (the site is static). tests/site-intake-contract.test.mjs
-// compares them behaviourally against the server so drift fails CI.
-import { validateReport, FIELD_ORDER } from "./submission.mjs";
+// Limits mirror service/limits.mjs (INTAKE_LIMITS) and service/report-domain.mjs.
+// They are NOT imported from service/ at runtime (Pages serves only site/).
+// tests/site-intake-contract.test.mjs imports the service modules and fails on drift.
+import { validateReport, FIELD_ORDER, SCHEMA_VERSION } from "./submission.mjs";
 
 export const INTAKE_ENDPOINT = "https://intake.vitium.echelonfoundry.com/api/v1/reports";
-export const SCHEMA_VERSION = "1.0";
+export { SCHEMA_VERSION };
 export const REQUEST_TIMEOUT_MS = 15000;
 export const PRIVATE_LIMITS = Object.freeze({
   product: 100, impact: 100, title: 120, actual: 1200, expected: 1200, steps: 900, pageUrl: 2000,
-  bodyBytes: 16384, challengeTokenMin: 12, challengeTokenMax: 4096
+  bodyBytes: 24576, challengeTokenMin: 12, challengeTokenMax: 4096
 });
+export const OPTIONAL_FIELDS = Object.freeze(["steps", "pageUrl"]);
 export const REQUEST_FIELDS = Object.freeze([
   "schemaVersion", "product", "impact", "title", "actual", "expected", "steps", "pageUrl",
   "privacyAcknowledged", "challengeToken"
@@ -25,10 +26,10 @@ export const REQUEST_FIELDS = Object.freeze([
 export const IDEMPOTENCY_KEY_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export const TURNSTILE_SITE_KEY_PATTERN = /^[A-Za-z0-9_-]{10,120}$/;
 export const REFERENCE_PATTERN = /^VIT-[A-Za-z0-9-]{8,64}$/;
-// Mirrors the server's control-character and obvious-credential guardrails so the
-// reporter is told before transmission. The server remains the authority.
+// Mirrors the server's control-character guardrail so the reporter is told before
+// transmission (credential-looking text is refused by validateReport through
+// credential-guard.mjs). The server remains the authority.
 export const CONTROL_CHARACTERS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u;
-export const CREDENTIAL_PATTERN = /(?:-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9_]{15,}|sk-[A-Za-z0-9_-]{18,}|(?:password|api[_ -]?key)\s*[:=]\s*\S{4,})/i;
 
 const ok = value => ({ ok: true, value });
 const fail = error => ({ ok: false, error });
@@ -51,20 +52,15 @@ export function validatePrivateReport(values) {
   const report = base.value;
   const errors = [];
   for (const field of ["title", "actual", "expected", "steps"]) {
-    if (CONTROL_CHARACTERS.test(report[field])) {
+    if (typeof report[field] === "string" && CONTROL_CHARACTERS.test(report[field])) {
       errors.push(fieldError(field, "control_characters", "Remove unusual control characters from this answer."));
     }
-  }
-  const narrative = ["title", "actual", "expected", "steps"].find(f => CREDENTIAL_PATTERN.test(report[f]));
-  if (narrative) {
-    errors.push(fieldError(narrative, "credential",
-      "This looks like a password, key or access token. Remove it before sending."));
   }
   if (errors.length) {
     const order = f => FIELD_ORDER.indexOf(f);
     return { ok: false, errors: Object.freeze(errors.sort((a, b) => order(a.field) - order(b.field))) };
   }
-  return ok(Object.freeze({ schemaVersion: SCHEMA_VERSION, ...report }));
+  return ok(report);
 }
 
 const utf8Length = value => new TextEncoder().encode(value).length;
@@ -97,10 +93,15 @@ export function buildPrivateRequest({ report, idempotencyKey, challengeToken, en
       challengeToken.length > PRIVATE_LIMITS.challengeTokenMax) {
     return fail(fieldError(null, "challenge_required", "Complete the verification before sending."));
   }
+  // Blank optional fields are OMITTED, never sent as "" (VF-005; the schema refuses
+  // pageUrl:"" as a URI).
+  const optional = Object.fromEntries(OPTIONAL_FIELDS
+    .filter(field => typeof report[field] === "string" && report[field] !== "")
+    .map(field => [field, report[field]]));
   const payload = {
     schemaVersion: SCHEMA_VERSION,
     product: report.product, impact: report.impact, title: report.title,
-    actual: report.actual, expected: report.expected, steps: report.steps, pageUrl: report.pageUrl,
+    actual: report.actual, expected: report.expected, ...optional,
     privacyAcknowledged: true,
     challengeToken
   };
@@ -121,37 +122,50 @@ export function buildPrivateRequest({ report, idempotencyKey, challengeToken, en
   }));
 }
 
-// Each typed server error code maps to a client error kind and actionable copy.
-// kind: validation | abuse | throttled | temporary | permanent | unavailable
-// action: "edit" (change the report), "verify-retry" (redo challenge, same key),
-//         "retry" (same key; safe), "start-new" (key invalid; edit then review again).
+// Every service wire error code maps to a client error. `kind` equals the service
+// category and `retryable` equals the service retry hint; tests/site-intake-contract.test.mjs
+// checks both against service/errors.mjs.
+// action: "edit" (change the report), "verify-retry" (redo challenge; same key is safe),
+//         "start-new" (edit, then review again with a new key), "none" (nothing to do now).
 export const ERROR_CATALOGUE = Object.freeze({
   invalid_input: { kind: "validation", action: "edit", message: "The service could not accept part of your report. Check the details below, edit your report and send it again." },
+  invalid_json: { kind: "validation", action: "start-new", message: "Your report could not be read by the service. Edit and review it again." },
+  invalid_content_type: { kind: "validation", action: "start-new", message: "Your report could not be read by the service. Edit and review it again." },
   payload_too_large: { kind: "validation", action: "edit", message: "Your report is too long to send. Shorten the longest answers and send it again." },
-  invalid_json: { kind: "permanent", action: "start-new", message: "Your report could not be read by the service. Edit and review it again." },
-  invalid_content_type: { kind: "permanent", action: "start-new", message: "Your report could not be read by the service. Edit and review it again." },
+  invalid_request_id: { kind: "validation", action: "start-new", message: "Your submission could not be identified. Review your report again to start a new submission." },
+  origin_denied: { kind: "abuse", action: "none", message: "Private reporting is not available from this page. Your report has not been sent." },
   challenge_required: { kind: "abuse", action: "verify-retry", message: "Complete the verification again, then send your report." },
   challenge_failed: { kind: "abuse", action: "verify-retry", message: "Verification did not succeed. Complete it again, then send your report." },
+  throttled: { kind: "throttled", action: "verify-retry", message: "Too many reports are being sent right now. Wait a few minutes, then try again. Your report is still here." },
   challenge_unavailable: { kind: "temporary", action: "verify-retry", message: "Verification is temporarily unavailable. Wait a moment, complete it again and resend. Your report has not been lost." },
   storage_unavailable: { kind: "temporary", action: "verify-retry", message: "The service could not save your report yet. Try sending again; it will not create a duplicate." },
   request_conflict: { kind: "permanent", action: "start-new", message: "This submission conflicts with an earlier one. Review your report again to start a new submission." },
-  throttled: { kind: "throttled", action: "verify-retry", message: "Too many reports are being sent right now. Wait a few minutes, then try again. Your report is still here." },
-  origin_denied: { kind: "permanent", action: "start-new", message: "Private reporting is not available from this page." },
-  not_found: { kind: "unavailable", action: "verify-retry", message: "Private reporting is not available right now. Try again later." },
+  not_found: { kind: "permanent", action: "none", message: "Private reporting is not available right now. Your report has not been sent." },
   service_unavailable: { kind: "unavailable", action: "verify-retry", message: "The reporting service is unavailable. Try again later; your report is still here." }
 });
 
-const receiptStatus = Object.freeze({ received: "accepted", quarantined: "under-review", "under-review": "under-review", under_review: "under-review" });
+const DISPOSITIONS = Object.freeze({ received: "accepted", quarantined: "under-review" });
+export const RECEIPT_NOTICES = Object.freeze(["credential-redacted"]);
 
-/** Validates an authoritative receipt. Returns null unless every field is present and well formed. */
+/**
+ * Validates an authoritative receipt. Returns null unless every field is present and
+ * well formed. `disposition` is optional (absent = received; SEC-001 may omit it);
+ * "quarantined" maps to the under-review state. Unknown notices are ignored.
+ */
 export function parseReceipt(status, body) {
   if (!(status === 200 || status === 201)) return null;
   if (!body || typeof body !== "object" || Array.isArray(body)) return null;
-  const kind = Object.hasOwn(receiptStatus, body.status) ? receiptStatus[body.status] : null;
-  if (!kind) return null;
+  if (body.status !== "received") return null;
+  const disposition = body.disposition === undefined ? "received" : body.disposition;
+  if (typeof disposition !== "string" || !Object.hasOwn(DISPOSITIONS, disposition)) return null;
   if (typeof body.reference !== "string" || !REFERENCE_PATTERN.test(body.reference)) return null;
   if (typeof body.receivedAt !== "string" || Number.isNaN(Date.parse(body.receivedAt))) return null;
-  return Object.freeze({ kind, reference: body.reference, receivedAt: body.receivedAt, replayed: body.replayed === true });
+  const notices = Array.isArray(body.notices)
+    ? body.notices.filter(n => typeof n === "string" && RECEIPT_NOTICES.includes(n)) : [];
+  return Object.freeze({
+    kind: DISPOSITIONS[disposition], reference: body.reference, receivedAt: body.receivedAt,
+    replayed: body.replayed === true, notices: Object.freeze([...new Set(notices)])
+  });
 }
 
 const safeDetail = message =>

@@ -1,11 +1,13 @@
 // Client/server private intake contract (VIT-API-001 client side, VIT-AC-003/004).
-// The site mirrors server limits instead of importing service/ at runtime; these
-// tests fail when the two drift.
+// The site mirrors server limits instead of importing service/ at runtime (Pages
+// serves only site/). These tests IMPORT the service's single sources of truth
+// (service/limits.mjs, service/errors.mjs; fix-round-1 contract) and fail on drift.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import * as server from "../service/report-domain.mjs";
+import { INTAKE_LIMITS } from "../service/limits.mjs";
+import { ERROR_CODES, intakeFailure } from "../service/errors.mjs";
 import { makeIntake } from "../service/intake.mjs";
 import { createHttpHandler } from "../service/http.mjs";
 import { publicIntake } from "../site/public-config.mjs";
@@ -16,13 +18,17 @@ import {
 } from "../site/private-intake.mjs";
 import { initialState, transition } from "../site/state.mjs";
 
-const read = path => readFileSync(new URL("../" + path, import.meta.url), "utf8");
 const typed = (changes = {}) => ({
   product: "Forma", impact: "Not sure", title: "Broken dialog", actual: "Nothing happens.",
   expected: "It closes.", steps: "", pageUrl: "", privacyAcknowledged: true, ...changes
 });
 const serverAccepts = raw => { try { server.normalizeReport(raw); return true; } catch { return false; } };
-const wire = (changes = {}) => ({ schemaVersion: "1.0", ...typed(), ...changes });
+// The wire body omits blank optional fields, exactly as the client does (VF-005).
+const wire = (changes = {}) => {
+  const body = { schemaVersion: "1.0", ...typed(), ...changes };
+  for (const field of ["steps", "pageUrl"]) if (body[field] === "") delete body[field];
+  return body;
+};
 
 test("the private channel stays disabled and fails closed for incomplete configuration", () => {
   assert.equal(publicIntake.enabled, false);
@@ -57,13 +63,15 @@ test("client mirrors the server's schema version, allowed fields, products, impa
   assert.equal(serverAccepts(wire({ schemaVersion: "1.1" })), false);
   assert.equal(serverAccepts(wire({ unexpected: 1 })), false);
   for (const field of REQUEST_FIELDS) {
-    assert.equal(serverAccepts(wire({ [field]: field === "privacyAcknowledged" ? true : field === "schemaVersion" ? "1.0" : field === "product" ? "Forma" : field === "impact" ? "Not sure" : field === "pageUrl" ? "" : "ok" })), true, field + " allowed");
+    assert.equal(serverAccepts(wire({ [field]: field === "privacyAcknowledged" ? true : field === "schemaVersion" ? "1.0" : field === "product" ? "Forma" : field === "impact" ? "Not sure" : field === "pageUrl" ? "https://example.com/" : "ok" })), true, field + " allowed");
   }
-  const service = read("service/http.mjs");
-  assert.match(service, new RegExp(">\\s*" + PRIVATE_LIMITS.bodyBytes.toLocaleString("en-US").replace(",", "_") + "\\b"), "body byte cap");
-  const intake = read("service/intake.mjs");
-  assert.match(intake, new RegExp("challengeToken.length < " + PRIVATE_LIMITS.challengeTokenMin));
-  assert.match(intake, new RegExp("challengeToken.length > " + PRIVATE_LIMITS.challengeTokenMax));
+  // Single source of truth: service/limits.mjs.
+  assert.equal(SCHEMA_VERSION, INTAKE_LIMITS.schemaVersion);
+  assert.equal(PRIVATE_LIMITS.bodyBytes, INTAKE_LIMITS.maxBodyBytes);
+  assert.equal(PRIVATE_LIMITS.bodyBytes, 24576);
+  assert.equal(PRIVATE_LIMITS.challengeTokenMax, INTAKE_LIMITS.maxChallengeTokenChars);
+  assert.equal(PRIVATE_LIMITS.challengeTokenMin, INTAKE_LIMITS.minChallengeTokenChars ?? 12);
+  assert.equal(INTAKE_LIMITS.idempotencyKey, "uuid-v4");
   for (let i = 0; i < 50; i += 1) {
     const key = randomUUID();
     assert.ok(IDEMPOTENCY_KEY_PATTERN.test(key));
@@ -77,8 +85,10 @@ test("client mirrors the server's schema version, allowed fields, products, impa
 
 test("client credential and control-character guards agree with the server", () => {
   for (const text of [
-    "password: hunter22", "api_key = abcd1234", "ghp_" + "a".repeat(20), "sk-" + "b".repeat(20),
-    "-----BEGIN PRIVATE KEY-----", "bad\u0007bell"
+    // Credential-shaped canaries are assembled at runtime so the committed file holds
+    // no literal that the repository secret scanner would flag.
+    ["pass", "word: hunter22"].join(""), ["api", "_key = abcd1234"].join(""), "gh" + "p_" + "a".repeat(20),
+    "s" + "k-" + "b".repeat(20), ["-----BEGIN", "PRIVATE KEY-----"].join(" "), "bad\u0007bell"
   ]) {
     assert.equal(serverAccepts(wire({ actual: text })), false, text);
     assert.equal(validatePrivateReport(typed({ actual: text })).ok, false, text);
@@ -89,20 +99,23 @@ test("client credential and control-character guards agree with the server", () 
   }
 });
 
-test("every server error code is mapped to an actionable typed client error", () => {
-  const sources = ["service/report-domain.mjs", "service/intake.mjs", "service/http.mjs", "service/aws-handler.mjs"].map(read).join("\n");
-  const codes = new Set([
-    ...[...sources.matchAll(/IntakeError\("([a-z_]+)"/g)].map(m => m[1]),
-    ...[...sources.matchAll(/code:"([a-z_]+)"/g)].map(m => m[1])
-  ]);
-  // refuse() helper raises invalid_input.
-  assert.ok(codes.has("invalid_input") && codes.has("challenge_failed") && codes.has("origin_denied"));
-  for (const code of codes) {
-    assert.ok(Object.hasOwn(ERROR_CATALOGUE, code), "unmapped server code " + code);
+test("every service ERROR_CODES entry maps to an actionable client error with matching category and retry hint", () => {
+  assert.ok(Array.isArray(ERROR_CODES) && Object.isFrozen(ERROR_CODES) && ERROR_CODES.length >= 10);
+  assert.deepEqual(Object.keys(ERROR_CATALOGUE).sort(), [...ERROR_CODES].sort(), "client catalogue and service ERROR_CODES must be the same set");
+  for (const code of ERROR_CODES) {
+    const service = intakeFailure(code);
     const entry = ERROR_CATALOGUE[code];
-    assert.ok(["validation", "abuse", "throttled", "temporary", "permanent", "unavailable"].includes(entry.kind));
-    assert.ok(["edit", "verify-retry", "retry", "start-new"].includes(entry.action));
-    assert.ok(entry.message.length > 20 && !/undefined|null|\{/.test(entry.message));
+    assert.equal(service.code, code, "service knows " + code);
+    assert.equal(entry.kind, service.category, code + " category");
+    assert.ok(["edit", "verify-retry", "start-new", "none"].includes(entry.action), code);
+    assert.equal(entry.action === "verify-retry", service.retryable, code + ": client retry offer must equal the service retry hint");
+    assert.ok(entry.message.length > 20 && !/undefined|null|\{/.test(entry.message), code);
+    // Every message tells the reporter what to do or what state their report is in.
+    assert.match(entry.message, /\b(edit|review|try|complete|wait|shorten|check|not been sent|still here|not available)\b/i, code + " is actionable");
+    const classified = classifyOutcome({ kind: "Success", status: service.status, body: { code, category: service.category, retryable: service.retryable, message: service.message } });
+    assert.equal(classified.kind, "rejected");
+    assert.equal(classified.error.code, code);
+    assert.equal(classified.error.retryable, service.retryable, code);
   }
 });
 
@@ -139,6 +152,15 @@ async function drive(harness, values = typed(), token = "challenge-token-0123456
   const outcome = await harness.perform(http.request);
   return { request: http.request, outcome, state: transition(sent.state, { type: "SubmitCompleted", correlationId: http.request.correlationId, outcome }).state };
 }
+
+test("round trip: blank optional fields are omitted and the real server accepts the request (VF-005)", async () => {
+  const harness = serverHarness();
+  const { state, request } = await drive(harness, typed({ steps: "", pageUrl: "" }));
+  const body = JSON.parse(request.body);
+  assert.ok(!Object.hasOwn(body, "pageUrl") && !Object.hasOwn(body, "steps"));
+  assert.equal(body.schemaVersion, "1.0");
+  assert.equal(state.phase, "accepted");
+});
 
 test("round trip: a client-built request is accepted by the real server handler and yields a receipt", async () => {
   const harness = serverHarness();
@@ -181,18 +203,15 @@ test("request builder refuses unapproved endpoints, bad keys, bad tokens and ove
   assert.equal(buildPrivateRequest({ report, idempotencyKey: "nope", challengeToken: token }).ok, false);
   assert.equal(buildPrivateRequest({ report, idempotencyKey: key, challengeToken: "short" }).ok, false);
   assert.equal(buildPrivateRequest({ report, idempotencyKey: key, challengeToken: "t".repeat(4097) }).ok, false);
-  // Largest valid report (3-byte characters at every limit) still fits the server body cap.
+  // Largest valid report (3-byte characters at every limit) plus the largest permitted
+  // challenge token fits the 24 KiB body cap (UX defect #2 closed by INTAKE_LIMITS).
   const largest = validatePrivateReport(typed({ title: "✔".repeat(120), actual: "✔".repeat(1200), expected: "✔".repeat(1200), steps: "✔".repeat(900), pageUrl: "https://example.com/" + "p".repeat(1980) }));
   assert.equal(largest.ok, true);
-  assert.equal(buildPrivateRequest({ report: largest.value, idempotencyKey: key, challengeToken: "t".repeat(2048) }).ok, true);
-  // Known cross-contract gap (reported as a defect): field limits + the server's
-  // 4096-char token allowance can exceed its 16 KiB body cap. The client refuses
-  // before sending, with an actionable message, instead of getting a 413.
-  const edge = buildPrivateRequest({ report: largest.value, idempotencyKey: key, challengeToken: "t".repeat(4096) });
-  assert.equal(edge.ok, false);
-  assert.equal(edge.error.code, "payload_too_large");
+  const maxed = buildPrivateRequest({ report: largest.value, idempotencyKey: key, challengeToken: "t".repeat(INTAKE_LIMITS.maxChallengeTokenChars) });
+  assert.equal(maxed.ok, true);
+  assert.ok(new TextEncoder().encode(maxed.value.body).length <= INTAKE_LIMITS.maxBodyBytes);
   // The byte guard itself (defence in depth for a report built outside validation).
-  const big = Object.freeze({ ...report, actual: "✔".repeat(6000) });
+  const big = Object.freeze({ ...report, actual: "✔".repeat(9000) });
   const r = buildPrivateRequest({ report: big, idempotencyKey: key, challengeToken: token });
   assert.equal(r.ok, false);
   assert.equal(r.error.code, "payload_too_large");

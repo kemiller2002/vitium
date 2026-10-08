@@ -88,12 +88,16 @@ test("validateReport is total and reports every invalid field in form order", ()
   const ok = validateReport(valid());
   assert.equal(ok.ok, true);
   assert.deepEqual(ok.value, normalizeReport(valid()));
+  assert.equal(ok.value.schemaVersion, "1.0");
+  const blank = validateReport(valid({ steps: "  ", pageUrl: "" }));
+  assert.ok(!Object.hasOwn(blank.value, "steps") && !Object.hasOwn(blank.value, "pageUrl"), "blank optional fields omitted (VF-005)");
 });
 
 test("URL sanitisation removes credentials, query and fragment for every accepted URL shape", () => {
   const cases = [
-    ["https://user:pa55@example.com/a/b?token=t#frag", "https://example.com/a/b"],
-    ["http://example.com:8080/x;jsessionid=abc?x=1", "http://example.com:8080/x;jsessionid=abc"],
+    // Userinfo assembled at runtime so the committed file holds no credential-shaped URL.
+    ["https://" + ["user", "pa55"].join(":") + "@example.com/a/b?token=t#frag", "https://example.com/a/b"],
+    ["http://example.com:8080/x;v=1?x=1", "http://example.com:8080/x;v=1"],
     ["HTTPS://EXAMPLE.com/Path#access_token=zzz", "https://example.com/Path"],
     ["https://example.com", "https://example.com/"],
     ["https://example.com/?", "https://example.com/"]
@@ -104,6 +108,33 @@ test("URL sanitisation removes credentials, query and fragment for every accepte
     assert.equal(r.value.pageUrl, expected, input);
     assert.doesNotMatch(buildIssueUrl(r.value), /pa55|token=t|frag|access_token|x%3D1/);
   }
+});
+
+test("page URL length is checked after sanitisation (VF-011)", () => {
+  const spaced = "https://example.com/" + " x".repeat(985);
+  assert.ok(spaced.length <= 2000);
+  const r = validateReport(valid({ pageUrl: spaced }));
+  assert.equal(r.ok, false);
+  assert.equal(r.errors[0].field, "pageUrl");
+  assert.equal(r.errors[0].code, "too_long");
+  // A long raw URL whose query is stripped is accepted: what is sent is short.
+  const longQuery = validateReport(valid({ pageUrl: "https://example.com/p?" + "q".repeat(3000) }));
+  assert.equal(longQuery.ok, true);
+  assert.equal(longQuery.value.pageUrl, "https://example.com/p");
+});
+
+test("credential-looking text is refused before a public link is built (VF-004)", () => {
+  const github = "gh" + "p_" + "Z".repeat(36);
+  const r = validateReport(valid({ actual: "token " + github }));
+  assert.equal(r.ok, false);
+  assert.equal(r.errors[0].code, "credential");
+  assert.doesNotMatch(r.errors[0].message, new RegExp(github), "the message never echoes the secret");
+  // Defence in depth: tryBuildIssueUrl refuses even a hand-built report.
+  const forged = Object.freeze({ ...normalizeReport(valid()), steps: "x " + github });
+  const link = tryBuildIssueUrl(forged);
+  assert.equal(link.ok, false);
+  assert.equal(link.error.code, "credential");
+  assert.throws(() => buildIssueUrl(forged));
 });
 
 test("tryBuildIssueUrl is total and agrees with buildIssueUrl", () => {
