@@ -34,7 +34,10 @@ async function createLiveHandler() {
           Item:{
             pk:{S:pk},reference:{S:reference},payloadHash:{S:payloadHash},
             report:{S:JSON.stringify(report)},source:{S:source},
-            visibility:{S:visibility},kind:{S:kind},status:{S:status},receivedAt:{S:receivedAt}
+            visibility:{S:visibility},kind:{S:kind},status:{S:status},receivedAt:{S:receivedAt},
+            state:{S:item.state},revision:{N:String(item.revision)},
+            history:{S:JSON.stringify(item.history)},reviewQueuePk:{S:item.reviewQueuePk},
+            reviewQueueSk:{S:receivedAt+"#"+reference}
           },
           ConditionExpression:"attribute_not_exists(pk)"
         }));
