@@ -150,9 +150,10 @@ test("VF-026: canonicalActor is NFKC + trim + lower-case and is the only identit
   assert.equal(canonicalActor(undefined), "");
 });
 
-test("VF-027: triage-cli passes its authenticated provenance as trusted context (operator not budget-bound)", async () => {
+test("VF-027 / VF-035: triage-cli passes the CLASSIFIED caller provenance as trusted context (only an allow-listed human role session is not budget-bound)", async () => {
   const { decide } = await import("../service/triage-cli.mjs");
-  // Agent attempts fail until the budget is exhausted; the CLI operator (trusted human) may still submit.
+  const { classifyCaller, parseHumanRoleAllowList } = await import("../service/operator-identity.mjs");
+  // Agent attempts fail until the budget is exhausted.
   const at = "2026-10-08T12:00:00Z";
   let record = { kind: "defect", id: "DEF-0900", state: "in-progress", revision: 0, history: [] };
   for (let n = 1; n <= table.policy.maxAutonomousFailedAttempts.value; n++) {
@@ -164,7 +165,29 @@ test("VF-027: triage-cli passes its authenticated provenance as trusted context 
   assert.equal(agentRepairBudget(table, record.history).exhausted, true, "precondition: budget exhausted");
   const args = { command: "advance", to: "awaiting-verification", role: "triager", reason: "operator retry",
     fields: { attemptId: "op-1", candidateRevision: "c-op" }, evidence: [{ kind: "verification-request", ref: "req-op" }] };
-  const r = decide({ args, record, actor: "arn:aws:iam::123456789012:user/operator", occurredAt: at });
-  assert.equal(r.ok, true, "trusted operator context exempts the human operator: " + JSON.stringify(r.error));
+  const allowList = parseHumanRoleAllowList("arn:aws:iam::123456789012:role/ops/VitiumTriager").value;
+  const attempt = (actor, provenance) => decide({ args, record, actor, occurredAt: at, ...(provenance === undefined ? {} : { provenance }) });
+
+  // (1) An assumed-role session of an allow-listed role is classified human -> not budget-bound.
+  const humanSession = "arn:aws:sts::123456789012:assumed-role/VitiumTriager/kevin";
+  const human = classifyCaller(humanSession, allowList);
+  assert.equal(human.provenance, "authenticated-human", "precondition: allow-listed role session classifies as human");
+  const r = attempt(humanSession, human.provenance);
+  assert.equal(r.ok, true, "classified human operator is exempt from the agent budget: " + JSON.stringify(r.error));
   assert.equal(r.value.events[0].provenance, "authenticated-human");
+
+  // (2) The same call by an IAM user, an unlisted role, a listed role in another account, or
+  // with no classification at all is budget-bound (fail closed).
+  for (const [name, actor] of [
+    ["IAM user", "arn:aws:iam::123456789012:user/operator"],
+    ["unlisted role session", "arn:aws:sts::123456789012:assumed-role/praxis-agent-runner/session-1"],
+    ["listed role name in another account", "arn:aws:sts::999999999999:assumed-role/VitiumTriager/kevin"]
+  ]) {
+    const classified = classifyCaller(actor, allowList);
+    assert.equal(classified.provenance, "agent", name + " classifies as agent");
+    const refused = attempt(actor, classified.provenance);
+    assert.equal(refused.error?.code, "escalation_required", name + " must be budget-bound");
+  }
+  assert.equal(attempt(humanSession, undefined).error?.code, "escalation_required", "missing classification is budget-bound");
+  assert.equal(attempt(humanSession, "Authenticated-Human").error?.code, "escalation_required", "only the exact classifier value is trusted");
 });
