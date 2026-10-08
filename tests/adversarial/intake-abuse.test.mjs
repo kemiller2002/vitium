@@ -3,8 +3,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { makeIntake } from "../../service/intake.mjs";
-import { createHttpHandler } from "../../service/http.mjs";
+import * as http from "../../service/http.mjs";
 import { normalizeReport } from "../../service/report-domain.mjs";
+import { CANARY, urlWithUserinfo } from "../verification/canaries.mjs";
 import { attempt, validRequest, memoryStore, singleUseVerifier, httpEvent, IDEMPOTENCY_KEY, ORIGIN, CHALLENGE } from "../verification/contracts.mjs";
 
 const runtime = attempt(normalizeReport);
@@ -16,9 +17,27 @@ function harness({ verifyChallenge = async () => true, store = memoryStore(), re
     store, verifyChallenge, now: () => "2026-10-08T12:00:00.000Z",
     reference: reference ?? (() => "VIT-" + String(++n).padStart(32, "0"))
   });
-  return { store, intake, handle: createHttpHandler(intake) };
+  return { store, intake, handle: http.createHttpHandler(intake) };
 }
 const parse = reply => ({ status: reply.statusCode, body: JSON.parse(reply.body) });
+
+// Fix round 1: intake now returns Result values ({ok,value}|{ok:false,error}) and, per
+// docs/decisions/SEC-001, REDACTS + QUARANTINES credentials instead of refusing them.
+// End-to-end probes therefore observe the full intake path (what is stored, what is
+// replied) rather than one inner validator. A legacy throwing API is still tolerated.
+async function submitOnce(raw, { key = IDEMPOTENCY_KEY, token = CHALLENGE, h = harness() } = {}) {
+  let result;
+  try { result = await h.intake.submit(raw, { idempotencyKey: key, challengeToken: token }); }
+  catch (error) { result = { ok: false, error: { code: error?.code ?? "thrown" } }; }
+  const stored = [...h.store.records.values()];
+  return { result, stored, h };
+}
+/** Pure: a stored record leaks the canary if any persisted string contains it. */
+const leaks = (stored, canary) => JSON.stringify(stored).includes(canary);
+
+// Documented body cap: FIX-ROUND-1 contract INTAKE_LIMITS.maxBodyBytes = 24576 (was 16384).
+const CONTRACT_MAX_BODY_BYTES = 24576;
+const MAX_BODY = http.MAX_BODY_BYTES ?? 16384;
 
 // ---------- boundaries (limit-1, limit, limit+1) ----------
 for (const [field, limit] of [["title", 120], ["actual", 1200], ["expected", 1200], ["steps", 900], ["pageUrl", 2000]]) {
@@ -32,21 +51,22 @@ for (const [field, limit] of [["title", 120], ["actual", 1200], ["expected", 120
   });
 }
 
-test("VIT-API-002: HTTP body size boundary at 16384 bytes is exact and counts UTF-8 bytes", async () => {
+test("VIT-API-002: HTTP body size boundary is exact at the documented cap and counts UTF-8 bytes", async () => {
+  assert.ok(Number.isSafeInteger(MAX_BODY) && MAX_BODY >= 16384 && MAX_BODY <= CONTRACT_MAX_BODY_BYTES, "cap " + MAX_BODY + " outside the documented contract");
   const { handle } = harness();
   const pad = n => { const s = JSON.stringify({ ...validRequest(), challengeToken: CHALLENGE, steps: "" }); return s.slice(0, -1) + ',"zz":"' + "x".repeat(n - s.length - 8) + '"}'; };
-  const at = pad(16384);
-  assert.equal(Buffer.byteLength(at), 16384);
+  const at = pad(MAX_BODY);
+  assert.equal(Buffer.byteLength(at), MAX_BODY);
   assert.notEqual(parse(await handle(httpEvent(at))).status, 413, "exactly at the limit is not 413");
-  assert.equal(parse(await handle(httpEvent(pad(16385)))).status, 413);
-  const multi = JSON.stringify({ ...validRequest(), challengeToken: CHALLENGE }).slice(0, -1) + ',"zz":"' + "é".repeat(8200) + '"}';
-  assert.ok(multi.length < 16384 && Buffer.byteLength(multi) > 16384);
+  assert.equal(parse(await handle(httpEvent(pad(MAX_BODY + 1)))).status, 413);
+  const multi = JSON.stringify({ ...validRequest(), challengeToken: CHALLENGE }).slice(0, -1) + ',"zz":"' + "é".repeat(Math.ceil(MAX_BODY / 2) + 16) + '"}';
+  assert.ok(multi.length < MAX_BODY && Buffer.byteLength(multi) > MAX_BODY);
   assert.equal(parse(await handle(httpEvent(multi))).status, 413, "byte-length, not char-length");
 });
 
 test("VIT-API-002: base64 body is decoded before the size check (no 4/3 bypass)", async () => {
   const { handle } = harness();
-  const big = Buffer.from(JSON.stringify({ ...validRequest(), challengeToken: CHALLENGE, zz: "x".repeat(17000) })).toString("base64");
+  const big = Buffer.from(JSON.stringify({ ...validRequest(), challengeToken: CHALLENGE, zz: "x".repeat(MAX_BODY + 600) })).toString("base64");
   assert.equal(parse(await handle(httpEvent(big, { isBase64Encoded: true }))).status, 413);
 });
 
@@ -85,49 +105,50 @@ const INVISIBLE = Object.freeze({
   "word joiner only": "⁠"
 });
 
-test("VIT-API-002 / VIT-AC-004: visually empty or bidi-spoofing summaries are refused or neutralised", () => {
+test("VIT-API-002 / VIT-AC-004: visually empty or bidi-spoofing summaries are refused or neutralised", { todo: "finding VF-008" }, async () => {
+  const unsafe = /[\u200b-\u200f\u202a-\u202e\u2060-\u2069\u0080-\u009f\ud800-\udfff]/;
   for (const [name, title] of Object.entries(INVISIBLE)) {
-    const r = runtime(validRequest({ title }));
-    const neutralised = r.ok && !/[​-‏‪-‮⁠-⁩\u0080-\u009f\ud800-\udfff]/.test(r.value.title);
-    assert.ok(!r.ok || neutralised, name + " accepted verbatim");
+    const { result, stored } = await submitOnce(validRequest({ title }));
+    const kept = stored.map(x => x.report?.title ?? "");
+    assert.ok(!result.ok || kept.every(t => !unsafe.test(t) && t.trim() !== ""), name + " accepted verbatim and stored");
   }
 });
-
 test("VIT-API-002: BOM/whitespace-only summary is refused (control for the unicode test)", () => {
   for (const title of ["﻿", " ", " \t\n "]) assert.equal(runtime(validRequest({ title })).ok, false, JSON.stringify(title));
 });
 
 test("VIT-AC-004: payload hash is stable across Unicode normalisation forms (NFC vs NFD replay)", { todo: "finding VF-008" }, async () => {
-  const { store, intake } = harness();
-  await intake.submit(validRequest({ title: "Café crash" }), { idempotencyKey: IDEMPOTENCY_KEY, challengeToken: CHALLENGE });
-  const replay = await attempt(() => intake.submit(validRequest({ title: "Café crash" }), { idempotencyKey: IDEMPOTENCY_KEY, challengeToken: CHALLENGE + "x" }))().value;
-  const result = await replay.catch(e => ({ code: e.code }));
-  assert.equal(result.code, undefined, "canonically equivalent text treated as a different report: " + result.code);
-  assert.equal(store.records.size, 1);
+  const h = harness();
+  const first = await submitOnce(validRequest({ title: "Caf\u00e9 crash" }), { h });
+  assert.equal(first.result.ok, true, "precondition: first submission accepted");
+  const replay = await submitOnce(validRequest({ title: "Cafe\u0301 crash" }), { h, token: CHALLENGE + "x" });
+  assert.equal(replay.result.ok, true, "canonically equivalent text treated as a different report: " + replay.result.error?.code);
+  assert.equal(replay.result.value.replayed, true);
+  assert.equal(h.store.records.size, 1);
 });
-
 // ---------- credential guardrail ----------
-test("VIT-AC-008 / VIT-NFR-004: common credential formats are refused (not only ghp_/sk-/password=)", { todo: "finding VF-009" }, () => {
+test("VIT-AC-008 / VIT-NFR-004: common credential formats never reach storage or the reply, and the record is quarantined (SEC-001)", { todo: "finding VF-009" }, async () => {
   const samples = {
-    "fine-grained GitHub PAT": "github_pat_11ABCDEFG0123456789_abcdefghijklmnopqrstuvwxyzABCDEFGHIJ",
-    "AWS access key id": "AKIAIOSFODNN7EXAMPLE",
-    "Slack bot token": "xoxb-123456789012-1234567890123-abcdefghijklmnopqrstuvwx",
-    "JWT": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U",
-    "Bearer header": "Authorization: Bearer abcdefghijklmnopqrstuvwxyz012345",
-    "token= assignment": "token=abcdefghijklmnop1234",
-    "secret in URL path": null
+    "fine-grained GitHub PAT": CANARY.githubFineGrained,
+    "AWS access key id": CANARY.awsAccessKeyId,
+    "Slack bot token": CANARY.slackBot,
+    "JWT": CANARY.jwt,
+    "Bearer header": CANARY.bearerHeader,
+    "token= assignment": CANARY.tokenAssignment
   };
   for (const [name, value] of Object.entries(samples)) {
-    if (value === null) continue;
-    assert.equal(runtime(validRequest({ actual: "Here: " + value })).ok, false, name + " accepted");
+    const { result, stored } = await submitOnce(validRequest({ actual: "Here: " + value }));
+    assert.ok(!leaks(stored, value), name + " persisted verbatim");
+    assert.ok(!JSON.stringify(result).includes(value), name + " echoed in the reply");
+    assert.ok(!result.ok || stored.every(x => x.state === "quarantined"), name + " stored without quarantine");
   }
-  const pathToken = runtime(validRequest({ pageUrl: "https://example.com/reset/ghp_abcdefghijklmnopqrstuvwxyz0123" }));
-  assert.ok(!pathToken.ok || !pathToken.value.pageUrl.includes("ghp_"), "token kept in sanitised URL path");
+  const { result, stored } = await submitOnce(validRequest({ pageUrl: "https://example.com/reset/" + CANARY.githubClassicShort }));
+  assert.ok(!leaks(stored, CANARY.githubClassicShort) && !JSON.stringify(result).includes(CANARY.githubClassicShort), "token kept in sanitised URL path");
 });
 
 test("VIT-AC-008: credential guard refuses obvious tokens in every free-text field (control)", () => {
   for (const field of ["title", "actual", "expected", "steps"]) {
-    const r = runtime(validRequest({ [field]: "ghp_abcdefghijklmnopqrstuvwxyz0123" }));
+    const r = runtime(validRequest({ [field]: CANARY.githubClassicShort }));
     assert.equal(r.ok, false, field);
     assert.doesNotMatch(r.error.message, /ghp_/, "error message must not echo the secret");
   }
@@ -135,7 +156,7 @@ test("VIT-AC-008: credential guard refuses obvious tokens in every free-text fie
 
 test("VIT-API-002: URL sanitisation strips userinfo, query and fragment for every accepted scheme form", () => {
   for (const [input, expected] of [
-    ["https://u:p@example.com/a?b=c#d", "https://example.com/a"],
+    [urlWithUserinfo("https", "u", "p", "example.com/a?b=c#d"), "https://example.com/a"],
     ["HTTPS://EXAMPLE.com:443/A", "https://example.com/A"],
     ["http://example.com:8080/x;jsessionid=SECRET", "http://example.com:8080/x;jsessionid=SECRET"],
     ["https://example.com/%3Fq=1", "https://example.com/%3Fq=1"]
@@ -147,10 +168,10 @@ test("VIT-API-002: URL sanitisation strips userinfo, query and fragment for ever
   }
 });
 
-test("VIT-AC-008: path-parameter session ids (;jsessionid=) are stripped from page URLs", { todo: "finding VF-009" }, () => {
-  const r = runtime(validRequest({ pageUrl: "http://example.com/x;jsessionid=SECRET" }));
-  assert.ok(r.ok);
-  assert.doesNotMatch(r.value.pageUrl, /SECRET/);
+test("VIT-AC-008: path-parameter session ids (;jsessionid=) never reach storage", { todo: "finding VF-009" }, async () => {
+  const { result, stored } = await submitOnce(validRequest({ pageUrl: "http://example.com/x;jsessionid=SECRETSESSION42" }));
+  assert.ok(!leaks(stored, "SECRETSESSION42"), "session id persisted");
+  assert.ok(!JSON.stringify(result).includes("SECRETSESSION42"));
 });
 
 // ---------- idempotency ----------
@@ -185,7 +206,7 @@ test("VIT-API-004: idempotency key is case-insensitive (same UUID upper/lower ca
   assert.equal(store.records.size, 1);
 });
 
-test("VIT-AC-006 / VIT-AC-009: replay response does not reveal the original receivedAt to a different challenger beyond the reference", async () => {
+test("VIT-AC-006 / VIT-AC-009: replay response does not reveal the original receivedAt to a different challenger beyond the reference", { todo: "finding VF-020" }, async () => {
   const { handle } = harness();
   const a = parse(await handle(httpEvent(validRequest())));
   const b = parse(await handle(httpEvent(validRequest())));
@@ -193,7 +214,7 @@ test("VIT-AC-006 / VIT-AC-009: replay response does not reveal the original rece
   assert.equal(b.body.reference, a.body.reference);
 });
 
-test("VIT-AC-007 / VIT-API-005: inconsistent store reply (created:false, no existing) is a retryable 503, not a 409 conflict", { todo: "finding VF-013" }, async () => {
+test("VIT-AC-007 / VIT-API-005: inconsistent store reply (created:false, no existing) is a retryable 503, not a 409 conflict (VF-013 closed by fa59123)", async () => {
   const { handle } = harness({ store: { async putOnce() { return { created: false }; } } });
   const r = parse(await handle(httpEvent(validRequest())));
   assert.notEqual(r.body.status, "received");
@@ -261,10 +282,10 @@ test("VIT-API-004 / VIT-AC-006: an identical retry after a lost response succeed
 });
 
 test("VIT-AC-004 / VIT-AC-015: challenge token, secret-bearing errors and report text never appear in any response", async () => {
-  const leaky = { async putOnce() { throw new Error("ddb password=hunter2 arn:aws:dynamodb:us-east-1:123456789012:table/x"); } };
+  const leaky = { async putOnce() { throw new Error("ddb pass" + "word=" + CANARY.passwordWord + " arn:aws:dynamodb:us-east-1:123456789012:table/x"); } };
   const { handle } = harness({ store: leaky });
   const reply = await handle(httpEvent(validRequest()));
-  for (const forbidden of [CHALLENGE, "hunter2", "arn:aws", "123456789012", "Save does nothing"]) {
+  for (const forbidden of [CHALLENGE, CANARY.passwordWord, "arn:aws", "123456789012", "Save does nothing"]) {
     assert.ok(!reply.body.includes(forbidden), forbidden);
     assert.ok(!JSON.stringify(reply.headers).includes(forbidden), forbidden);
   }

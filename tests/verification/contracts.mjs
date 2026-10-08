@@ -63,6 +63,14 @@ export function memoryStore() {
       if (records.has(item.pk)) return { created: false, existing: records.get(item.pk) };
       records.set(item.pk, item);
       return { created: true };
+    },
+    // Read-only replay port (fix round 1, service/adapters/dynamodb-store.mjs lookup):
+    // projects receipt attributes only, never the report, as the real adapter does.
+    async lookup(pk) {
+      const hit = records.get(pk);
+      return hit
+        ? { ok: true, value: { found: true, existing: { reference: hit.reference, payloadHash: hit.payloadHash, receivedAt: hit.receivedAt } } }
+        : { ok: true, value: { found: false } };
     }
   };
 }

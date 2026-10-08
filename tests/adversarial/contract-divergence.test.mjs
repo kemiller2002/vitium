@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import * as site from "../../site/submission.mjs";
 import * as domain from "../../service/report-domain.mjs";
 import { defectStates } from "../../service/triage.mjs";
+import { CANARY } from "../verification/canaries.mjs";
 import { readRepo, readJson, schemaValidator, selectOptions, attempt, CHALLENGE } from "../verification/contracts.mjs";
 
 const html = readRepo("site/index.html");
@@ -53,13 +54,13 @@ test("VIT-DOM-004: product names that differ only by case/whitespace/homoglyph a
   }
 });
 
-test("VIT-AC-003 / VIT-API-001: the request the browser would send is accepted by the service runtime", () => {
+test("VIT-AC-003 / VIT-API-001: the request the browser would send is accepted by the service runtime", { todo: "finding VF-005" }, () => {
   const body = clientWireBody(formInput);
   const result = serviceNormalize(body);
   assert.ok(result.ok, "service refused the client's own payload: " + JSON.stringify(result.error));
 });
 
-test("VIT-DOM-003 / VIT-AC-010: the request the browser would send validates against intake-request.schema.json", () => {
+test("VIT-DOM-003 / VIT-AC-010: the request the browser would send validates against intake-request.schema.json", { todo: "finding VF-005" }, () => {
   const body = clientWireBody(formInput);
   const result = validateRequest(body);
   assert.ok(result.ok, "schema refused the client's payload: " + JSON.stringify(result.error));
@@ -75,8 +76,8 @@ test("VIT-API-002 / VIT-UX-007: a page URL accepted by the site is accepted by t
   assert.ok(serviceNormalize({ ...draft, schemaVersion: "1.0", privacyAcknowledged: true }).ok);
 });
 
-test("VIT-AC-008 / VIT-NFR-004: site and service agree on refusing credential-looking text", () => {
-  for (const secret of ["sk-abcdefghijklmnopqrstuvwxyz", "password: hunter2hunter2", "ghp_abcdefghijklmnopqrstuvwxyz0123"]) {
+test("VIT-AC-008 / VIT-NFR-004: site and service agree on refusing credential-looking text", { todo: "finding VF-004" }, () => {
+  for (const secret of [CANARY.openAiStyle, CANARY.passwordAssignment, CANARY.githubClassicShort]) {
     const server = serviceNormalize({ schemaVersion: "1.0", ...formInput, actual: secret });
     assert.equal(server.ok, false, "precondition: service refuses " + secret.slice(0, 6));
     const client = attempt(site.normalizeReport)({ ...formInput, actual: secret });
@@ -86,12 +87,12 @@ test("VIT-AC-008 / VIT-NFR-004: site and service agree on refusing credential-lo
   }
 });
 
-test("VIT-DOM-003 / VIT-LCY-004: every defect state used by triage.mjs is representable in defect.schema.json", () => {
+test("VIT-DOM-003 / VIT-LCY-004: every defect state used by triage.mjs is representable in defect.schema.json", { todo: "finding VF-012" }, () => {
   const schemaStates = defectSchema.properties.state.enum;
   assert.deepEqual(defectStates.filter(s => !schemaStates.includes(s)), []);
 });
 
-test("VIT-DOM-003 / VIT-DOM-006: intake impact labels have a declared mapping to defect.schema.json impact codes", () => {
+test("VIT-DOM-003 / VIT-DOM-006: intake impact labels have a declared mapping to defect.schema.json impact codes", { todo: "finding VF-012" }, () => {
   const codes = defectSchema.properties.impact.enum;
   const unmapped = domain.impacts.filter(label => !codes.includes(label));
   // A mapping module (or a shared enum) must exist; today the two vocabularies are disjoint.

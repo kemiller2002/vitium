@@ -5,6 +5,18 @@ Author role: independent verification agent (VIT-P0-2026-10-08). This document d
 
 Status vocabulary follows `docs/requirements/VITIUM-ACCEPTANCE.md`: `not-started`, `in-progress`, `blocked`, `executed-failed`, `verified-passed`. A check line can be `executed-pass`, `executed-fail (finding)` or `not-executed`.
 
+> **Fix round 1 update (`p0/fix1-verify` on `p0/integration` @ `2b9de54`).** The tables below record the phase-1 baseline runs.
+> Integrated-tree results:
+> - `npm run test:adversarial`: 101 tests, 72 pass, 0 fail, 29 todo.
+> - `npm test` (not owned here): 172 tests, 164 pass, 7 fail, 1 todo. The failures are in other owners' files.
+> - Browser, block and file CSS modes: 66 expected / 0 unexpected each. 63 pass; the 3 VF-004 `test.fail` cases fail as expected.
+> - axe: 0 violations.
+>
+> Closed by integration: VF-001, VF-002, VF-003, VF-013, VF-014, VF-015 (duplicate reference, evidenceId).
+> New: VF-020, VF-021, VF-022.
+> Mutation appraisal: 44 mutants, 41 killed by unit + adversarial. M24 was killed after a new test. M38 and M43 are equivalent mutants.
+> Adjudication and evidence: `EVIDENCE-APPRAISAL.md` § "Fix round 1". No scenario is promoted to `verified-passed`.
+
 ## Execution environment of the recorded runs (2026-10-08)
 
 | Item | Value |
@@ -247,3 +259,6 @@ Full reproductions are in the verification report; the summary is in `docs/verif
 | VF-017 | low | DOM-007 | domain | `occurredAt` only prefix-regex checked (`2026-99-99T99:99:99` accepted) |
 | VF-018 | medium | NFR-008, REP-011 | ux / ops | CDN stylesheet version-pinned but no SRI `integrity`/`crossorigin` |
 | VF-019 | medium | VER-003, AC-023 | all (test owners) | Baseline `npm test` lets 10/20 guard mutants survive |
+| VF-020 | medium | AC-009, SEC-001 | intake | Receipt exposes `disposition`/`notices`, an oracle for the screening detectors (fix round 1) |
+| VF-021 | medium | DOM-003 | domain | `observation.schema.json` refuses the observation shape makeIntake produces (fix round 1) |
+| VF-022 | low | NFR-004 | ops | Secret scanner scans gitignored browser output; false positives after a browser run (fix round 1) |

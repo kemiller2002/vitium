@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { resolveSitePath, startStaticServer } from "../verification/static-server.mjs";
 import { safeLaunchArgs, chooseChromium } from "../verification/chromium-launch.mjs";
 import { classifyRequest, formaModeFrom, FORMA_CSS_URL } from "../browser/support.mjs";
-import { applyMutation } from "../verification/mutation-appraisal.mjs";
+import { applyMutation, summarise, failingTests } from "../verification/mutation-appraisal.mjs";
 import { selectOptions } from "../verification/contracts.mjs";
 
 const root = new URL("../../site/", import.meta.url).pathname;
@@ -64,6 +64,16 @@ test("VIT-VER-003 harness: mutation application refuses missing or ambiguous anc
   assert.equal(applyMutation("a b a", { from: "a", to: "x" }).ok, false);
   assert.equal(applyMutation("a b", { from: "z", to: "x" }).ok, false);
   assert.equal(applyMutation("a b", { from: "b", to: "x" }).value, "a x");
+});
+
+test("VIT-VER-003 harness: mutant kills are differential against the control run (pre-existing failures never count)", () => {
+  const control = { exit: 1, failing: failingTests("not ok 3 - pre-existing\nnot ok 4 - finding # TODO finding VF-1\n") };
+  assert.deepEqual([...control.failing], ["pre-existing"], "TODO failures are findings, not regressions");
+  assert.equal(summarise(1, "not ok 3 - pre-existing\n", control).killed, false, "same failure as control is not a kill");
+  assert.equal(summarise(1, "not ok 3 - pre-existing\nnot ok 9 - new regression\n", control).killed, true);
+  assert.equal(summarise(0, "not ok 9 - x # TODO finding VF-2\n# pass 3\n# todo 1\n", { exit: 0, failing: [] }).killed, false, "a todo failing is not a kill (node:test exits 0)");
+  assert.equal(summarise(1, "SyntaxError: boom", { exit: 0, failing: [] }).killed, true, "crash of a previously green suite is a kill");
+  assert.deepEqual([...failingTests("  1) [w375] › tests/browser/reporter.spec.mjs:5:3 › a › b ───\n")], ["[w375] › tests/browser/reporter.spec.mjs:5:3 › a › b"]);
 });
 
 test("VIT-DOM-004 harness: option parser handles value attributes and placeholders", () => {
