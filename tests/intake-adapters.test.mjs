@@ -5,7 +5,7 @@ import {readFileSync} from "node:fs";
 import {makeDynamoStore, encodeObservation} from "../service/adapters/dynamodb-store.mjs";
 import {makeTurnstileVerifier, interpretSiteverify} from "../service/adapters/turnstile-challenge.mjs";
 import {readConfig, composeHandler} from "../service/aws-handler.mjs";
-import {parseArgs, planUpdate, runTriage} from "../service/triage-cli.mjs";
+import {parseArgs, planUpdate, runTriage, buildCommand, parseEvidence} from "../service/triage-cli.mjs";
 
 class Put { constructor(input){ this.input = input; this.kind = "put"; } }
 class Get { constructor(input){ this.input = input; this.kind = "get"; } }
@@ -77,6 +77,17 @@ test("T-34 triage CLI: pure parsing, queue-following update plan, no AWS call on
   assert.equal(parseArgs(["queue", "--queue=all"]).ok, false);
   assert.equal(parseArgs(["show", "--key=REQUEST#zz"]).error, "invalid_key");
   assert.equal(parseArgs(["scan"]).ok, false);
+  const k = "--key=REQUEST#" + "a".repeat(64);
+  assert.equal(parseArgs(["advance", k, "--to=reopened", "--reason=r"]).error, "evidence_required");
+  assert.deepEqual(parseArgs(["advance", k, "--to=reopened", "--reason=r", "--evidence=new-occurrence:OBS-1"]).value.evidence, [{kind:"new-occurrence", ref:"OBS-1"}]);
+  assert.deepEqual(parseEvidence("a:1,b:x:y").value, [{kind:"a", ref:"1"}, {kind:"b", ref:"x:y"}]);
+  assert.equal(parseEvidence("a:").ok, false);
+  const cmd = buildCommand({args:parseArgs(["advance", k, "--to=classified", "--reason=r", "--classification=c"]).value,
+    record:{revision:3}, actor:"arn:x", occurredAt:"2026-10-08T00:00:00.000Z"});
+  assert.equal(cmd.provenance, "authenticated-human");
+  assert.deepEqual(cmd.fields, {classification:"c"});
+  assert.equal(cmd.expectedRevision, 3);
+  assert.equal(cmd.evidenceId, undefined, "legacy untyped evidence shape is not used");
   const plan = s => planUpdate({table:"t", key:"k", current:{state:"quarantined", revision:0}, changed:{state:s, revision:1, history:[]}, reference:"R", receivedAt:"T"});
   assert.match(plan("accepted-for-triage").UpdateExpression, /reviewQueuePk = :queue/);
   assert.equal(plan("accepted-for-triage").ExpressionAttributeValues[":queue"].S, "QUEUE#pending");
@@ -93,7 +104,8 @@ test("T-35 template keeps least-privilege, POST-only, canonical-origin invariant
   assert.deepEqual(actions, ["dynamodb:GetItem", "dynamodb:PutItem", "secretsmanager:GetSecretValue"]);
   assert.match(t, /dynamodb:Attributes:/);
   assert.match(t, /AllowCredentials: false/);
-  assert.match(t, /DeletionProtectionEnabled: true/);
+  assert.match(t, /DeletionProtectionEnabled: !Ref TableDeletionProtection/);
+  assert.doesNotMatch(t, /^\s+FunctionName:/m, "fixed FunctionName collides across stacks");
   assert.match(t, /DeletionPolicy: Retain/);
   assert.doesNotMatch(t, /AllowOrigins:\s*\n\s*-\s*['"]?\*/);
 });

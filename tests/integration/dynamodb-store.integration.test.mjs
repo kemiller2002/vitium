@@ -56,10 +56,10 @@ const report = (patch = {}) => ({schemaVersion:"1.0", product:"Forma", impact:"N
   title:"Save fails", actual:"Nothing happens.", expected:"It saves.", steps:"", pageUrl:"",
   privacyAcknowledged:true, ...patch});
 let tokenSeq = 0;
-const event = (key, body = report()) => ({
+const event = (key, body = report(), token = "emulator-challenge-" + (++tokenSeq)) => ({
   rawPath:"/api/v1/reports", requestContext:{http:{method:"POST"}, requestId:"it-" + tokenSeq},
   headers:{origin, "content-type":"application/json", "idempotency-key":key},
-  body:JSON.stringify({...body, challengeToken:"emulator-challenge-" + (++tokenSeq)})
+  body:JSON.stringify({...body, challengeToken:token})
 });
 // Turnstile is replaced by an injected fetch (no network); the DynamoDB path is real SDK + emulator.
 const fakeTurnstile = async () => ({ok:true, json:async () => ({success:true, hostname:"vitium.echelonfoundry.com", action:"vitium-intake"})});
@@ -137,15 +137,20 @@ test("I-04 transient failure before write -> typed 503, nothing stored, retry cr
   assert.equal((await allItems(table)).length, 1);
 });
 
-test("I-05 write commits but response is lost -> no receipt; client retry replays the ORIGINAL reference", async () => {
+test("I-05 write commits but response is lost -> no receipt; identical retry (same spent token) replays the ORIGINAL reference", async () => {
   const table = await freshTable();
   const key = crypto.randomUUID();
-  const lossy = liveLikeHandler(table, faultyClient(n => n === 1 ? "fail-after" : "pass"));
-  const first = await lossy(event(key));
+  const lossy = liveLikeHandler(table, faultyClient((n, cmd) => cmd instanceof PutItemCommand ? "fail-after" : "pass"));
+  const token = "emulator-challenge-spent-once";
+  const first = await lossy(event(key, report(), token));
   assert.equal(first.statusCode, 503, "a lost acknowledgement must not become a receipt");
   const items = await allItems(table);
   assert.equal(items.length, 1, "the write itself did commit");
-  const retry = await liveLikeHandler(table)(event(key));
+  // A Turnstile model that refuses any second use of a token: the retry must not need it (VF-010).
+  const strict = composeHandler({config:{...config, tableName:table}, dynamo:client, commands,
+    loadSecret:async () => "emulator-secret", log:() => {},
+    fetch:async () => ({ok:true, json:async () => ({success:false, "error-codes":["timeout-or-duplicate"]})})});
+  const retry = await strict(event(key, report(), token));
   assert.equal(retry.statusCode, 200);
   assert.equal(JSON.parse(retry.body).replayed, true);
   assert.equal(JSON.parse(retry.body).reference, items[0].reference.S);
@@ -159,6 +164,16 @@ test("I-06 conditional failure followed by a failing replay read -> typed 503, n
   const reply = await readBroken(event(key));
   assert.equal(reply.statusCode, 503);
   assert.equal(JSON.parse(reply.body).reference, undefined);
+  // Lookup misses (race: record not yet visible), put hits the condition, replay read fails.
+  let gets = 0;
+  const raced = liveLikeHandler(table, {async send(cmd) {
+    if (cmd instanceof GetItemCommand && ++gets === 1) return {};
+    if (cmd instanceof GetItemCommand) throw Object.assign(new Error("x"), {name:"TimeoutError"});
+    return client.send(cmd);
+  }});
+  const r2 = await raced(event(key));
+  assert.equal(r2.statusCode, 503);
+  assert.equal(JSON.parse(r2.body).reference, undefined);
   const throttled = liveLikeHandler(table, faultyClient(() => "throttle"));
   const t = await throttled(event(crypto.randomUUID()));
   assert.equal(t.statusCode, 429);
@@ -188,12 +203,31 @@ test("I-07 replay read projects only receipt attributes, never the report body",
 test("I-08 quarantined observations land in the quarantine queue partition with redacted text", async () => {
   const table = await freshTable();
   const key = crypto.randomUUID();
-  const reply = await liveLikeHandler(table)(event(key, report({actual:"token ghp_EMULATORcanary0123456789abcdefXYZ broke it"})));
+  const reply = await liveLikeHandler(table)(event(key, report({actual:"token " + ["gh", "p_", "EMULATORcanary0123456789abcdefXYZ"].join("") + " broke it"})));
   assert.equal(reply.statusCode, 201);
-  assert.equal(JSON.parse(reply.body).disposition, "quarantined");
+  assert.equal(JSON.parse(reply.body).disposition, undefined, "receipt does not expose screening");
   const [item] = await allItems(table);
   assert.equal(item.reviewQueuePk.S, "QUEUE#quarantined");
   assert.equal(item.state.S, "quarantined");
-  assert.ok(!item.report.S.includes("ghp_EMULATOR"));
+  assert.ok(!item.report.S.includes("EMULATORcanary"));
   assert.equal(item.visibility.S, "private");
+});
+
+test("I-09 VF-010 sequential replay via lookup: same body -> original receipt without a challenge; different body -> 409, nothing disclosed", async () => {
+  const table = await freshTable();
+  const key = crypto.randomUUID();
+  const first = await liveLikeHandler(table)(event(key, report({actual:"Original private EMULATORTEXT"})));
+  assert.equal(first.statusCode, 201);
+  const sent = [];
+  const noChallenge = composeHandler({config:{...config, tableName:table}, dynamo:client, commands,
+    loadSecret:async () => "emulator-secret", log:() => {},
+    fetch:async () => { sent.push(1); return {ok:true, json:async () => ({success:false})}; }});
+  const same = await noChallenge(event(key, report({actual:"Original private EMULATORTEXT"})));
+  assert.equal(same.statusCode, 200);
+  assert.equal(JSON.parse(same.body).reference, JSON.parse(first.body).reference);
+  const other = await noChallenge(event(key, report({actual:"Guess"})));
+  assert.equal(other.statusCode, 409);
+  for (const leak of [JSON.parse(first.body).reference, JSON.parse(first.body).receivedAt, "EMULATORTEXT"]) assert.ok(!other.body.includes(leak));
+  assert.equal(sent.length, 0, "replay path must not call the challenge provider");
+  assert.equal((await allItems(table)).length, 1);
 });

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {makeIntake} from "../service/intake.mjs";
 import {createHttpHandler} from "../service/http.mjs";
 import {normalizeReport, IntakeError} from "../service/report-domain.mjs";
+import {INTAKE_LIMITS} from "../service/limits.mjs";
 
 const key = "124e4567-e89b-42d3-a456-426614174000";
 const origin="https://vitium.echelonfoundry.com";
@@ -105,7 +106,7 @@ test("origin, method, type, invalid json, large input, idempotency and short cha
     [http(valid(),{rawPath:"/private/admin"}),404],
     [http(valid(),{headers:{origin,"content-type":"text/plain","idempotency-key":key}}),415],
     [http(valid(),{body:"{"}),400],
-    [http(valid(),{body:"x".repeat(20000)}),413],
+    [http(valid(),{body:"x".repeat(INTAKE_LIMITS.maxBodyBytes+1)}),413],
     [http(valid(),{headers:{origin,"content-type":"application/json","idempotency-key":"bad"}}),400],
     [http(valid({challengeToken:"bad"}),{body:JSON.stringify({...valid(),challengeToken:"short"})}),403]
   ];

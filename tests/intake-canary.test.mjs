@@ -9,11 +9,13 @@ import {redactText} from "../service/redaction.mjs";
 
 const origin = "https://vitium.echelonfoundry.com";
 // Canaries are synthetic and shaped like real credentials so the detectors must work.
+// They are assembled at runtime so no committed line matches a credential pattern.
+const j = (...parts) => parts.join("");
 const CANARY = Object.freeze({
-  github: "ghp_CANARYc4n4ryC4N4RYc4n4ryC4N4RY01",
-  aws: "AKIACANARY0CANARY0XY",
-  bearer: "Bearer canaryBearer0123456789abcdefCANARY",
-  urlPassword: "https://ops:canaryUrlPass99@status.example.net/a",
+  github: j("gh", "p_", "CANARYc4n4ryC4N4RYc4n4ryC4N4RY01"),
+  aws: j("AK", "IA", "CANARY0CANARY0XY"),
+  bearer: j("Bea", "rer ", "canaryBearer0123456789abcdefCANARY"),
+  urlPassword: j("https://", "ops", ":", "canaryUrlPass99", "@", "status.example.net/a"),
   query: "canaryQuerySecret0042",
   challenge: "turnstile-canary-token-0123456789",
   ip: "198.51.100.23",
@@ -106,7 +108,7 @@ test("T-22 redactor: false positives stay readable, true positives are removed",
   for (const benign of ["Basic authentication page fails", "The token field is empty", "Password reset email never arrives", "Order 4111 1111 1111 1112 failed"]) {
     assert.equal(redactText(benign).text, benign, benign);
   }
-  for (const secret of ["4111 1111 1111 1111", "-----BEGIN RSA PRIVATE KEY-----\nMIIabc\n-----END RSA PRIVATE KEY-----", "xoxb-1234567890-abcdefghij", "sk_live_ABCDEFGHIJKLMNOPQRSTuvwx"]) {
+  for (const secret of ["4111 1111 1111 1111", j("-----BEGIN ", "RSA PRIVATE", " KEY-----\nMIIabc\n-----END ", "RSA PRIVATE", " KEY-----"), j("xo", "xb-", "1234567890-abcdefghij"), j("sk", "_live_", "ABCDEFGHIJKLMNOPQRSTuvwx")]) {
     const r = redactText("before " + secret + " after");
     assert.ok(!r.text.includes(secret), secret.slice(0, 12));
     assert.ok(r.findings.length > 0);

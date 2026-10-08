@@ -42,9 +42,9 @@ Test IDs: `T-xx` = `tests/intake-core.test.mjs` / `intake-canary.test.mjs` / `in
 | # | STRIDE | Threat | Mitigation | Tests |
 |---|---|---|---|---|
 | S1 | Spoofing | Bot submits without solving a challenge | Turnstile siteverify, hostname + action bound, checked **before** any write | T-01, T-31, legacy "challenge failure blocks storage" |
-| S2 | Spoofing | Replay of a previously valid Turnstile token | Provider single-use (`timeout-or-duplicate`); verify-before-persist means replay cannot write | T-02 (single-use provider model), T-31 |
+| S2 | Spoofing | Replay of a previously valid Turnstile token | Provider single-use (`timeout-or-duplicate`); verify-before-persist means a replayed token cannot write under a new key. A known key with the identical canonical body gets its original receipt without a challenge (VF-010), and that path never writes | T-02, R-01..R-03, I-05, I-09, T-31 |
 | S3 | Spoofing | Cross-origin browser page submits | Exact-match Origin, no CORS grant on denial, `AllowCredentials: false` | T-10, Y-04 |
-| T1 | Tampering | Same idempotency key, different body, overwrites or merges | `attribute_not_exists(pk)` conditional put; payload hash compare -> 409 | T-04, T-30, I-02, legacy conflict test |
+| T1 | Tampering | Same idempotency key, different body, overwrites or merges | `attribute_not_exists(pk)` conditional put; NFC canonical payload hash compared on both lookup and conditional-failure paths -> 409 | T-04, T-30, R-02, R-04, I-02, I-09, legacy conflict test |
 | T2 | Tampering | Concurrent duplicate deliveries create several records | Conditional put; replay returns the original receipt | T-13, **I-01 (50-way, emulator)**, I-03 |
 | T3 | Tampering | Operator transitions race or are illegal | Revision + state conditional `UpdateItem`; `triage.mjs` legal graph | I-11, I-12, T-34 |
 | T4 | Tampering | Control characters/bidi spoof operator display or terminal | C0 (domain) + C1/bidi (intake) refused; CLI prints through JSON.stringify | D-04, T-12 |
@@ -57,7 +57,7 @@ Test IDs: `T-xx` = `tests/intake-core.test.mjs` / `intake-canary.test.mjs` / `in
 | I6 | Info disclosure | Compromised intake Lambda reads all stored reports | IAM: no Query/Scan; GetItem limited by `dynamodb:Attributes` to receipt attributes; no index access | Y-03, I-07 (adapter projects only those), T-35. **IAM conditions not verified against real IAM** (R-01) |
 | I7 | Info disclosure | URL query, fragment or userinfo carries secrets | Domain strips userinfo/query/fragment; redactor screens path and text URLs | legacy pageUrl test, T-20 |
 | D1 | DoS | Oversized/nested bodies consume CPU before rejection | Byte cap before base64 decode and JSON.parse | T-09 |
-| D2 | DoS | Flooding exhausts capacity or cost; unbounded storage | Global stage throttle 2 rps/burst 4; reserved concurrency 4; 16 KiB cap; challenge per write | Y-04, Y-06; **no per-IP limit** (R-03) |
+| D2 | DoS | Flooding exhausts capacity or cost; unbounded storage | Global stage throttle 2 rps/burst 4; reserved concurrency 4 (parameter); 24 KiB cap; challenge per write | Y-04, Y-06; **no per-IP limit** (R-03) |
 | D3 | DoS | Challenge provider or storage outage | Typed 503 `temporary`, `retryable: true`; no receipt | T-05, T-06, I-04, I-06 |
 | D4 | DoS | Throttled storage | `ThrottlingException` -> 429 `throttled` | I-06, T-30 |
 | E1 | Elevation | Public API exposes operator operations | Only POST /api/v1/reports; everything else 404; no admin route | T-07, Y-04, legacy route test |
