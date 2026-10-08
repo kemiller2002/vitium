@@ -86,9 +86,24 @@ module Wire =
 
             decodeEvidence item
             |> Result.map (fun evidence ->
+                // Field values: legacy events carry them at the top level, v1.2 events under
+                // `fields` (which wins). Only string values are read.
+                let strings (o: JsonElement) =
+                    if o.ValueKind = JsonValueKind.Object then
+                        o.EnumerateObject()
+                        |> Seq.filter (fun p -> p.Value.ValueKind = JsonValueKind.String)
+                        |> Seq.map (fun p -> p.Name, p.Value.GetString())
+                        |> List.ofSeq
+                    else
+                        []
+
+                let nested = JsonRead.tryProp "fields" item |> Option.map strings |> Option.defaultValue []
+
                 Event.Recorded
                     { Sequence = sequence
                       To = optString "to" item
+                      Type = optString "type" item
+                      Fields = Map.ofList (strings item @ nested)
                       Evidence = evidence
                       Json = item.GetRawText() })
 

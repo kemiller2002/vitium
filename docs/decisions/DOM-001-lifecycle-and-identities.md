@@ -141,6 +141,92 @@ formally specifying guards and special dispositions, and separating fix facts.
     `classification` on every command. It is applied only where the table declares it,
     which matches the baseline semantics. The strict API still refuses undeclared fields.
 
+### Round 2: bidirectional verification cycle (2026-10-08, still proposed; table 1.2.0)
+
+Sources: `docs/requirements/VITIUM-BUILD-SYSTEM-REPORTING.md` ("Bidirectional defect
+state and verification cycle"), VIT-LCY-010/011 and VIT-VER-009 (P0), groundwork for
+LCY-012/013 and VER-010/011, VIT-AC-033/034/036, and mission section 7. Kevin's
+`tests/triage.test.mjs` and `tests/state-contract.test.mjs` are user-authored authority;
+they pass unedited.
+
+18. **Verification attempts are table data.** An edge may carry `attempt`:
+    - `submission` (`in-progress → awaiting-verification`): requires `attemptId`,
+      `candidateRevision` and `verification-request` evidence. Optional fields are `author`
+      and `workItemId`.
+    - `result` (`awaiting-verification → in-progress` with outcome `failed`, or `→ resolved`
+      with outcome `passed`): requires `verification-run` evidence and the verifier or
+      administrator role. It must name the **latest** submission's `attemptId` and
+      `candidateRevision` (`attempt_mismatch`, with the message "…submitted candidate").
+      A stated `verificationOutcome` must match the target (`outcome_mismatch`, "…outcome…").
+      The outcome is recorded on the event.
+    - `rework` (new edge `reopened → in-progress`): requires `attemptId` and `workItemId`
+      ("new work attempt").
+
+    An `attemptId` can be submitted only once per defect (`duplicate_attempt`). A record
+    with no submission in its history has nothing to match, so the attempt fields are
+    optional for it. This covers records that entered awaiting-verification before table
+    1.2 and migrated records. Every passing, failing and inconclusive event stays in the
+    append-only history with its attempt, candidate, verifier and evidence. A regression
+    never rewrites earlier passing evidence.
+19. **`verificationOutcome` ∈ {passed, failed, inconclusive}. Inconclusive is an event,
+    not a self-loop** (VER-010). `recordInconclusive` appends a `type: "verification"`
+    event against the latest submission. The defect stays `awaiting-verification`, and
+    another run of the same attempt is still possible. Inconclusive never counts as a
+    failure. It cannot resolve, cannot fail and cannot reopen: `inconclusive` on any
+    result edge is refused as `outcome_mismatch`. I chose an event over a self-loop
+    because a self-loop would make "awaiting-verification → awaiting-verification" a legal
+    transition. That would let every UI and API treat it as a state change and would
+    weaken the exhaustive edge matrix.
+20. **Bounded agent repair** (VER-011, mission section 7). `agentRepairBudget(table,
+    history, maxFailedAttempts)` is a pure function. It counts `failed` results since the
+    last `reopened` transition or `escalation` event (the "open cycle").
+    `maxFailedAttempts` is an explicit parameter. Its default is read from
+    `policy.maxAutonomousFailedAttempts`, which is **3, `provisional: true`**. That value is
+    a reversible engineering placeholder, not a decided limit; the owner decision is
+    pending (VIT-OQ-012 / VER-011). Once the budget is reached, a submission by an actor
+    with provenance `agent` is refused with `escalation_required`. Humans are not bound by
+    it. `recordEscalation` may be called only by `authenticated-human` provenance in
+    triager or administrator role. It appends an `escalation` event, which opens a new
+    budget. The table loader refuses a budget that is not marked provisional.
+21. **Independent verification** (VER-006, VIT-AC-036). A submission records `author`.
+    The strict API defaults it to the submitting actor. A `passed` result recorded by
+    that same actor is refused with `independence_required`
+    (`policy.independentVerification`: required, appliesTo `[passed]`, provisional).
+    **Change forced by Kevin's tests:** the legacy call shape never names an author, and
+    Kevin's tests submit and verify as the same `operator-1`. The legacy adapter therefore
+    records `author` only when the caller supplies it. For legacy callers, independence
+    is enforced through the verifier role, as before. The strict API applies the full
+    rule. To get author-level independence, the operator CLI should pass `author` (or move
+    to the strict shape); this is a handoff.
+22. **"Reopen and resume" composite** (LCY-011). `reopenAndResume(table, record, reopen,
+    resume)` evaluates `→ reopened` and then `→ in-progress | reproducing` through every
+    guard and returns both events, or neither (all-or-nothing). The reopened state is
+    never skipped. On failure, `detail.step = "resume"` names the step that refused.
+23. **Changes forced by Kevin's tests, each reconciled with typed evidence:**
+    - `in-progress → awaiting-verification` now requires the attempt, the candidate
+      revision and a verification request. A legacy `evidenceId` maps to
+      `verification-request`.
+    - `awaiting-verification → in-progress` is now verifier/administrator only and needs
+      failure evidence. Triager was allowed before; this is stricter and consistent with
+      VIT-LCY-010. A legacy `evidenceId` maps to `verification-run`.
+    - `→ reopened` messages now mention "recurrence evidence". The legacy `evidenceId`
+      maps to `new-occurrence` (the first kind the table lists). `affectedRelease` is
+      recorded but **optional**, because Kevin's reopen test with only `evidenceId` +
+      `affectedRelease` passes either way, and the adversarial reopen test (which sends no
+      release) must still pass. Making it mandatory is left to Ordo/owner review.
+    - Legacy events keep their field values at the top level as well (`attemptId`,
+      `candidateRevision`, `verificationOutcome`, `affectedRelease`, `workItemId`,
+      `evidenceId`), as Kevin's assertions on `history[n].field` require. Strict events
+      keep them under `fields`. History readers accept both shapes (`verificationCycle`,
+      F# `Event.field`).
+    - `schemas/defect.schema.json` state enum is now exactly the table's defect states.
+      A duplicated `reopened` from the merge was removed (state-contract test).
+24. **VF-011.** The service also bounds the **stored** page URL. After sanitising
+    (percent-encoding), the URL must still be ≤ 2000 characters, in JS and F#. JSON Schema
+    cannot express "length after encoding", so this is the one documented schema/runtime
+    gap. `report-cases.v1.json` records it on its case (`schemaExpect`, `schemaGap`), and
+    `tests/domain-report-contract.test.mjs` fails if any undocumented gap appears.
+
 ## Alternatives considered
 
 - **Keep the graph in code (status quo).** Rejected: JS, F# and any UI would drift

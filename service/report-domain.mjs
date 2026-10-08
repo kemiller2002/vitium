@@ -127,6 +127,10 @@ export function normalizeReport(raw) {
     if (!["http:", "https:"].includes(url.protocol)) refuse("Page URL must be HTTP or HTTPS.");
     // Deliberately remove credentials, query and fragments from user-supplied URLs.
     pageUrl = url.origin + url.pathname;
+    // VF-011: the 2000 limit also applies to what is STORED. Sanitising percent-encodes
+    // non-ASCII and some ASCII characters, so a 1010-code-point input can become 5960
+    // characters; measure again after sanitising (the sanitised form is ASCII).
+    if (pageUrl.length > 2000) refuse("page URL is too long after removing the query and fragment and encoding special characters.");
   }
   return Object.freeze({schemaVersion:"1.0",product,impact,title,actual,expected,steps,pageUrl});
 }

@@ -92,7 +92,7 @@ let defect state = { record Machine.Defect state with Identity = Some(RecordIden
 
 /// A prior history consistent with a revision (VF-016): one recorded event per revision.
 let past n =
-    List.init n (fun i -> Event.Recorded { Sequence = i + 1; To = None; Evidence = []; Json = "{}" })
+    List.init n (fun i -> Event.Recorded { Sequence = i + 1; To = None; Type = None; Fields = Map.empty; Evidence = []; Json = "{}" })
 
 let at' revision (r: LifecycleRecord) = { r with Revision = revision; History = past revision }
 
@@ -149,6 +149,54 @@ let guardCloseNeedsEvidence (t: Table) =
     let r = Lifecycle.transition t triager { command "closed" with ExpectedRevision = 1 } (defect "resolved" |> at' 1)
     equal "resolved -> closed without evidence" "missing_evidence" (codeOf r)
 
+// ---- verification cycle (round 2) ----------------------------------------------------
+
+let agentActor = { Id = ActorId.create "agent-repair-1" |> unwrap; Provenance = Provenance.Agent; Role = "triager" }
+let humanVerifier = { Id = ActorId.create "verifier-2" |> unwrap; Provenance = Provenance.AuthenticatedHuman; Role = "verifier" }
+
+let submitCmd attempt rev =
+    { command "awaiting-verification" with
+        Fields = Map.ofList [ "attemptId", attempt; "candidateRevision", rev ]
+        Evidence = [ evidence "verification-request" ("req-" + attempt) ] }
+
+let resultCmd target attempt rev outcome =
+    { command target with
+        Fields = Map.ofList [ "attemptId", attempt; "candidateRevision", rev; "verificationOutcome", outcome ]
+        Evidence = [ evidence "verification-run" ("run-" + attempt) ] }
+
+let step (who: Actor) (cmd: TransitionCommand) (r: LifecycleRecord) =
+    Lifecycle.transition table who { cmd with ExpectedRevision = r.Revision } r
+
+let guardResultMatchesAttempt (t: Table) =
+    let r0 = defect "in-progress"
+    let r1, _ = Lifecycle.transition t agentActor (submitCmd "fix-1" "sha-1") r0 |> okValue "submit"
+    let r = Lifecycle.transition t humanVerifier { resultCmd "resolved" "fix-0" "sha-1" "passed" with ExpectedRevision = 1 } r1
+    equal "old attempt refused" "attempt_mismatch" (codeOf r)
+
+let guardOutcomeMatchesTarget (t: Table) =
+    let r1, _ = Lifecycle.transition t agentActor (submitCmd "fix-1" "sha-1") (defect "in-progress") |> okValue "submit"
+    let r = Lifecycle.transition t humanVerifier { resultCmd "resolved" "fix-1" "sha-1" "failed" with ExpectedRevision = 1 } r1
+    equal "failed outcome cannot resolve" "outcome_mismatch" (codeOf r)
+
+let guardIndependence (t: Table) =
+    // The same person submits (as administrator) and then tries to pass the attempt.
+    let r1, _ = Lifecycle.transition t { humanVerifier with Role = "administrator" } (submitCmd "fix-1" "sha-1") (defect "in-progress") |> okValue "submit"
+    let r = Lifecycle.transition t humanVerifier { resultCmd "resolved" "fix-1" "sha-1" "passed" with ExpectedRevision = 1 } r1
+    equal "author cannot pass own attempt" "independence_required" (codeOf r)
+
+let guardBudget (t: Table) =
+    let mutable r = defect "in-progress"
+    for n in 1 .. t.Policy.MaxAutonomousFailedAttempts do
+        let a, rv = "a-" + string n, "s-" + string n
+        r <- Lifecycle.transition t agentActor { submitCmd a rv with ExpectedRevision = r.Revision } r |> okValue "submit" |> fst
+        r <- Lifecycle.transition t humanVerifier { resultCmd "in-progress" a rv "failed" with ExpectedRevision = r.Revision } r |> okValue "fail" |> fst
+    let refused = Lifecycle.transition t agentActor { submitCmd "a-next" "s-next" with ExpectedRevision = r.Revision } r
+    equal "agent past budget" "escalation_required" (codeOf refused)
+
+let guardReopenEvidence (t: Table) =
+    let r = Lifecycle.transition t triager { command "reopened" with ExpectedRevision = 1; Fields = Map [ "affectedRelease", "v2" ] } (defect "resolved" |> at' 1)
+    equal "reopen without recurrence evidence" "missing_evidence" (codeOf r)
+
 let mutants: (string * (Table -> unit) * (Nodes.JsonNode -> unit)) list =
     [ "resolve role guard",
       guardResolveNeedsVerifier,
@@ -168,6 +216,21 @@ let mutants: (string * (Table -> unit) * (Nodes.JsonNode -> unit)) list =
       "resolved -> closed evidence guard (VF-015)",
       guardCloseNeedsEvidence,
       (fun root -> set (transitionNode root "defect" "resolved" "closed") "evidenceAnyOf" (strings []))
+      "result must name the submitted attempt (attempt match)",
+      guardResultMatchesAttempt,
+      (fun root -> (transitionNode root "defect" "awaiting-verification" "resolved").AsObject().Remove("attempt") |> ignore)
+      "outcome must match target (outcome match)",
+      guardOutcomeMatchesTarget,
+      (fun root -> (transitionNode root "defect" "awaiting-verification" "resolved").AsObject().Remove("attempt") |> ignore)
+      "independent verification policy",
+      guardIndependence,
+      (fun root -> set (node root [ "policy"; "independentVerification" ]) "required" (Nodes.JsonValue.Create(false)))
+      "agent repair budget",
+      guardBudget,
+      (fun root -> (transitionNode root "defect" "in-progress" "awaiting-verification").AsObject().Remove("attempt") |> ignore)
+      "reopen recurrence evidence",
+      guardReopenEvidence,
+      (fun root -> set (transitionNode root "defect" "resolved" "reopened") "evidenceAnyOf" (strings []))
       "forbidden edge (fail closed)",
       guardForbiddenEdge,
       (fun root ->
@@ -217,7 +280,7 @@ let tests: (string * (unit -> unit)) list =
               (table.Definition Machine.Observation).States @ (table.Definition Machine.Defect).States @ [ "unknown" ]
 
           let fieldValue =
-              Map.ofList [ "classification", "suspected defect"; "duplicateOf", "DEF-0001"; "supersededBy", "DEF-0003"; "workItemRef", "w-1" ]
+              Map.ofList [ "classification", "suspected defect"; "duplicateOf", "DEF-0001"; "supersededBy", "DEF-0003"; "workItemRef", "w-1"; "attemptId", "attempt-1"; "candidateRevision", "rev-1"; "workItemId", "WI-1"; "affectedRelease", "v1" ]
 
           let allEvidence =
               table.EvidenceKinds |> Map.toList |> List.map fst |> List.filter ((<>) "unspecified") |> List.map (fun k -> evidence k ("ev-" + k))
@@ -247,7 +310,7 @@ let tests: (string * (unit -> unit)) list =
                       else
                           equal (sprintf "%A %s->%s" machine from target) "forbidden_transition" (codeOf r)
 
-          equal "legal pair count" 40 legal
+          equal "legal pair count" 41 legal
 
       "illegal transitions are refused",
       fun () ->
@@ -516,6 +579,85 @@ let tests: (string * (unit -> unit)) list =
           equal "bare close" "missing_evidence" (codeOf (Lifecycle.transition table triager { command "closed" with ExpectedRevision = 1 } resolved))
           let ok, _ = Lifecycle.transition table triager { command "closed" with ExpectedRevision = 1; Evidence = [ evidence "decision-record" "policy-1" ] } resolved |> okValue "close"
           equal "closed" "closed" ok.State
+
+      "shared cycles (transition-cases.v1.json `cycles`): F# agrees with JS on every step",
+      fun () ->
+          use doc = JsonDocument.Parse(readText "schemas/lifecycle/transition-cases.v1.json")
+          let cycles = doc.RootElement.GetProperty("cycles").EnumerateArray() |> List.ofSeq
+          isTrue "at least 8 shared cycles" (cycles.Length >= 8)
+
+          for c in cycles do
+              let name = c.GetProperty("name").GetString()
+              let initial = Wire.decodeRecord (c.GetProperty "record") |> okValue (name + " record")
+              let mutable current = initial
+
+              c.GetProperty("steps").EnumerateArray()
+              |> Seq.iteri (fun i s ->
+                  let label = sprintf "%s step %d" name (i + 1)
+                  let fromInitial = match s.TryGetProperty "from" with | true, v -> v.GetString() = "initial" | _ -> false
+                  let record = if fromInitial then initial else current
+                  let expected = match s.TryGetProperty "expectedRevision" with | true, v -> v.GetInt32() | _ -> record.Revision
+                  let decode (e: JsonElement) =
+                      // Wire commands carry no expectedRevision in cycles: inject it.
+                      let o = Nodes.JsonNode.Parse(e.GetRawText()).AsObject()
+                      o["expectedRevision"] <- Nodes.JsonValue.Create(expected)
+                      use d = JsonDocument.Parse(o.ToJsonString())
+                      Wire.decodeTransition (d.RootElement.Clone())
+
+                  let outcome =
+                      match s.GetProperty("op").GetString() with
+                      | "transition" ->
+                          decode (s.GetProperty "command") |> Result.bind (fun (a, cmd) -> Lifecycle.transition table a cmd record) |> Result.map fst
+                      | "inconclusive" ->
+                          decode (s.GetProperty "command") |> Result.bind (fun (a, cmd) -> Lifecycle.recordInconclusive table a cmd record) |> Result.map fst
+                      | "escalate" ->
+                          decode (s.GetProperty "command")
+                          |> Result.bind (fun (a, cmd) -> Lifecycle.recordEscalation table a cmd.ExpectedRevision cmd.Reason cmd.OccurredAt record)
+                          |> Result.map fst
+                      | "reopenAndResume" ->
+                          decode (s.GetProperty "reopen")
+                          |> Result.bind (fun (a, reopen) ->
+                              decode (s.GetProperty "resume")
+                              |> Result.bind (fun (b, resume) -> Lifecycle.reopenAndResume table a reopen b resume record))
+                          |> Result.map fst
+                      | other -> fail ("unknown op " + other)
+
+                  let expect = s.GetProperty "expect"
+
+                  match expect.GetProperty("ok").GetBoolean(), outcome with
+                  | true, Ok next ->
+                      equal (label + " state") (expect.GetProperty("state").GetString()) next.State
+                      if not fromInitial then current <- next
+                  | false, Error e -> equal label (expect.GetProperty("code").GetString()) (TransitionError.code e)
+                  | e, r -> fail (sprintf "%s: expected ok=%b, got %A" label e r))
+
+              let final = c.GetProperty "final"
+              equal (name + " final revision") (final.GetProperty("revision").GetInt32()) current.Revision
+              equal (name + " one event per revision") (initial.History.Length + current.Revision - initial.Revision) current.History.Length
+              equal (name + " prior history kept") initial.History (List.truncate initial.History.Length current.History)
+              let submissions = current.History |> List.skip initial.History.Length |> List.filter (fun e -> Event.target e = Some "awaiting-verification")
+              let added = current.History |> List.skip initial.History.Length
+              let results = added |> List.filter (fun e -> Event.kind e = "transition" && (Event.target e = Some "resolved" || Event.target e = Some "in-progress") && Event.field "verificationOutcome" e |> Option.isSome)
+              let listOf (k: string) = match final.TryGetProperty k with | true, v -> Some(v.EnumerateArray() |> Seq.map (fun x -> x.GetString()) |> List.ofSeq) | _ -> None
+              listOf "attempts" |> Option.iter (fun xs -> equal (name + " attempts") xs (submissions |> List.choose (Event.field "attemptId")))
+              listOf "candidates" |> Option.iter (fun xs -> equal (name + " candidates") xs (submissions |> List.choose (Event.field "candidateRevision")))
+              listOf "outcomes" |> Option.iter (fun xs -> equal (name + " outcomes") xs (results |> List.choose (Event.field "verificationOutcome")))
+
+      "verification cycle guards (attempt, outcome, independence, budget, reopen evidence)",
+      fun () ->
+          guardResultMatchesAttempt table
+          guardOutcomeMatchesTarget table
+          guardIndependence table
+          guardBudget table
+          guardReopenEvidence table
+          isTrue "budget default is provisional table value 3" (table.Policy.MaxAutonomousFailedAttempts = 3)
+          let history = [ for n in 1 .. 2 do
+                            yield Event.Recorded { Sequence = 2 * n - 1; To = Some "awaiting-verification"; Type = None; Fields = Map [ "attemptId", "a" + string n ]; Evidence = []; Json = "{}" }
+                            yield Event.Recorded { Sequence = 2 * n; To = Some "in-progress"; Type = None; Fields = Map [ "verificationOutcome", "failed" ]; Evidence = []; Json = "{}" } ]
+          isTrue "explicit budget parameter" (Lifecycle.repairBudgetExhausted history 2)
+          isTrue "default not yet exhausted" (not (Lifecycle.repairBudgetExhausted history 3))
+          let escalated = history @ [ Event.Recorded { Sequence = 5; To = None; Type = Some "escalation"; Fields = Map.empty; Evidence = []; Json = "{}" } ]
+          isTrue "escalation resets budget" (not (Lifecycle.repairBudgetExhausted escalated 2))
 
       "mutation sensitivity: each guard test FAILS against its weakened table",
       fun () ->

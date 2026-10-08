@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0",
   "table": "schemas/lifecycle/transitions.v1.json",
-  "description": "Shared transition cases. Consumed by tests/domain-lifecycle-contract.test.mjs (service/lifecycle.mjs) and domain/Vitium.Domain.Tests (F#). Both implementations must return the same ok/state/revision or the same error code. Commands use the strict (non-legacy) shape; provenance is required.",
+  "description": "Shared transition cases. Consumed by tests/domain-lifecycle-contract.test.mjs (service/lifecycle.mjs) and domain/Vitium.Domain.Tests (F#). Both implementations must return the same ok/state/revision or the same error code. Commands use the strict (non-legacy) shape; provenance is required. `cycles` are multi-step sequences: each step's expectedRevision is the current record's revision unless the step sets `expectedRevision`; a step with from:\"initial\" applies to the cycle's starting record (atomicity checks). `final` lists the submitted attemptIds, candidate revisions and verification outcomes the final history must still contain, in order.",
   "cases": [
     {
       "name": "observation accepted for triage",
@@ -1363,12 +1363,2088 @@
         "role": "verifier",
         "reason": "Independent investigation",
         "occurredAt": "2026-10-08T12:00:00.000Z",
-        "to": "in-progress"
+        "to": "in-progress",
+        "evidence": [
+          {
+            "kind": "verification-run",
+            "ref": "run-f"
+          }
+        ]
       },
       "expect": {
         "ok": true,
         "state": "in-progress",
         "revision": 1
+      }
+    },
+    {
+      "name": "failed result needs failure evidence",
+      "record": {
+        "kind": "defect",
+        "state": "awaiting-verification",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "verifier",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "in-progress"
+      },
+      "expect": {
+        "ok": false,
+        "code": "missing_evidence"
+      }
+    },
+    {
+      "name": "triager cannot record a verification failure",
+      "record": {
+        "kind": "defect",
+        "state": "awaiting-verification",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "in-progress",
+        "evidence": [
+          {
+            "kind": "verification-run",
+            "ref": "evidence-1"
+          }
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "code": "unauthorized_role"
+      }
+    },
+    {
+      "name": "submission needs attempt and candidate",
+      "record": {
+        "kind": "defect",
+        "state": "in-progress",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "awaiting-verification",
+        "evidence": [
+          {
+            "kind": "verification-request",
+            "ref": "evidence-1"
+          }
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "code": "missing_field"
+      }
+    },
+    {
+      "name": "submission needs a verification request",
+      "record": {
+        "kind": "defect",
+        "state": "in-progress",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "awaiting-verification",
+        "fields": {
+          "attemptId": "a-1",
+          "candidateRevision": "sha-1"
+        }
+      },
+      "expect": {
+        "ok": false,
+        "code": "missing_evidence"
+      }
+    },
+    {
+      "name": "resolved cannot jump back to in-progress",
+      "record": {
+        "kind": "defect",
+        "state": "resolved",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "in-progress",
+        "fields": {
+          "attemptId": "a-9",
+          "workItemId": "WI-9"
+        }
+      },
+      "expect": {
+        "ok": false,
+        "code": "forbidden_transition"
+      }
+    },
+    {
+      "name": "reopened resumes only with a new work attempt",
+      "record": {
+        "kind": "defect",
+        "state": "reopened",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "in-progress"
+      },
+      "expect": {
+        "ok": false,
+        "code": "missing_field"
+      }
+    }
+  ],
+  "cycles": [
+    {
+      "name": "two failed iterations before an independent pass (mission gate)",
+      "record": {
+        "kind": "defect",
+        "id": "DEF-0100",
+        "state": "in-progress",
+        "revision": 0,
+        "history": []
+      },
+      "steps": [
+        {
+          "op": "transition",
+          "command": {
+            "to": "awaiting-verification",
+            "actor": "agent-repair-1",
+            "provenance": "agent",
+            "role": "triager",
+            "reason": "Submit fix-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "fix-1",
+              "candidateRevision": "sha-1",
+              "workItemId": "WI-1"
+            },
+            "evidence": [
+              {
+                "kind": "verification-request",
+                "ref": "req-fix-1"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "awaiting-verification"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "in-progress",
+            "actor": "verifier-2",
+            "provenance": "authenticated-human",
+            "role": "verifier",
+            "reason": "failed for fix-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "fix-1",
+              "candidateRevision": "sha-1",
+              "verificationOutcome": "failed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-fix-1-failed"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "in-progress"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "awaiting-verification",
+            "actor": "agent-repair-1",
+            "provenance": "agent",
+            "role": "triager",
+            "reason": "Submit fix-2",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "fix-2",
+              "candidateRevision": "sha-2",
+              "workItemId": "WI-1"
+            },
+            "evidence": [
+              {
+                "kind": "verification-request",
+                "ref": "req-fix-2"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "awaiting-verification"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "in-progress",
+            "actor": "verifier-2",
+            "provenance": "authenticated-human",
+            "role": "verifier",
+            "reason": "failed for fix-2",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "fix-2",
+              "candidateRevision": "sha-2",
+              "verificationOutcome": "failed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-fix-2-failed"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "in-progress"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "awaiting-verification",
+            "actor": "agent-repair-1",
+            "provenance": "agent",
+            "role": "triager",
+            "reason": "Submit fix-3",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "fix-3",
+              "candidateRevision": "sha-3",
+              "workItemId": "WI-1"
+            },
+            "evidence": [
+              {
+                "kind": "verification-request",
+                "ref": "req-fix-3"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "awaiting-verification"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "resolved",
+            "actor": "verifier-2",
+            "provenance": "authenticated-human",
+            "role": "verifier",
+            "reason": "passed for fix-3",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "fix-3",
+              "candidateRevision": "sha-3",
+              "verificationOutcome": "passed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-fix-3-passed"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "resolved"
+          }
+        }
+      ],
+      "final": {
+        "revision": 6,
+        "attempts": [
+          "fix-1",
+          "fix-2",
+          "fix-3"
+        ],
+        "candidates": [
+          "sha-1",
+          "sha-2",
+          "sha-3"
+        ],
+        "outcomes": [
+          "failed",
+          "failed",
+          "passed"
+        ]
+      }
+    },
+    {
+      "name": "resolved -> reopened -> in-progress -> awaiting -> resolved, prior resolution kept",
+      "record": {
+        "kind": "defect",
+        "id": "DEF-0200",
+        "state": "resolved",
+        "revision": 1,
+        "history": [
+          {
+            "type": "transition",
+            "sequence": 1,
+            "from": "x",
+            "to": "resolved",
+            "fields": {
+              "attemptId": "orig",
+              "candidateRevision": "sha-orig",
+              "verificationOutcome": "passed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-orig"
+              }
+            ]
+          }
+        ]
+      },
+      "steps": [
+        {
+          "op": "transition",
+          "command": {
+            "to": "reopened",
+            "actor": "operator-1",
+            "provenance": "authenticated-human",
+            "role": "triager",
+            "reason": "Regression in v2.1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "affectedRelease": "v2.1"
+            },
+            "evidence": [
+              {
+                "kind": "new-occurrence",
+                "ref": "occ-1"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "reopened"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "in-progress",
+            "actor": "operator-1",
+            "provenance": "authenticated-human",
+            "role": "triager",
+            "reason": "Resume repair",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "rework-1",
+              "workItemId": "WI-2"
+            }
+          },
+          "expect": {
+            "ok": true,
+            "state": "in-progress"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "awaiting-verification",
+            "actor": "agent-repair-1",
+            "provenance": "agent",
+            "role": "triager",
+            "reason": "Submit fix-r1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "fix-r1",
+              "candidateRevision": "sha-r1",
+              "workItemId": "WI-1"
+            },
+            "evidence": [
+              {
+                "kind": "verification-request",
+                "ref": "req-fix-r1"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "awaiting-verification"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "resolved",
+            "actor": "verifier-2",
+            "provenance": "authenticated-human",
+            "role": "verifier",
+            "reason": "passed for fix-r1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "fix-r1",
+              "candidateRevision": "sha-r1",
+              "verificationOutcome": "passed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-fix-r1-passed"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "resolved"
+          }
+        }
+      ],
+      "final": {
+        "revision": 5,
+        "attempts": [
+          "fix-r1"
+        ],
+        "candidates": [
+          "sha-r1"
+        ],
+        "outcomes": [
+          "passed"
+        ]
+      }
+    },
+    {
+      "name": "closed -> reopened -> reproducing",
+      "record": {
+        "kind": "defect",
+        "id": "DEF-0300",
+        "state": "closed",
+        "revision": 2,
+        "history": [
+          {
+            "type": "transition",
+            "sequence": 1,
+            "from": "x",
+            "to": "resolved"
+          },
+          {
+            "type": "transition",
+            "sequence": 2,
+            "from": "resolved",
+            "to": "closed",
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-c"
+              }
+            ]
+          }
+        ]
+      },
+      "steps": [
+        {
+          "op": "transition",
+          "command": {
+            "to": "reopened",
+            "actor": "operator-1",
+            "provenance": "authenticated-human",
+            "role": "triager",
+            "reason": "Regression in v2.1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "affectedRelease": "v2.1"
+            },
+            "evidence": [
+              {
+                "kind": "new-occurrence",
+                "ref": "occ-1"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "reopened"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "reproducing",
+            "actor": "operator-1",
+            "provenance": "authenticated-human",
+            "role": "triager",
+            "reason": "Resume repair",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {}
+          },
+          "expect": {
+            "ok": true,
+            "state": "reproducing"
+          }
+        }
+      ],
+      "final": {
+        "revision": 4
+      }
+    },
+    {
+      "name": "reopen and resume is atomic: both events or neither",
+      "record": {
+        "kind": "defect",
+        "id": "DEF-0200",
+        "state": "resolved",
+        "revision": 1,
+        "history": [
+          {
+            "type": "transition",
+            "sequence": 1,
+            "from": "x",
+            "to": "resolved",
+            "fields": {
+              "attemptId": "orig",
+              "candidateRevision": "sha-orig",
+              "verificationOutcome": "passed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-orig"
+              }
+            ]
+          }
+        ]
+      },
+      "steps": [
+        {
+          "op": "reopenAndResume",
+          "reopen": {
+            "to": "reopened",
+            "actor": "operator-1",
+            "provenance": "authenticated-human",
+            "role": "triager",
+            "reason": "Regression in v2.1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "affectedRelease": "v2.1"
+            },
+            "evidence": [
+              {
+                "kind": "new-occurrence",
+                "ref": "occ-1"
+              }
+            ]
+          },
+          "resume": {
+            "to": "in-progress",
+            "actor": "operator-1",
+            "provenance": "authenticated-human",
+            "role": "triager",
+            "reason": "Resume repair",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "rework-1",
+              "workItemId": "WI-2"
+            }
+          },
+          "expect": {
+            "ok": true,
+            "state": "in-progress"
+          }
+        },
+        {
+          "op": "reopenAndResume",
+          "reopen": {
+            "to": "reopened",
+            "actor": "operator-1",
+            "provenance": "authenticated-human",
+            "role": "triager",
+            "reason": "Regression in v2.1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "affectedRelease": "v2.1"
+            },
+            "evidence": [
+              {
+                "kind": "new-occurrence",
+                "ref": "occ-1"
+              }
+            ]
+          },
+          "resume": {
+            "to": "in-progress",
+            "actor": "operator-1",
+            "provenance": "authenticated-human",
+            "role": "triager",
+            "reason": "Resume repair",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {}
+          },
+          "expectedRevision": 1,
+          "from": "initial",
+          "expect": {
+            "ok": false,
+            "code": "missing_field"
+          }
+        },
+        {
+          "op": "reopenAndResume",
+          "reopen": {
+            "to": "reopened",
+            "actor": "operator-1",
+            "provenance": "authenticated-human",
+            "role": "triager",
+            "reason": "Regression in v2.1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "affectedRelease": "v2.1"
+            },
+            "evidence": []
+          },
+          "resume": {
+            "to": "in-progress",
+            "actor": "operator-1",
+            "provenance": "authenticated-human",
+            "role": "triager",
+            "reason": "Resume repair",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "rework-1",
+              "workItemId": "WI-2"
+            }
+          },
+          "expectedRevision": 1,
+          "from": "initial",
+          "expect": {
+            "ok": false,
+            "code": "missing_evidence"
+          }
+        }
+      ],
+      "final": {
+        "revision": 3
+      }
+    },
+    {
+      "name": "inconclusive run keeps awaiting-verification and is not a failure",
+      "record": {
+        "kind": "defect",
+        "id": "DEF-0100",
+        "state": "in-progress",
+        "revision": 0,
+        "history": []
+      },
+      "steps": [
+        {
+          "op": "transition",
+          "command": {
+            "to": "awaiting-verification",
+            "actor": "agent-repair-1",
+            "provenance": "agent",
+            "role": "triager",
+            "reason": "Submit fix-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "fix-1",
+              "candidateRevision": "sha-1",
+              "workItemId": "WI-1"
+            },
+            "evidence": [
+              {
+                "kind": "verification-request",
+                "ref": "req-fix-1"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "awaiting-verification"
+          }
+        },
+        {
+          "op": "inconclusive",
+          "command": {
+            "actor": "verifier-2",
+            "provenance": "authenticated-human",
+            "role": "verifier",
+            "reason": "inconclusive for fix-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "fix-1",
+              "candidateRevision": "sha-1",
+              "verificationOutcome": "inconclusive"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-fix-1-inconclusive"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "awaiting-verification"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "resolved",
+            "actor": "verifier-2",
+            "provenance": "authenticated-human",
+            "role": "verifier",
+            "reason": "inconclusive for fix-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "fix-1",
+              "candidateRevision": "sha-1",
+              "verificationOutcome": "inconclusive"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-fix-1-inconclusive"
+              }
+            ]
+          },
+          "expect": {
+            "ok": false,
+            "code": "outcome_mismatch"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "in-progress",
+            "actor": "verifier-2",
+            "provenance": "authenticated-human",
+            "role": "verifier",
+            "reason": "inconclusive for fix-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "fix-1",
+              "candidateRevision": "sha-1",
+              "verificationOutcome": "inconclusive"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-fix-1-inconclusive"
+              }
+            ]
+          },
+          "expect": {
+            "ok": false,
+            "code": "outcome_mismatch"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "resolved",
+            "actor": "verifier-2",
+            "provenance": "authenticated-human",
+            "role": "verifier",
+            "reason": "passed for fix-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "fix-1",
+              "candidateRevision": "sha-1",
+              "verificationOutcome": "passed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-fix-1-passed"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "resolved"
+          }
+        }
+      ],
+      "final": {
+        "revision": 3,
+        "outcomes": [
+          "passed"
+        ]
+      }
+    },
+    {
+      "name": "negative: stale result for an older attempt and old test on a new candidate",
+      "record": {
+        "kind": "defect",
+        "id": "DEF-0100",
+        "state": "in-progress",
+        "revision": 0,
+        "history": []
+      },
+      "steps": [
+        {
+          "op": "transition",
+          "command": {
+            "to": "awaiting-verification",
+            "actor": "agent-repair-1",
+            "provenance": "agent",
+            "role": "triager",
+            "reason": "Submit fix-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "fix-1",
+              "candidateRevision": "sha-1",
+              "workItemId": "WI-1"
+            },
+            "evidence": [
+              {
+                "kind": "verification-request",
+                "ref": "req-fix-1"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "awaiting-verification"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "in-progress",
+            "actor": "verifier-2",
+            "provenance": "authenticated-human",
+            "role": "verifier",
+            "reason": "failed for fix-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "fix-1",
+              "candidateRevision": "sha-1",
+              "verificationOutcome": "failed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-fix-1-failed"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "in-progress"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "awaiting-verification",
+            "actor": "agent-repair-1",
+            "provenance": "agent",
+            "role": "triager",
+            "reason": "Submit fix-2",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "fix-2",
+              "candidateRevision": "sha-2",
+              "workItemId": "WI-1"
+            },
+            "evidence": [
+              {
+                "kind": "verification-request",
+                "ref": "req-fix-2"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "awaiting-verification"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "resolved",
+            "actor": "verifier-2",
+            "provenance": "authenticated-human",
+            "role": "verifier",
+            "reason": "passed for fix-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "fix-1",
+              "candidateRevision": "sha-1",
+              "verificationOutcome": "passed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-fix-1-passed"
+              }
+            ]
+          },
+          "expect": {
+            "ok": false,
+            "code": "attempt_mismatch"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "resolved",
+            "actor": "verifier-2",
+            "provenance": "authenticated-human",
+            "role": "verifier",
+            "reason": "passed for fix-2",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "fix-2",
+              "candidateRevision": "sha-1",
+              "verificationOutcome": "passed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-fix-2-passed"
+              }
+            ]
+          },
+          "expect": {
+            "ok": false,
+            "code": "attempt_mismatch"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "resolved",
+            "actor": "verifier-2",
+            "provenance": "authenticated-human",
+            "role": "verifier",
+            "reason": "passed for fix-2",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "fix-2",
+              "candidateRevision": "sha-2",
+              "verificationOutcome": "passed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-fix-2-passed"
+              }
+            ]
+          },
+          "expectedRevision": 2,
+          "expect": {
+            "ok": false,
+            "code": "stale_revision"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "awaiting-verification",
+            "actor": "agent-repair-1",
+            "provenance": "agent",
+            "role": "triager",
+            "reason": "Submit fix-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "fix-1",
+              "candidateRevision": "sha-9",
+              "workItemId": "WI-1"
+            },
+            "evidence": [
+              {
+                "kind": "verification-request",
+                "ref": "req-fix-1"
+              }
+            ]
+          },
+          "expect": {
+            "ok": false,
+            "code": "forbidden_transition"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "in-progress",
+            "actor": "verifier-2",
+            "provenance": "authenticated-human",
+            "role": "verifier",
+            "reason": "failed for fix-2",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "fix-2",
+              "candidateRevision": "sha-2",
+              "verificationOutcome": "failed"
+            },
+            "evidence": []
+          },
+          "expect": {
+            "ok": false,
+            "code": "missing_evidence"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "in-progress",
+            "actor": "verifier-2",
+            "provenance": "authenticated-human",
+            "role": "verifier",
+            "reason": "failed for fix-2",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "fix-2",
+              "candidateRevision": "sha-2",
+              "verificationOutcome": "failed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-fix-2-failed"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "in-progress"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "awaiting-verification",
+            "actor": "agent-repair-1",
+            "provenance": "agent",
+            "role": "triager",
+            "reason": "Submit fix-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "fix-1",
+              "candidateRevision": "sha-9",
+              "workItemId": "WI-1"
+            },
+            "evidence": [
+              {
+                "kind": "verification-request",
+                "ref": "req-fix-1"
+              }
+            ]
+          },
+          "expect": {
+            "ok": false,
+            "code": "duplicate_attempt"
+          }
+        }
+      ],
+      "final": {
+        "revision": 4
+      }
+    },
+    {
+      "name": "negative: the attempt's author cannot record its passing result",
+      "record": {
+        "kind": "defect",
+        "id": "DEF-0100",
+        "state": "in-progress",
+        "revision": 0,
+        "history": []
+      },
+      "steps": [
+        {
+          "op": "transition",
+          "command": {
+            "to": "awaiting-verification",
+            "actor": "verifier-2",
+            "provenance": "authenticated-human",
+            "role": "administrator",
+            "reason": "Submit fix-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "fix-1",
+              "candidateRevision": "sha-1",
+              "workItemId": "WI-1"
+            },
+            "evidence": [
+              {
+                "kind": "verification-request",
+                "ref": "req-fix-1"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "awaiting-verification"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "resolved",
+            "actor": "verifier-2",
+            "provenance": "authenticated-human",
+            "role": "verifier",
+            "reason": "passed for fix-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "fix-1",
+              "candidateRevision": "sha-1",
+              "verificationOutcome": "passed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-fix-1-passed"
+              }
+            ]
+          },
+          "expect": {
+            "ok": false,
+            "code": "independence_required"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "in-progress",
+            "actor": "verifier-2",
+            "provenance": "authenticated-human",
+            "role": "verifier",
+            "reason": "failed for fix-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "fix-1",
+              "candidateRevision": "sha-1",
+              "verificationOutcome": "failed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-fix-1-failed"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "in-progress"
+          }
+        }
+      ],
+      "final": {
+        "revision": 2
+      }
+    },
+    {
+      "name": "negative: agent past the repair budget must escalate (budget 3)",
+      "record": {
+        "kind": "defect",
+        "id": "DEF-0100",
+        "state": "in-progress",
+        "revision": 0,
+        "history": []
+      },
+      "steps": [
+        {
+          "op": "transition",
+          "command": {
+            "to": "awaiting-verification",
+            "actor": "agent-repair-1",
+            "provenance": "agent",
+            "role": "triager",
+            "reason": "Submit a-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "a-1",
+              "candidateRevision": "s-1",
+              "workItemId": "WI-1"
+            },
+            "evidence": [
+              {
+                "kind": "verification-request",
+                "ref": "req-a-1"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "awaiting-verification"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "in-progress",
+            "actor": "verifier-2",
+            "provenance": "authenticated-human",
+            "role": "verifier",
+            "reason": "failed for a-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "a-1",
+              "candidateRevision": "s-1",
+              "verificationOutcome": "failed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-a-1-failed"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "in-progress"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "awaiting-verification",
+            "actor": "agent-repair-1",
+            "provenance": "agent",
+            "role": "triager",
+            "reason": "Submit a-2",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "a-2",
+              "candidateRevision": "s-2",
+              "workItemId": "WI-1"
+            },
+            "evidence": [
+              {
+                "kind": "verification-request",
+                "ref": "req-a-2"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "awaiting-verification"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "in-progress",
+            "actor": "verifier-2",
+            "provenance": "authenticated-human",
+            "role": "verifier",
+            "reason": "failed for a-2",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "a-2",
+              "candidateRevision": "s-2",
+              "verificationOutcome": "failed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-a-2-failed"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "in-progress"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "awaiting-verification",
+            "actor": "agent-repair-1",
+            "provenance": "agent",
+            "role": "triager",
+            "reason": "Submit a-3",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "a-3",
+              "candidateRevision": "s-3",
+              "workItemId": "WI-1"
+            },
+            "evidence": [
+              {
+                "kind": "verification-request",
+                "ref": "req-a-3"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "awaiting-verification"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "in-progress",
+            "actor": "verifier-2",
+            "provenance": "authenticated-human",
+            "role": "verifier",
+            "reason": "failed for a-3",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "a-3",
+              "candidateRevision": "s-3",
+              "verificationOutcome": "failed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-a-3-failed"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "in-progress"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "awaiting-verification",
+            "actor": "agent-repair-1",
+            "provenance": "agent",
+            "role": "triager",
+            "reason": "Submit a-4",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "a-4",
+              "candidateRevision": "s-4",
+              "workItemId": "WI-1"
+            },
+            "evidence": [
+              {
+                "kind": "verification-request",
+                "ref": "req-a-4"
+              }
+            ]
+          },
+          "expect": {
+            "ok": false,
+            "code": "escalation_required"
+          }
+        },
+        {
+          "op": "escalate",
+          "command": {
+            "actor": "operator-1",
+            "provenance": "agent",
+            "role": "triager",
+            "reason": "Agent wants to continue",
+            "occurredAt": "2026-10-08T12:00:00.000Z"
+          },
+          "expect": {
+            "ok": false,
+            "code": "invalid_provenance"
+          }
+        },
+        {
+          "op": "escalate",
+          "command": {
+            "actor": "operator-1",
+            "provenance": "authenticated-human",
+            "role": "triager",
+            "reason": "Owner approved three more attempts",
+            "occurredAt": "2026-10-08T12:00:00.000Z"
+          },
+          "expect": {
+            "ok": true,
+            "state": "in-progress"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "awaiting-verification",
+            "actor": "agent-repair-1",
+            "provenance": "agent",
+            "role": "triager",
+            "reason": "Submit a-4",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "a-4",
+              "candidateRevision": "s-4",
+              "workItemId": "WI-1"
+            },
+            "evidence": [
+              {
+                "kind": "verification-request",
+                "ref": "req-a-4"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "awaiting-verification"
+          }
+        }
+      ],
+      "final": {
+        "revision": 8
+      }
+    },
+    {
+      "name": "inconclusive runs never consume the agent repair budget (VER-010/011)",
+      "record": {
+        "kind": "defect",
+        "id": "DEF-0100",
+        "state": "in-progress",
+        "revision": 0,
+        "history": []
+      },
+      "steps": [
+        {
+          "op": "transition",
+          "command": {
+            "to": "awaiting-verification",
+            "actor": "agent-repair-1",
+            "provenance": "agent",
+            "role": "triager",
+            "reason": "Submit a-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "a-1",
+              "candidateRevision": "s-1",
+              "workItemId": "WI-1"
+            },
+            "evidence": [
+              {
+                "kind": "verification-request",
+                "ref": "req-a-1"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "awaiting-verification"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "in-progress",
+            "actor": "verifier-2",
+            "provenance": "authenticated-human",
+            "role": "verifier",
+            "reason": "failed for a-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "a-1",
+              "candidateRevision": "s-1",
+              "verificationOutcome": "failed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-a-1-failed"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "in-progress"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "awaiting-verification",
+            "actor": "agent-repair-1",
+            "provenance": "agent",
+            "role": "triager",
+            "reason": "Submit a-2",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "a-2",
+              "candidateRevision": "s-2",
+              "workItemId": "WI-1"
+            },
+            "evidence": [
+              {
+                "kind": "verification-request",
+                "ref": "req-a-2"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "awaiting-verification"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "in-progress",
+            "actor": "verifier-2",
+            "provenance": "authenticated-human",
+            "role": "verifier",
+            "reason": "failed for a-2",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "a-2",
+              "candidateRevision": "s-2",
+              "verificationOutcome": "failed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-a-2-failed"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "in-progress"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "awaiting-verification",
+            "actor": "agent-repair-1",
+            "provenance": "agent",
+            "role": "triager",
+            "reason": "Submit a-3",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "a-3",
+              "candidateRevision": "s-3",
+              "workItemId": "WI-1"
+            },
+            "evidence": [
+              {
+                "kind": "verification-request",
+                "ref": "req-a-3"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "awaiting-verification"
+          }
+        },
+        {
+          "op": "inconclusive",
+          "command": {
+            "actor": "verifier-2",
+            "provenance": "authenticated-human",
+            "role": "verifier",
+            "reason": "inconclusive for a-3",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "a-3",
+              "candidateRevision": "s-3",
+              "verificationOutcome": "inconclusive"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-a-3-inconclusive"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "awaiting-verification"
+          }
+        },
+        {
+          "op": "inconclusive",
+          "command": {
+            "actor": "verifier-2",
+            "provenance": "authenticated-human",
+            "role": "verifier",
+            "reason": "inconclusive for a-3",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "a-3",
+              "candidateRevision": "s-3",
+              "verificationOutcome": "inconclusive"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-a-3-inconclusive"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "awaiting-verification"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "in-progress",
+            "actor": "verifier-2",
+            "provenance": "authenticated-human",
+            "role": "verifier",
+            "reason": "failed for a-3",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "a-3",
+              "candidateRevision": "s-3",
+              "verificationOutcome": "failed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-a-3-failed"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "in-progress"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "awaiting-verification",
+            "actor": "agent-repair-1",
+            "provenance": "agent",
+            "role": "triager",
+            "reason": "Submit a-4",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "a-4",
+              "candidateRevision": "s-4",
+              "workItemId": "WI-1"
+            },
+            "evidence": [
+              {
+                "kind": "verification-request",
+                "ref": "req-a-4"
+              }
+            ]
+          },
+          "expect": {
+            "ok": false,
+            "code": "escalation_required"
+          }
+        }
+      ],
+      "final": {
+        "revision": 8,
+        "outcomes": [
+          "failed",
+          "failed",
+          "failed"
+        ]
+      }
+    },
+    {
+      "name": "inconclusive runs before the budget do not trigger escalation",
+      "record": {
+        "kind": "defect",
+        "id": "DEF-0100",
+        "state": "in-progress",
+        "revision": 0,
+        "history": []
+      },
+      "steps": [
+        {
+          "op": "transition",
+          "command": {
+            "to": "awaiting-verification",
+            "actor": "agent-repair-1",
+            "provenance": "agent",
+            "role": "triager",
+            "reason": "Submit a-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "a-1",
+              "candidateRevision": "s-1",
+              "workItemId": "WI-1"
+            },
+            "evidence": [
+              {
+                "kind": "verification-request",
+                "ref": "req-a-1"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "awaiting-verification"
+          }
+        },
+        {
+          "op": "inconclusive",
+          "command": {
+            "actor": "verifier-2",
+            "provenance": "authenticated-human",
+            "role": "verifier",
+            "reason": "inconclusive for a-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "a-1",
+              "candidateRevision": "s-1",
+              "verificationOutcome": "inconclusive"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-a-1-inconclusive"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "awaiting-verification"
+          }
+        },
+        {
+          "op": "inconclusive",
+          "command": {
+            "actor": "verifier-2",
+            "provenance": "authenticated-human",
+            "role": "verifier",
+            "reason": "inconclusive for a-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "a-1",
+              "candidateRevision": "s-1",
+              "verificationOutcome": "inconclusive"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-a-1-inconclusive"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "awaiting-verification"
+          }
+        },
+        {
+          "op": "inconclusive",
+          "command": {
+            "actor": "verifier-2",
+            "provenance": "authenticated-human",
+            "role": "verifier",
+            "reason": "inconclusive for a-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "a-1",
+              "candidateRevision": "s-1",
+              "verificationOutcome": "inconclusive"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-a-1-inconclusive"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "awaiting-verification"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "in-progress",
+            "actor": "verifier-2",
+            "provenance": "authenticated-human",
+            "role": "verifier",
+            "reason": "failed for a-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "a-1",
+              "candidateRevision": "s-1",
+              "verificationOutcome": "failed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-a-1-failed"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "in-progress"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "awaiting-verification",
+            "actor": "agent-repair-1",
+            "provenance": "agent",
+            "role": "triager",
+            "reason": "Submit a-2",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "a-2",
+              "candidateRevision": "s-2",
+              "workItemId": "WI-1"
+            },
+            "evidence": [
+              {
+                "kind": "verification-request",
+                "ref": "req-a-2"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "awaiting-verification"
+          }
+        }
+      ],
+      "final": {
+        "revision": 6,
+        "outcomes": [
+          "failed"
+        ]
+      }
+    },
+    {
+      "name": "humans are not bound by the agent repair budget",
+      "record": {
+        "kind": "defect",
+        "id": "DEF-0100",
+        "state": "in-progress",
+        "revision": 0,
+        "history": []
+      },
+      "steps": [
+        {
+          "op": "transition",
+          "command": {
+            "to": "awaiting-verification",
+            "actor": "agent-repair-1",
+            "provenance": "agent",
+            "role": "triager",
+            "reason": "Submit a-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "a-1",
+              "candidateRevision": "s-1",
+              "workItemId": "WI-1"
+            },
+            "evidence": [
+              {
+                "kind": "verification-request",
+                "ref": "req-a-1"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "awaiting-verification"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "in-progress",
+            "actor": "verifier-2",
+            "provenance": "authenticated-human",
+            "role": "verifier",
+            "reason": "failed for a-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "a-1",
+              "candidateRevision": "s-1",
+              "verificationOutcome": "failed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-a-1-failed"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "in-progress"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "awaiting-verification",
+            "actor": "agent-repair-1",
+            "provenance": "agent",
+            "role": "triager",
+            "reason": "Submit a-2",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "a-2",
+              "candidateRevision": "s-2",
+              "workItemId": "WI-1"
+            },
+            "evidence": [
+              {
+                "kind": "verification-request",
+                "ref": "req-a-2"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "awaiting-verification"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "in-progress",
+            "actor": "verifier-2",
+            "provenance": "authenticated-human",
+            "role": "verifier",
+            "reason": "failed for a-2",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "a-2",
+              "candidateRevision": "s-2",
+              "verificationOutcome": "failed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-a-2-failed"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "in-progress"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "awaiting-verification",
+            "actor": "agent-repair-1",
+            "provenance": "agent",
+            "role": "triager",
+            "reason": "Submit a-3",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "a-3",
+              "candidateRevision": "s-3",
+              "workItemId": "WI-1"
+            },
+            "evidence": [
+              {
+                "kind": "verification-request",
+                "ref": "req-a-3"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "awaiting-verification"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "in-progress",
+            "actor": "verifier-2",
+            "provenance": "authenticated-human",
+            "role": "verifier",
+            "reason": "failed for a-3",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "a-3",
+              "candidateRevision": "s-3",
+              "verificationOutcome": "failed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-a-3-failed"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "in-progress"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "awaiting-verification",
+            "actor": "operator-1",
+            "provenance": "authenticated-human",
+            "role": "triager",
+            "reason": "Submit h-4",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "h-4",
+              "candidateRevision": "s-4",
+              "workItemId": "WI-1"
+            },
+            "evidence": [
+              {
+                "kind": "verification-request",
+                "ref": "req-h-4"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "awaiting-verification"
+          }
+        }
+      ],
+      "final": {
+        "revision": 7
       }
     }
   ]

@@ -15,7 +15,7 @@ const allStates = [...table.machines.observation.states, ...table.machines.defec
 const strict = (o = {}) => ({ expectedRevision: 0, actor: "operator-1", provenance: "authenticated-human", role: "triager", reason: "Investigated", occurredAt: ts, ...o });
 // A prior history consistent with a revision (VF-016: history length must equal revision).
 const past = n => Array.from({ length: n }, (_, i) => ({ type: "transition", sequence: i + 1 }));
-const fieldValue = { classification: "suspected defect", duplicateOf: "DEF-0001", supersededBy: "DEF-0003", workItemRef: "work-1" };
+const fieldValue = { classification: "suspected defect", duplicateOf: "DEF-0001", supersededBy: "DEF-0003", workItemRef: "work-1", attemptId: "attempt-1", candidateRevision: "rev-1", workItemId: "WI-1", affectedRelease: "v1" };
 
 test("table declares candidate authority and never claims Ordo authorization", () => {
   assert.equal(rawTable.authority, "vitium-domain-candidate");
@@ -74,7 +74,7 @@ test("exhaustive matrix: triage.mjs accepts exactly the legal (from,to) pairs an
     }
   }
   assert.equal(legal, table.machines.observation.transitions.length + table.machines.defect.transitions.length);
-  assert.equal(legal, 40);
+  assert.equal(legal, 41);
   assert.ok(refused > 250, "matrix covered " + refused + " refusals");
 });
 

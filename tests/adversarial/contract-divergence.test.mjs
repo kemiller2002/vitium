@@ -80,7 +80,7 @@ const URL_CORPUS = Object.freeze([
   ["long query stripped", "https://example.com/a?" + "q".repeat(1970)]
 ]);
 
-test("VIT-API-002 / VIT-UX-007: a page URL accepted by the site is accepted by the service", { todo: "finding VF-011" }, () => {
+test("VIT-API-002 / VIT-UX-007: a page URL accepted by the site is accepted by the service", () => {
   const siteNormalize = attempt(site.normalizeReport);
   for (const [name, pageUrl] of URL_CORPUS) {
     const draft = siteNormalize({ ...formInput, pageUrl });

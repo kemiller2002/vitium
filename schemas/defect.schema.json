@@ -86,7 +86,6 @@
         "closed",
         "duplicate",
         "not-reproducible",
-        "reopened",
         "expected-behavior",
         "declined",
         "superseded"
