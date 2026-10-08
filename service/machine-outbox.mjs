@@ -10,8 +10,16 @@ export const defaultOutboxPolicy = Object.freeze({
 const delivered = new Set([200, 201, 202]);
 const retryable = new Set([408, 425, 429, 500, 502, 503, 504]);
 
+const positive = value => Number.isSafeInteger(value) && value > 0;
+function resolveOutboxPolicy(policy) {
+  const merged = { ...defaultOutboxPolicy, ...Object.fromEntries(Object.entries(policy).filter(([, value]) => value !== undefined)) };
+  if (!Object.keys(defaultOutboxPolicy).every(key => positive(merged[key])) || merged.baseDelayMs > merged.maxDelayMs) {
+    throw new TypeError("Outbox policy values must be bounded positive integers.");
+  }
+  return Object.freeze(merged);
+}
 export const createOutbox = (policy = {}) => Object.freeze({
-  policy: Object.freeze({ ...defaultOutboxPolicy, ...policy }),
+  policy: resolveOutboxPolicy(policy),
   pending: Object.freeze([]),
   delivered: Object.freeze([]),
   deadLetters: Object.freeze([]),
@@ -24,6 +32,7 @@ const refuseEntry = (outbox, eventId, reason, at) => withChanges(outbox, { refus
 /** Adds an envelope unless it is a Vitium echo, a duplicate, or the outbox is full (recorded, not hidden). */
 export function enqueue(outbox, envelope, now) {
   const eventId = envelope?.eventId;
+  if (typeof eventId !== "string" || !eventId) return refuseEntry(outbox, null, "missing-event-id", now);
   if (isVitiumEcho(envelope)) return refuseEntry(outbox, eventId, "vitium-echo", now);
   const known = [...outbox.pending, ...outbox.delivered, ...outbox.deadLetters].some(entry => entry.eventId === eventId);
   if (known) return outbox;
@@ -39,8 +48,10 @@ export function enqueue(outbox, envelope, now) {
 
 export const due = (outbox, now) => outbox.pending.filter(entry => Date.parse(entry.nextAttemptAt) <= Date.parse(now));
 
+// A malformed Retry-After from the server never crashes the producer; it falls back to backoff.
+const safeRetryAfter = value => Number.isFinite(value) && value > 0 ? value : 0;
 export const backoffMs = (policy, attempts, retryAfterMs) =>
-  Math.min(policy.maxDelayMs, Math.max(retryAfterMs ?? 0, policy.baseDelayMs * 2 ** Math.max(0, attempts - 1)));
+  Math.min(policy.maxDelayMs, Math.max(safeRetryAfter(retryAfterMs), policy.baseDelayMs * 2 ** Math.max(0, attempts - 1)));
 
 /** Applies one delivery result: {status} from HTTP, or {error} for a transport failure. */
 export function applyDeliveryResult(outbox, eventId, result, now) {
@@ -79,8 +90,9 @@ export async function drain(outbox, send, now) {
  * makes reporting mandatory fails the separate reporting gate, while buildOutcome is preserved.
  */
 export function reportingGate(buildOutcome, outbox, { mandatory = false } = {}) {
-  const undelivered = Object.freeze([...outbox.pending, ...outbox.deadLetters].map(entry => entry.eventId));
-  const failed = outbox.deadLetters.length > 0 || outbox.refused.some(entry => entry.reason === "outbox-full");
+  const dropped = outbox.refused.filter(entry => entry.reason !== "vitium-echo");
+  const undelivered = Object.freeze([...outbox.pending, ...outbox.deadLetters, ...dropped].map(entry => entry.eventId));
+  const failed = outbox.deadLetters.length > 0 || dropped.length > 0;
   const reporting = failed ? "failed" : outbox.pending.length > 0 ? "pending" : "delivered";
   return Object.freeze({
     buildOutcome,

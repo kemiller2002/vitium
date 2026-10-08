@@ -38,7 +38,8 @@ const refuse = message => { throw new ObservationError("invalid_observation", 40
 const isObject = value => value !== null && typeof value === "object" && !Array.isArray(value);
 const exactKeys = (value, name, allowed) => {
   if (!isObject(value)) refuse(name + " must be an object.");
-  Object.keys(value).forEach(key => { if (!allowed.includes(key)) refuse("Unexpected field " + name + "." + key + "."); });
+  // Attacker-chosen key names are truncated so errors never echo large payload fragments.
+  Object.keys(value).forEach(key => { if (!allowed.includes(key)) refuse("Unexpected field " + name + "." + key.slice(0, 40).replace(/[^\w.-]/g, "?") + "."); });
   return value;
 };
 const controlCharacters = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u;
@@ -61,7 +62,13 @@ const commit = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const digest = /^[0-9a-f]{64}$/;
 const defectId = /^VIT-[A-Za-z0-9]{4,64}$/;
 const isoInstant = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/;
+// Evidence must point at a public artifact host, never an IP literal or internal name (SSRF/metadata).
+const internalHost = host => /^\[|^\d{1,3}(?:\.\d{1,3}){3}$|^localhost$|\.(?:local|internal|localhost|lan|home|corp)$/i.test(host) || !host.includes(".");
 const secretQueryName = /token|sig|signature|secret|password|credential|auth|key|code/i;
+
+const decodeURIComponentSafe = value => { try { return decodeURIComponent(value); } catch { return value; } };
+const stringsOf = value => typeof value === "string" ? [value]
+  : value && typeof value === "object" ? Object.values(value).flatMap(stringsOf) : [];
 
 function evidenceItem(raw, index) {
   const item = exactKeys(raw, "evidence[" + index + "]", ["kind", "uri", "sha256"]);
@@ -72,6 +79,8 @@ function evidenceItem(raw, index) {
   if (url.username || url.password) refuse("Evidence uri must not embed credentials.");
   if ([...url.searchParams.keys()].some(name => secretQueryName.test(name))) refuse("Evidence uri must not carry credential parameters.");
   if (url.hash) refuse("Evidence uri must not carry a fragment.");
+  if (internalHost(url.hostname)) refuse("Evidence uri must reference a public artifact host.");
+  if (containsCredential(uri) || containsCredential(decodeURIComponentSafe(uri))) refuse("Evidence uri appears to contain a credential.");
   return Object.freeze({
     kind: oneOf(item.kind, "evidence kind", evidenceKinds),
     uri: url.href,
@@ -143,8 +152,8 @@ export function normalizeMachineObservation(raw, now) {
   if (eventType === "governance.violation" && normalized.finding.category !== "governance-violation") {
     refuse("Governance violations must use the governance-violation category.");
   }
-  const prose = [normalized.finding.summary, normalized.finding.expected, normalized.finding.observed].join("\n");
-  if (containsCredential(prose)) refuse("The observation appears to contain a credential. Send a redacted evidence reference instead.");
+  // Every accepted string, identifiers included, is scanned; not only the prose fields.
+  if (stringsOf(normalized).some(containsCredential)) refuse("The observation appears to contain a credential. Send a redacted evidence reference instead.");
   return Object.freeze(normalized);
 }
 

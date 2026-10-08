@@ -2,7 +2,7 @@
 // VIT-AC-036). A proposal is applied solely through transition() by an authorized, independent
 // verifier, so a green build, an agent's own claim or a forged status cannot close a defect.
 import { verificationEventTypes } from "./machine-observation.mjs";
-import { latestSubmission, transition } from "./triage.mjs";
+import { latestSubmission, transition, sameActor } from "./triage.mjs";
 
 const targets = Object.freeze({
   "verification.failed": { to: "in-progress", verificationOutcome: "failed" },
@@ -30,6 +30,8 @@ export function proposeFromMachineObservation(defect, item) {
       evidenceId: item.pk,
       workItemId: observation.subject.workItemId,
       proposedBy: item.principal?.subject ?? null,
+      // The workload that submitted the candidate is reporting on its own work.
+      selfReported: sameActor(item.principal?.subject, candidate.actor),
       provenance: item.provenance ?? null
     }),
     reason: null
@@ -40,6 +42,9 @@ export function proposeFromMachineObservation(defect, item) {
 export function acceptProposal(defect, proposal, decision, policy) {
   if (!proposal) throw new TypeError("No proposal to accept.");
   const { to, verificationOutcome, attemptId, candidateRevision, evidenceId, workItemId } = proposal;
+  if (proposal.selfReported && verificationOutcome === "passed") {
+    throw new TypeError("A pass reported by the submitting workload is not independent evidence; run an independent verification.");
+  }
   return transition(defect, {
     actor: decision.actor, actorKind: decision.actorKind, role: decision.role, reason: decision.reason,
     expectedRevision: decision.expectedRevision, occurredAt: decision.occurredAt,

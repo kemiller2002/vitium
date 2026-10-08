@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {transition,TransitionError} from "../service/triage.mjs";
 const ts="2026-10-08T12:00:00.000Z";
-const cmd=(to,overrides={})=>({to,actor:"operator-1",role:"triager",reason:"Independent investigation",expectedRevision:0,occurredAt:ts,...overrides});
+const cmd=(to,overrides={})=>({to,actor:"operator-1",actorKind:"human",role:"triager",reason:"Independent investigation",expectedRevision:0,occurredAt:ts,...overrides});
 const caseOf=(kind,state)=>({kind,state,revision:0,history:[]});
 test("an observation needs classification, not automatic defect promotion",()=>{
   const a=transition(caseOf("observation","received"),cmd("accepted-for-triage"));
