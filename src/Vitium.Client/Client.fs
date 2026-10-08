@@ -80,9 +80,11 @@ type VitiumClient(httpClient: HttpClient, tokenProvider: IAccessTokenProvider) =
                             let! stream = response.Content.ReadAsStreamAsync(ct)
                             let! receipt = JsonSerializer.DeserializeAsync<Receipt>(stream, jsonOptions, ct)
 
+                            // "suppressed" acknowledges an intentional no-op (an echo of Vitium's own
+                            // update); it is delivered, not failed, and must not be retried.
                             if isNull (box receipt)
                                || String.IsNullOrWhiteSpace receipt.Reference
-                               || receipt.Status <> "received" then
+                               || not (receipt.Status = "received" || receipt.Status = "suppressed") then
                                 return makeError "invalid_receipt" "Vitium returned an invalid acknowledgement." (int response.StatusCode) false
                             else
                                 return Ok receipt

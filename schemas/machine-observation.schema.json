@@ -1,0 +1,321 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://echelonfoundry.com/schemas/vitium/machine-observation/1.0",
+  "title": "Vitium authenticated machine observation envelope",
+  "description": "Candidate wire contract for POST /api/v1/observations (VIT-INT-013). Authentication is a separate workload credential; source.system is a claim checked against it, never proof. Not a deployed API.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "eventId",
+    "eventType",
+    "source",
+    "subject",
+    "finding",
+    "evidence",
+    "observedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "eventId": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+    },
+    "eventType": {
+      "enum": [
+        "observation.detected",
+        "verification.failed",
+        "verification.passed",
+        "verification.inconclusive",
+        "governance.violation"
+      ]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "system",
+        "repository",
+        "installationId",
+        "version"
+      ],
+      "properties": {
+        "system": {
+          "enum": [
+            "praxis",
+            "ordo",
+            "conditor",
+            "dokimos",
+            "tutela",
+            "aegis",
+            "ci",
+            "agent"
+          ]
+        },
+        "repository": {
+          "type": "string",
+          "maxLength": 140,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9._-]{1,100}$"
+        },
+        "installationId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "version": {
+          "type": "string",
+          "maxLength": 100,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/#@+-]{0,99}$"
+        }
+      }
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commit",
+        "runId",
+        "checkId",
+        "environment"
+      ],
+      "properties": {
+        "workItemId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/identifier"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+        },
+        "runId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "checkId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "environment": {
+          "enum": [
+            "ci",
+            "local",
+            "staging",
+            "production"
+          ]
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "category",
+        "summary",
+        "expected",
+        "observed",
+        "classification",
+        "confidence"
+      ],
+      "properties": {
+        "category": {
+          "enum": [
+            "test-failure",
+            "build-failure",
+            "packaging-failure",
+            "deployment-verification-failure",
+            "quality-violation",
+            "mutation-weakness",
+            "security-finding",
+            "runtime-fault",
+            "install-failure",
+            "governance-violation",
+            "work-execution-failure",
+            "agent-suspicion",
+            "verification-result"
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "\\S"
+        },
+        "expected": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1200,
+          "pattern": "\\S"
+        },
+        "observed": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1200,
+          "pattern": "\\S"
+        },
+        "classification": {
+          "const": "untriaged"
+        },
+        "confidence": {
+          "enum": [
+            "observed",
+            "suspected"
+          ]
+        }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "uri",
+          "sha256"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "test-result",
+              "check-run",
+              "build-log",
+              "artifact",
+              "sarif",
+              "diagnostic",
+              "attestation"
+            ]
+          },
+          "uri": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https://",
+            "maxLength": 2000
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      }
+    },
+    "correlation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "defectId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^VIT-[A-Za-z0-9]{4,64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "verificationAttemptId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/identifier"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "causationEventId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 80,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/#@+-]{0,79}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "observedAt": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "maxLength": 200,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/#@+-]{0,199}$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "eventType": {
+            "enum": [
+              "verification.failed",
+              "verification.passed",
+              "verification.inconclusive"
+            ]
+          }
+        },
+        "required": [
+          "eventType"
+        ]
+      },
+      "then": {
+        "required": [
+          "correlation"
+        ],
+        "properties": {
+          "correlation": {
+            "required": [
+              "defectId",
+              "verificationAttemptId"
+            ],
+            "properties": {
+              "defectId": {
+                "type": "string"
+              },
+              "verificationAttemptId": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "eventType": {
+            "const": "governance.violation"
+          }
+        },
+        "required": [
+          "eventType"
+        ]
+      },
+      "then": {
+        "properties": {
+          "finding": {
+            "properties": {
+              "category": {
+                "const": "governance-violation"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

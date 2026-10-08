@@ -137,6 +137,131 @@
     },
     "verification": {
       "type": "string"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "history": {
+      "description": "Append-only lifecycle events; failed, inconclusive and passing verification attempts and reopenings are never rewritten.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/lifecycleEvent"
+      }
+    }
+  },
+  "$defs": {
+    "lifecycleEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from",
+        "to",
+        "actor",
+        "actorKind",
+        "role",
+        "reason",
+        "occurredAt",
+        "sequence"
+      ],
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "actor": {
+          "type": "string",
+          "minLength": 1
+        },
+        "actorKind": {
+          "enum": [
+            "human",
+            "agent"
+          ]
+        },
+        "role": {
+          "enum": [
+            "triager",
+            "verifier",
+            "administrator"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "evidenceId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "classification": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "verificationOutcome": {
+          "enum": [
+            "passed",
+            "failed",
+            "inconclusive",
+            null
+          ]
+        },
+        "inconclusiveCause": {
+          "enum": [
+            "flaky",
+            "infrastructure",
+            "environment",
+            "timeout",
+            "missing-test",
+            null
+          ]
+        },
+        "attemptId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "candidateRevision": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "workItemId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "affectedRelease": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "priorResolutionSequence": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
     }
   }
 }

@@ -26,6 +26,10 @@ dotnet pack src/Vitium.Client/Vitium.Client.fsproj -c Release -o artifacts/nuget
 
 This produces the two versioned `.nupkg` files in `artifacts/nuget`. They are generated files and must not be checked in. GitHub Actions `nuget-ci.yml` builds, smoke-tests and creates these artifacts, but **does not publish anything**.
 
+## 1a. Prove the client against the real intake handler
+
+`tests/interop/run.sh` (needs Node 22, .NET 10 and openssl) starts the real `service/machine-http.mjs` handler on loopback HTTPS with a pinned self-signed certificate and drives the real `VitiumClient` through observation, replay, conflicting replay, verification result, suppressed echo, out-of-scope sender, credential refusal and forged outcome. `nuget-ci.yml` runs it. It proves wire compatibility only; it is not a deployed endpoint.
+
 ## 2. Test a package as a Praxis consumer
 
 Once both archives exist locally, create an isolated test project or use a temporary Praxis clone. Do not edit the Praxis production dependency graph until the consumer build and compatibility are verified.
