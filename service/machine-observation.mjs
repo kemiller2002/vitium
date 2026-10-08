@@ -61,7 +61,9 @@ const identifier = /^[A-Za-z0-9][A-Za-z0-9._:/#@+-]{0,199}$/;
 const commit = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const digest = /^[0-9a-f]{64}$/;
 const defectId = /^VIT-[A-Za-z0-9]{4,64}$/;
-const isoInstant = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/;
+// RFC 3339 with an explicit zone. .NET's System.Text.Json writes DateTimeOffset as "+00:00",
+// so offsets are accepted and stored canonically in UTC ("Z").
+const isoInstant = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
 // Evidence must point at a public artifact host, never an IP literal or internal name (SSRF/metadata).
 const internalHost = host => /^\[|^\d{1,3}(?:\.\d{1,3}){3}$|^localhost$|\.(?:local|internal|localhost|lan|home|corp)$/i.test(host) || !host.includes(".");
 const secretQueryName = /token|sig|signature|secret|password|credential|auth|key|code/i;
@@ -95,7 +97,7 @@ const normalizeEventTime = (raw, now) => {
   const current = Date.parse(now);
   if (at > current + limits.maxClockSkewMs) refuse("observedAt is in the future.");
   if (at < current - limits.maxEventAgeMs) throw new ObservationError("stale_observation", 422, "The observation is older than the accepted delivery window.");
-  return observedAt;
+  return new Date(at).toISOString();
 };
 
 /** Validates an untrusted envelope. `now` is an ISO instant supplied by the effect boundary. */
@@ -192,3 +194,45 @@ export const groupOccurrences = observations => Object.freeze(Object.fromEntries
     deliveries: items.length
   })])
 ));
+
+// Verification result submitted by EchelonFoundry.Vitium.Client to POST /api/v1/verification-results.
+// It is evidence for a proposal, never a state change; see verification-proposals.mjs.
+export const verificationResultOutcomes = Object.freeze(["passed", "failed", "inconclusive"]);
+export function normalizeVerificationResult(raw, now) {
+  const result = exactKeys(raw, "verificationResult", ["schemaVersion", "eventId", "defectId", "attemptId", "candidateRevision", "workItemId", "expectedDefectRevision", "outcome", "source", "evidence", "observedAt"]);
+  if (result.schemaVersion !== machineSchemaVersion) throw new ObservationError("unsupported_version", 422, "Unsupported verification result schema version.");
+  const source = exactKeys(result.source, "source", ["system", "repository", "installationId", "version"]);
+  if (!Array.isArray(result.evidence) || result.evidence.length < 1 || result.evidence.length > limits.maxEvidence) {
+    refuse("Between 1 and " + limits.maxEvidence + " evidence references are required.");
+  }
+  if (!Number.isSafeInteger(result.expectedDefectRevision) || result.expectedDefectRevision < 0) {
+    refuse("expectedDefectRevision must be a non-negative integer.");
+  }
+  const outcome = oneOf(result.outcome, "outcome", verificationResultOutcomes);
+  const normalized = {
+    schemaVersion: machineSchemaVersion,
+    eventId: text(result.eventId, "eventId", 36, { pattern: uuid }).toLowerCase(),
+    eventType: "verification." + outcome,
+    source: Object.freeze({
+      system: oneOf(source.system, "source system", sourceSystems),
+      repository: text(source.repository, "source repository", 140, { pattern: repository }),
+      installationId: text(source.installationId, "source installationId", 200, { pattern: identifier }),
+      version: text(source.version, "source version", 100, { pattern: identifier })
+    }),
+    subject: Object.freeze({
+      workItemId: text(result.workItemId, "workItemId", 200, { optional: true, pattern: identifier }),
+      commit: text(result.candidateRevision, "candidateRevision", 64, { pattern: commit })
+    }),
+    correlation: Object.freeze({
+      defectId: text(result.defectId, "defectId", 70, { pattern: defectId }),
+      verificationAttemptId: text(result.attemptId, "attemptId", 200, { pattern: identifier }),
+      causationEventId: null
+    }),
+    expectedDefectRevision: result.expectedDefectRevision,
+    evidence: Object.freeze(result.evidence.map(evidenceItem)),
+    observedAt: normalizeEventTime(result.observedAt, now)
+  };
+  if (new Set(normalized.evidence.map(item => item.uri)).size !== normalized.evidence.length) refuse("Evidence references must be unique.");
+  if (stringsOf(normalized).some(containsCredential)) refuse("The verification result appears to contain a credential.");
+  return Object.freeze(normalized);
+}

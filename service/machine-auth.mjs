@@ -65,3 +65,15 @@ export function authorizeObservation(principal, observation) {
   if (!principal.eventTypes.includes(observation.eventType)) deny("The credential is not authorized for this event type.");
   return principal;
 }
+
+/**
+ * Verification results (VerificationResult in the F# contract) carry no environment, so they are
+ * scoped by system, repository and the outcome event type only; bindings must list the
+ * verification.* types explicitly.
+ */
+export function authorizeVerificationResult(principal, result) {
+  if (principal.system !== result.source.system) deny("The credential is not authorized for the claimed source system.");
+  if (!principal.repositories.includes(result.source.repository)) deny("The credential is not authorized for this repository.");
+  if (!principal.eventTypes.includes(result.eventType)) deny("The credential is not authorized for this event type.");
+  return principal;
+}

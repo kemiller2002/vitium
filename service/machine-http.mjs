@@ -1,4 +1,5 @@
-// HTTP boundary for authenticated machine observations: POST /api/v1/observations.
+// HTTP boundary for authenticated machine events: POST /api/v1/observations and
+// POST /api/v1/verification-results (the routes used by EchelonFoundry.Vitium.Client).
 // Deliberately not wired into infra/aws/template.yaml: no machine endpoint is deployed.
 // Machine clients send no Origin; browser-originated requests are refused and no CORS
 // headers are emitted, so this route cannot be driven from the public reporting page.
@@ -23,7 +24,8 @@ export function createMachineHttpHandler(machineIntake) {
     const requestId = event.requestContext?.requestId;
     const method = event.requestContext?.http?.method || event.httpMethod;
     const path = event.rawPath || event.path;
-    if (method !== "POST" || path !== "/api/v1/observations") {
+    const submit = { "/api/v1/observations": "submit", "/api/v1/verification-results": "submitVerificationResult" }[path];
+    if (method !== "POST" || !submit) {
       return response(404, { code: "not_found", message: "This operation is unavailable." }, requestId);
     }
     if (header(event.headers, "origin") !== undefined) {
@@ -40,7 +42,10 @@ export function createMachineHttpHandler(machineIntake) {
     try { body = JSON.parse(input); }
     catch { return response(400, { code: "invalid_json", message: "The observation must be valid JSON." }, requestId); }
     try {
-      const result = await machineIntake.submit(body, { authorization: header(event.headers, "authorization") });
+      const result = await machineIntake[submit](body, {
+        authorization: header(event.headers, "authorization"),
+        idempotencyKey: header(event.headers, "idempotency-key")
+      });
       return response(statusFor(result), result, requestId);
     } catch (error) {
       if (error instanceof MachineIntakeError) return response(error.status, { code: error.code, message: error.message }, requestId);

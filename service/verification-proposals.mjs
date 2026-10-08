@@ -17,6 +17,10 @@ export function proposeFromMachineObservation(defect, item) {
   if (!observation || !verificationEventTypes.includes(observation.eventType)) return none("not-a-verification-result");
   if (!defect || defect.kind !== "defect" || observation.correlation.defectId !== defect.id) return none("defect-mismatch");
   if (defect.state !== "awaiting-verification") return none("defect-not-awaiting-verification");
+  // A result computed against an older defect revision is stale, even for the same attempt.
+  if (observation.expectedDefectRevision !== undefined && observation.expectedDefectRevision !== defect.revision) {
+    return none("stale-defect-revision");
+  }
   const candidate = latestSubmission(defect.history || []);
   if (!candidate || candidate.attemptId !== observation.correlation.verificationAttemptId ||
       candidate.candidateRevision !== observation.subject.commit) {

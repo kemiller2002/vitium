@@ -114,6 +114,12 @@ match forgedReceipt with
 | Error error -> assertTrue (error.Code = "invalid_receipt") "Invalid receipts must be refused"
 | Ok _ -> failwith "A response claiming resolution is not an intake receipt"
 
+let suppressed, _ =
+    reportWith HttpStatusCode.Accepted """{"schemaVersion":"1.0","reference":"VIT-M0276","acceptedAt":"2026-10-08T12:00:00Z","status":"suppressed","replayed":false}"""
+match suppressed with
+| Ok receipt -> assertTrue (receipt.Status = "suppressed") "A suppressed echo is delivered, not failed"
+| Error error -> failwithf "A suppressed acknowledgement must not be an error: %s" error.Code
+
 let verification =
     { SchemaVersion = "1.0"
       EventId = Guid.Parse("e9d2d556-41ec-4cc4-bd0a-d03a5b0db188")

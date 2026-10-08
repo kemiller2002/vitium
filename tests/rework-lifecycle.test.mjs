@@ -193,3 +193,11 @@ test("spec test 7: green builds, stale or forged machine results can only propos
   const failed = acceptProposal(waiting, proposeFromMachineObservation(waiting, machineItem("verification.failed", "fix-1", "sha-1")).proposal, decision);
   assert.equal(failed.state, "in-progress");
 });
+
+test("a machine verification result computed against an older defect revision only yields a stale refusal", () => {
+  const waiting = submit(toInProgress(), "fix-1", "sha-1");
+  const item = revision => ({ ...machineItem("verification.failed", "fix-1", "sha-1"),
+    envelope: { ...machineItem("verification.failed", "fix-1", "sha-1").envelope, expectedDefectRevision: revision } });
+  assert.equal(proposeFromMachineObservation(waiting, item(waiting.revision - 1)).reason, "stale-defect-revision");
+  assert.equal(proposeFromMachineObservation(waiting, item(waiting.revision)).proposal.to, "in-progress");
+});

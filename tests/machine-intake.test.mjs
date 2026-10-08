@@ -96,7 +96,9 @@ test("spec test 1: identical deliveries give one observation and two acknowledgm
   assert.equal(store.records.size, 1);
   assert.deepEqual([first.replayed, second.replayed], [false, true]);
   assert.equal(first.eventId, second.eventId);
-  assert.equal(first.receivedAt, second.receivedAt, "replay reports the original receipt, not a new one");
+  assert.ok(first.acceptedAt);
+  assert.equal(first.acceptedAt, second.acceptedAt, "replay reports the original receipt, not a new one");
+  assert.equal(first.reference, second.reference);
 });
 
 test("spec test 2: same fingerprint on distinct commits/runs keeps two occurrences of one candidate", async () => {
@@ -226,4 +228,63 @@ test("machine HTTP boundary is separate from the public Turnstile route and refu
   const anonymous = await handle(request(envelope(), { headers: { "content-type": "application/json" } }));
   assert.equal(anonymous.statusCode, 401);
   assert.ok(!anonymous.body.includes("Routing contract"), "errors do not echo observation content");
+});
+
+test("the .NET wire format (+00:00 offsets, 7 fractional digits) is accepted and stored in UTC", async () => {
+  const { store, intake } = fixture();
+  await intake.submit(envelope({ observedAt: "2026-10-08T11:59:00.1234567+00:00" }), auth("praxis-token-0000000000"));
+  assert.equal([...store.records.values()][0].envelope.observedAt, "2026-10-08T11:59:00.123Z");
+  const shifted = normalizeMachineObservation(envelope({ observedAt: "2026-10-08T07:59:00-04:00" }), now);
+  assert.equal(shifted.observedAt, "2026-10-08T11:59:00.000Z");
+  assert.throws(() => normalizeMachineObservation(envelope({ observedAt: "2026-10-08T11:59:00" }), now), /observedAt/);
+});
+
+test("receipts match the F# Receipt contract and are stable across replays", async () => {
+  const { intake } = fixture();
+  const ack = await intake.submit(envelope(), auth("praxis-token-0000000000"));
+  assert.equal(ack.reference, "VIT-M0276F8ACA6734D6285A75D2292EF0CDD");
+  assert.deepEqual([ack.schemaVersion, ack.status, ack.acceptedAt, ack.replayed], ["1.0", "received", now, false]);
+  const echo = await intake.submit(envelope({ top: { eventId: "3276f8ac-a673-4d62-85a7-5d2292ef0cdd" }, correlation: { causationEventId: "vitium:x" } }), auth("praxis-token-0000000000"));
+  assert.ok(echo.reference.startsWith("VIT-M") && echo.status === "suppressed");
+});
+
+test("an Idempotency-Key that disagrees with the eventId is refused, and a matching one is accepted", async () => {
+  const { store, intake } = fixture();
+  await rejects(intake.submit(envelope(), { ...auth("praxis-token-0000000000"), idempotencyKey: "1276f8ac-a673-4d62-85a7-5d2292ef0cdd" }), "idempotency_mismatch", 400);
+  assert.equal(store.records.size, 0);
+  const ack = await intake.submit(envelope(), { ...auth("praxis-token-0000000000"), idempotencyKey: "0276F8AC-A673-4D62-85A7-5D2292EF0CDD" });
+  assert.equal(ack.status, "received");
+});
+
+const verificationResult = (patch = {}) => ({
+  schemaVersion: "1.0", eventId: "e9d2d556-41ec-4cc4-bd0a-d03a5b0db188", defectId: "VIT-1234", attemptId: "fix-2",
+  candidateRevision: commitA, workItemId: "WI-0042", expectedDefectRevision: 3, outcome: "failed",
+  source: { system: "praxis", repository: "kemiller2002/summa", installationId: "praxis-ci-1", version: "3.7.2" },
+  evidence: [{ kind: "test-result", uri: "https://github.com/kemiller2002/summa/actions/runs/9", sha256: digest }],
+  observedAt: "2026-10-08T11:59:00+00:00", ...patch
+});
+
+test("verification results are stored as evidence under the binding's verification scope", async () => {
+  const { store, intake, handle } = fixture();
+  const ack = await intake.submitVerificationResult(verificationResult(), auth("praxis-token-0000000000"));
+  assert.equal(ack.status, "received");
+  const [item] = store.records.values();
+  assert.equal(item.kind, "machine-verification-result");
+  assert.equal(item.envelope.eventType, "verification.failed");
+  assert.deepEqual([item.envelope.correlation.defectId, item.envelope.correlation.verificationAttemptId, item.envelope.subject.commit], ["VIT-1234", "fix-2", commitA]);
+  assert.equal(item.state, "received", "a verification result never changes defect state by itself");
+  // The praxis binding does not list verification.passed, so a pass is out of scope.
+  await rejects(intake.submitVerificationResult(verificationResult({ eventId: "f9d2d556-41ec-4cc4-bd0a-d03a5b0db188", outcome: "passed" }), auth("praxis-token-0000000000")), "scope_denied", 403);
+  // A forged outcome is a contract violation (400), not merely an out-of-scope event type.
+  await rejects(intake.submitVerificationResult(verificationResult({ eventId: "c9d2d556-41ec-4cc4-bd0a-d03a5b0db188", outcome: "resolved" }), auth("praxis-token-0000000000")), "invalid_observation", 400);
+  for (const patch of [{ outcome: "resolved" }, { expectedDefectRevision: -1 }, { expectedDefectRevision: "3" }, { candidateRevision: "sha-2" },
+    { defectId: "" }, { extra: 1 }, { evidence: [] }, { schemaVersion: "2.0" }]) {
+    await assert.rejects(intake.submitVerificationResult(verificationResult({ eventId: "a9d2d556-41ec-4cc4-bd0a-d03a5b0db188", ...patch }), auth("praxis-token-0000000000")),
+      MachineIntakeError, JSON.stringify(patch));
+  }
+  const routed = await handle(request(verificationResult({ eventId: "b9d2d556-41ec-4cc4-bd0a-d03a5b0db188" }), { rawPath: "/api/v1/verification-results" }));
+  assert.equal(routed.statusCode, 201);
+  // The same eventId cannot be reused across the two routes.
+  const crossRoute = await handle(request(envelope({ top: { eventId: "b9d2d556-41ec-4cc4-bd0a-d03a5b0db188" } })));
+  assert.equal(crossRoute.statusCode, 409);
 });
