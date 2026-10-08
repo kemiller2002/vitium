@@ -82,6 +82,7 @@
         "in-progress",
         "awaiting-verification",
         "resolved",
+        "reopened",
         "closed",
         "duplicate",
         "not-reproducible",

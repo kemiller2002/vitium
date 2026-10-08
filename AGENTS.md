@@ -10,7 +10,7 @@
 
 ## Requirements authority
 
-The canonical proposed product scope is `docs/requirements/VITIUM-REQUIREMENTS.md`; acceptance cases are in `docs/requirements/VITIUM-ACCEPTANCE.md`; pending decisions are in `docs/requirements/VITIUM-OPEN-DECISIONS.md`. Read these before planning substantive behavior. Proposed requirements are not implementation evidence or decision approval. Reference individual requirement IDs in work items and change reviews, and keep questions unresolved rather than inventing answers.
+The canonical proposed product scope is `docs/requirements/VITIUM-REQUIREMENTS.md`; acceptance cases are in `docs/requirements/VITIUM-ACCEPTANCE.md`; pending decisions are in `docs/requirements/VITIUM-OPEN-DECISIONS.md`; automated Echelon system intake and iterative rework are specified in `docs/requirements/VITIUM-BUILD-SYSTEM-REPORTING.md`. Read these before planning substantive behavior. Proposed requirements are not implementation evidence or decision approval. Reference individual requirement IDs in work items and change reviews, and keep questions unresolved rather than inventing answers.
 
 ## Initial application rules
 
@@ -37,6 +37,10 @@ The canonical proposed product scope is `docs/requirements/VITIUM-REQUIREMENTS.m
 ## Current checks
 
 `npm test` executes node-native submission contract tests. A full real-browser and accessibility suite is not yet installed; track it in issue #2.
+
+## Failed-verification behavior
+
+When tests fail, a verified defect must return from `awaiting-verification` to `in-progress` with independently sourced failure evidence, attempt ID, candidate revision, and verifier. Record multiple attempts without overwriting history. After resolution, a recurring defect must move through `reopened` before returning to work. Build-system observations must use a future authenticated machine boundary, never the anonymous Turnstile endpoint. See issues #14 and #15. The current pure transition module is not deployed Ordo authority.
 
 <!-- BEGIN echelon:visual-engineering -->
 ## Visual Engineering UI research

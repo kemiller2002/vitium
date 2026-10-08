@@ -6,9 +6,13 @@ Vitium is Echelon Foundry's cross-repository defect reporting and quality intell
 
 ## Product requirements
 
-Vitium's **proposed end-to-end product baseline** is [docs/requirements/VITIUM-REQUIREMENTS.md](docs/requirements/VITIUM-REQUIREMENTS.md), with [31 acceptance scenarios](docs/requirements/VITIUM-ACCEPTANCE.md) and [open product/architecture decisions](docs/requirements/VITIUM-OPEN-DECISIONS.md). The baseline currently contains 79 scoped requirements across reporting, domain records, secure intake, lifecycle, Echelon integration, independent verification, operations and governance.
+Vitium's **proposed end-to-end product baseline** is [docs/requirements/VITIUM-REQUIREMENTS.md](docs/requirements/VITIUM-REQUIREMENTS.md), with [36 acceptance scenarios](docs/requirements/VITIUM-ACCEPTANCE.md) and [open product/architecture decisions](docs/requirements/VITIUM-OPEN-DECISIONS.md). The baseline currently contains 92 scoped requirements across reporting, domain records, secure intake, lifecycle, Echelon integration, independent verification, operations and governance.
 
-**Status:** Proposed, not approved or fully implemented. Decisions and production acceptance evidence remain outstanding. See [current state](context/CURRENT-STATE.md). Related tracked implementation issues are #1–#13.
+**Status:** Proposed, not approved or fully implemented. Decisions and production acceptance evidence remain outstanding. See [current state](context/CURRENT-STATE.md). Related tracked implementation issues include #1–#15.
+
+### Automated Echelon defect reporting
+
+The reporting/verification contract for Praxis, Ordo, Conditor, Dokimos, Tutela, Aegis and CI is [the build-system reporting specification](docs/requirements/VITIUM-BUILD-SYSTEM-REPORTING.md). It requires scoped machine identity, versioned observations, evidence, duplicate protection, and failed-test rework loops. The dedicated implementation work is tracked in issues [#14](https://github.com/kemiller2002/vitium/issues/14) and [#15](https://github.com/kemiller2002/vitium/issues/15). The machine intake adapter is **not deployed**.
 
 ## Report a defect
 
