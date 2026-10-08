@@ -26,9 +26,22 @@ Resources:
       AttributeDefinitions:
         - AttributeName: pk
           AttributeType: S
+        - AttributeName: reviewQueuePk
+          AttributeType: S
+        - AttributeName: reviewQueueSk
+          AttributeType: S
       KeySchema:
         - AttributeName: pk
           KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: ReviewQueue
+          KeySchema:
+            - AttributeName: reviewQueuePk
+              KeyType: HASH
+            - AttributeName: reviewQueueSk
+              KeyType: RANGE
+          Projection:
+            ProjectionType: KEYS_ONLY
       SSESpecification:
         SSEEnabled: true
       PointInTimeRecoverySpecification:
