@@ -1,0 +1,22 @@
+<Project>
+  <!-- Shared settings for the Vitium F# domain core. Mirrors Arca's strictness
+       (warnings as errors, unused-binding warning, incomplete matches are errors). -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <WarningLevel>5</WarningLevel>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <OtherFlags>$(OtherFlags) --warnon:1182 --warnaserror:25</OtherFlags>
+    <Deterministic>true</Deterministic>
+    <!-- Not invariant globalization: alias matching needs real Unicode NFKC folding
+         (identical to JS String.prototype.normalize("NFKC")); invariant mode leaves
+         non-ASCII text unnormalised. All comparisons use ordinal/invariant APIs. -->
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- No implicit NuGet fallback folder: restore must succeed from the SDK's
+         bundled FSharp.Core library pack alone. -->
+    <DisableImplicitNuGetFallbackFolder>true</DisableImplicitNuGetFallbackFolder>
+    <RestoreIgnoreFailedSources>false</RestoreIgnoreFailedSources>
+  </PropertyGroup>
+</Project>

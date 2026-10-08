@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Pure Vitium domain core. No package references: only FSharp.Core (from the
+       SDK's offline library pack) and System.Text.Json (shared framework). -->
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Identity.fs" />
+    <Compile Include="Json.fs" />
+    <Compile Include="Registry.fs" />
+    <Compile Include="Report.fs" />
+    <Compile Include="Table.fs" />
+    <Compile Include="Lifecycle.fs" />
+    <Compile Include="Wire.fs" />
+    <Compile Include="Model.fs" />
+  </ItemGroup>
+
+</Project>
