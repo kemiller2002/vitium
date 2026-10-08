@@ -20,7 +20,22 @@ The baseline refused obvious credentials outright (`report-domain.mjs`) but miss
    - **Amended (fix round 1, VF-010):** the core first does a read-only `store.lookup(pk)`, a projected, strongly consistent GetItem. If the key is known and the canonical hash matches, the original `{schemaVersion, reference, receivedAt, status, replayed:true}` is returned (HTTP 200) **without a fresh challenge**. The caller already holds the random key and the full body, so nothing new is disclosed. This is what lets a lost-response retry succeed even though Turnstile tokens are single-use.
    - Same key with a different hash returns `409 request_conflict` with a catalogue-only body: no reference, timestamp or content.
    - An unknown key still requires a verified challenge before any write. A replay never writes.
-   - Residual: the 409/200 split tells a caller who already knows a key whether that key was used. Keys are 122-bit random and never logged, so this is accepted (threat model R-11).
+   - **Amended (fix round 2, VF-023):** only *same key + same canonical hash* skips the challenge. *Same key + different hash* goes through the same challenge as a fresh key. Until a challenge is verified, both cases return the identical `403` body (`challenge_required` or `challenge_failed`), so an unchallenged caller cannot learn whether a key was used. The `409` is returned only to a verified caller. Tests: O-01, O-02, R-02, I-09, adversarial replay-path "unchallenged caller".
+   - Residual: a caller who holds the key **and the exact body** gets the 200 replay. That is the intended capability of the original submitter (threat model R-11).
+
+### Unchallenged storage reads (VF-024): accepted residual with bounding controls
+
+The read-only `lookup` must run before the challenge, otherwise a lost-response retry, which carries a spent token or none, could never be answered (VF-010). Controls:
+
+- **Pre-filter (implemented):** a challenge token that is *present but malformed* is refused before any I/O: wrong type, outside 12..4096 characters, or containing non-printable-ASCII. Test O-04.
+- A *syntactically valid* token, real or fake, and an *absent* token still cost exactly one projected, strongly consistent `GetItem`, and no write or provider call. A syntactic check cannot tell a spent Turnstile token from a forged one, so this read cannot be removed without breaking VF-010.
+- **Bounds on that read:**
+  - it happens only after origin, content-type, the 24 KiB byte cap, JSON parsing and full report validation;
+  - the API Gateway stage throttle (2 rps, burst 4, global) and Lambda reserved concurrency cap the rate;
+  - the read is one key and projects only receipt attributes;
+  - on-demand billing makes the cost about one read request unit per call.
+  The worst case is therefore around 2 reads per second sustained, or about 5.2 million per month. That is an availability and cost exposure equal in size to the throttle, not a confidentiality one.
+- **Operator option:** a per-IP WAF rate rule (R-03) would bound it per source.
 5. **Receipt is not a capability.** `VIT-` plus 128 random bits from `crypto.randomUUID()`, uppercase hex. It can be shown to the reporter safely. The API has no read route, so the receipt grants nothing. Every non-`POST /api/v1/reports` request gets the same 404 body whether or not a reference exists (T-07). A status capability (VIT-API-010, P1) must be a **separate** high-entropy, revocable secret stored only as a hash. It is deferred to #12.
 6. **Typed failures (VIT-API-005):** `service/errors.mjs` maps every failure to `{code, category, retryable, message}`, with category one of validation, abuse, throttled, temporary, permanent, unavailable. A challenge-provider *misconfiguration* (bad secret) is `unavailable`/503, not a reporter failure (D-02).
 

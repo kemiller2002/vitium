@@ -63,6 +63,9 @@ Test IDs: `T-xx` = `tests/intake-core.test.mjs` / `intake-canary.test.mjs` / `in
 | E1 | Elevation | Public API exposes operator operations | Only POST /api/v1/reports; everything else 404; no admin route | T-07, Y-04, legacy route test |
 | E2 | Elevation | Reporter text steers agents/LLM triage ("ignore previous instructions") | Flagged `agent-instruction` -> quarantined; data is never executed | T-08 |
 | E3 | Elevation | Any IAM principal with table access acts as "triager" | Documented operator policy (below); Fides deferred | **Not testable without IAM** (R-02) |
+| E4 | Elevation / Spoofing | The anonymous public route is used to inject *machine* observations (forged CI/Praxis/agent findings), or to pass as an authenticated producer | Per `docs/requirements/VITIUM-BUILD-SYSTEM-REPORTING.md`, `POST /api/v1/reports` is **not** a machine-to-machine route. Envelope fields (`eventId`, `eventType`, `source`, `subject`, `finding`, `evidence`, `correlation`, `observedAt`) are unknown fields, refused as `400 invalid_input` before any lookup, challenge or write. Records it stores are always `source: "public-api"` anonymous observations. The handler serves no `/api/v1/observations` path (404). The machine contract belongs to the build-system integrations owner (`service/machine/`), behind separate machine authentication, and must not reuse this route, Turnstile or the public receipt | O-05 |
+| I8 | Info disclosure | Key-use oracle: an unchallenged caller probes whether an idempotency key was used | Only same-key + same-hash skips the challenge; every other case returns an identical 403 until a challenge is verified | O-01, O-02, R-02, I-09 (VF-023) |
+| D5 | DoS | Unchallenged requests force storage reads | Malformed tokens are pre-filtered before I/O; the remaining read is bounded by validation, throttle and concurrency (SEC-001 "Unchallenged storage reads") | O-04 (VF-024) |
 
 ### Audit findings (failure-before / fix-after)
 
