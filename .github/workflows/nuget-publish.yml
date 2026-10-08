@@ -1,7 +1,7 @@
 name: Publish Vitium NuGet packages
 
 # Requires owner-approved package license, release tag, GitHub environment
-# protection and an established nuget.org Trusted Publishing policy.
+# protection and the configured Kevin.m.miller nuget.org Trusted Publishing policy.
 # Never runs from push, pull_request, or a moving branch.
 on:
   workflow_dispatch:
@@ -52,20 +52,11 @@ jobs:
           dotnet pack src/Vitium.Contracts/Vitium.Contracts.fsproj -c Release --no-build -o artifacts/nuget
           dotnet pack src/Vitium.Client/Vitium.Client.fsproj -c Release --no-build -o artifacts/nuget
           test "$(find artifacts/nuget -maxdepth 1 -name '*.nupkg' | wc -l)" -eq 2
-      - name: Check trusted publishing identity
-        shell: bash
-        env:
-          NUGET_USER: ${{ vars.NUGET_USER }}
-        run: |
-          test -n "$NUGET_USER" || {
-            echo "::error::Set GitHub Actions variable NUGET_USER to the approved nuget.org owner username"
-            exit 1
-          }
       - name: Exchange GitHub OIDC identity for a short-lived NuGet API token
         uses: NuGet/login@v1
         id: nuget
         with:
-          user: ${{ vars.NUGET_USER }}
+          user: Kevin.m.miller
       - name: Publish Contracts first, then Client
         shell: bash
         env:

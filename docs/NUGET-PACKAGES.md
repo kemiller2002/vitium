@@ -49,19 +49,19 @@ A successful local install is **not** permission to send production telemetry. M
 
 **Public NuGet.org** is appropriate for redistributable SDK contracts/client code only after business ownership and package licensing are explicitly approved. Public packages are publicly downloadable even when they call a private API. Private package feeds are an alternative if the client implementation or contract must remain internal.
 
-**No license is currently asserted** by these project files. Do not publish until the business owner has selected a license and approved public or private distribution; add the correct `PackageLicenseExpression` or approved packaged license file to both project files.
+**License approved: MIT.** Both package project files now declare `<PackageLicenseExpression>MIT</PackageLicenseExpression>`, and the repository includes a top-level MIT `LICENSE` (copyright Echelon Foundry, 2026). This permits public distribution, but **no NuGet release has been published by this setup**. Treat the first preview publication as a separate release action requiring a green build, owner/publisher policy, protected environment and matching immutable tag.
 
-Before first release, verify package IDs do not conflict with existing nuget.org packages and select the NuGet owner (company organization versus personal account). Versions on NuGet are immutable: changes require a new version; never overwrite an existing package or reuse a preview version with different contents.
+Before first release, verify package IDs do not conflict with existing nuget.org packages. The confirmed initial NuGet package owner is `Kevin.m.miller`; transfer or add organizational ownership later through NuGet's supported owner workflow if desired. Versions on NuGet are immutable: changes require a new version; never overwrite an existing package or reuse a preview version with different contents.
 
 ## 4. Configure safer public publishing through NuGet Trusted Publishing
 
 Prefer [NuGet Trusted Publishing](https://learn.microsoft.com/en-us/nuget/nuget-org/trusted-publishing) to a stored long-lived API key.
 
 1. Log into **nuget.org** and create/select the intended Echelon owner account or organization.
-2. Under **Trusted Publishing**, register a GitHub Actions policy: owner `kemiller2002`, repository `vitium`, workflow `nuget-publish.yml`, environment `nuget-release`. Scope publishing to `EchelonFoundry.Vitium.*` when supported.
+2. The user has registered Trusted Publishing with package owner `Kevin.m.miller`, publisher `GitHubActions`, repository owner `kemiller2002` (GitHub ID `737074`), repository `vitium` (GitHub ID `1410063081`), workflow `nuget-publish.yml`, environment `nuget-release`, and package glob `EchelonFoundry.Vitium.*` for new packages and package versions. The repository and owner IDs were confirmed against GitHub; NuGet's policy state and OIDC success remain to be verified by an actual publishing run.
 3. In GitHub's repository Settings → Environments, create `nuget-release`, require a reviewer and restrict release to approved tags. This is an operator-controlled setting, not created by this documentation.
-4. In GitHub Settings → Secrets and variables → Actions → Variables, set `NUGET_USER` to the NuGet profile username **(not an email or password)** that owns the trusted publishing policy.
-5. Have engineering review the license, package metadata, source, API contract, tests, dependency graph, and provenance. Update versions in **both** projects together, then create the approved immutable `vitium-nuget-vX.Y.Z` tag on a validated commit.
+4. The workflow's `NuGet/login@v1` step now uses the approved NuGet owner username `Kevin.m.miller` directly. No secret or `NUGET_USER` variable is required. The GitHub environment must still exist and, ideally, require reviewer approval.
+5. Have engineering review the MIT metadata, package IDs, source, API contract, tests, dependency graph, and provenance. Update versions in **both** projects together, then create the approved immutable `vitium-nuget-vX.Y.Z` tag on a validated commit.
 6. Manually dispatch `.github/workflows/nuget-publish.yml` **against that tag**. Its tag and version checks prevent branch-tip or mismatched version publishing. It requires GitHub OIDC, gets a temporary NuGet credential and pushes Contracts before Client.
 
 If NuGet Trusted Publishing is unavailable or you choose a private feed, use its documented scoped-credentials approach, never a hardcoded secret in the code, script or chat.
