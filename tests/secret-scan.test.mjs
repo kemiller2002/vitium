@@ -2,7 +2,7 @@
 // Fake canaries are assembled at runtime so that no tracked file contains a matching literal.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -69,6 +69,28 @@ test("scanTree fails on a temp tree containing a fake canary and passes once rem
   }
 });
 
+test("files are scanned by content, not extension: unusual text formats are scanned, binaries reported", () => {
+  const dir = mkdtempSync(join(tmpdir(), "vitium-secret-scan-ext-"));
+  try {
+    mkdirSync(join(dir, ".ros", "events"), { recursive: true });
+    writeFileSync(join(dir, ".ros", "events", "events.jsonl"), `{"e":"${CANARIES["aws-access-key-id"]}"}\n`);
+    writeFileSync(join(dir, "launch.ps1"), `$t = "${CANARIES["github-classic-token"]}"`);
+    writeFileSync(join(dir, "Directory.Build.props"), `<P>${CANARIES["url-embedded-credentials"]}</P>`);
+    writeFileSync(join(dir, "logo.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x01]));
+    const r = scanTree(dir, { allowlist: [] });
+    assert.deepEqual(r.blocked.map(f => f.path).sort(), [".ros/events/events.jsonl", "Directory.Build.props", "launch.ps1"]);
+    assert.deepEqual(r.binary, ["logo.png"]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("no inline suppression exists: an annotated literal still fails", () => {
+  const annotated = `const k = "${CANARIES["aws-access-key-id"]}"; // secret-scan: allow canary test fixture`;
+  assert.equal(scanText("tests/x.test.mjs", annotated).length, 1);
+  assert.equal(partitionFindings(scanText("tests/x.test.mjs", annotated), []).blocked.length, 1);
+});
+
 test("allowlist must be exact (path + pattern) and stale entries are reported", () => {
   const findings = scanText("tests/x.mjs", CANARIES["aws-access-key-id"]);
   const exact = partitionFindings(findings, [{ path: "tests/x.mjs", patternId: "aws-access-key-id", reason: "documented canary" }]);
@@ -88,6 +110,13 @@ test("published site/ tree contains no credential patterns (what Pages uploads)"
 test("repository source contains no credential patterns outside the documented allowlist", () => {
   const result = scanTree(repoRoot);
   assert.ok(result.scanned >= 30, `expected to scan the repository, scanned ${result.scanned}`);
+  // Coverage guard: tests/ and generated governance/workflow directories are scanned when present.
+  const covered = dirName => result.scannedPaths.some(p => p.startsWith(dirName + "/"));
+  for (const d of ["tests", "site", "service", ".github"]) assert.ok(covered(d), `${d}/ must be scanned`);
+  for (const d of [".conditor", ".ros", ".sde", ".echelon", ".visual-engineering", ".communication-engineering"]) {
+    if (existsSync(join(repoRoot, d))) assert.ok(covered(d), `generated ${d}/ must be scanned`);
+  }
+  assert.ok(result.scannedPaths.every(p => !p.startsWith("node_modules/") && !p.startsWith(".git/")));
   assert.deepEqual(result.blocked, [], JSON.stringify(result.blocked));
   assert.deepEqual(result.staleAllowlist, [], "remove allowlist entries that no longer match");
   assert.ok(ALLOWLIST.every(a => typeof a.reason === "string" && a.reason.length > 10), "every allowlist entry needs a reason");

@@ -12,18 +12,30 @@ Status: **NOT DEPLOYED.** No AWS account, region, secret or approval exists. Not
 | S3 | Budget guardrail | AWS Budget with an approved amount and alert recipient. **Amount is not decided.** | [OPERATOR-DECISIONS](OPERATOR-DECISIONS.md) D-09 |
 | S4 | Cloudflare Turnstile widget for staging | Site key (public) and secret key created by the Cloudflare account owner. The secret goes **only** into Secrets Manager. | VIT-API-003 |
 | S5 | Secrets Manager entry | `aws secretsmanager create-secret --name vitium/staging/turnstile-secret --secret-string file://<local-file-outside-repo>` run by the operator. Only the ARN is recorded. | VIT-NFR-004 |
-| S6 | Staging origin decision (**blocking**, see below) | Template/handler accept a staging origin, or staging E2E is limited to non-browser API tests | handoff H-01 |
+| S6 | Staging hostname decision (**blocking for browser E2E**, see below) | A staging hostname `https://<label>.vitium.echelonfoundry.com` is chosen, served, and has its own Turnstile widget; or staging E2E is limited to non-browser API tests | H-01, [OPERATOR-DECISIONS](OPERATOR-DECISIONS.md) D-24 |
+| S11 | Concurrency quota | `aws lambda get-account-settings --query 'AccountLimit.ConcurrentExecutions'`. If the quota is 10, deploy with `ReservedConcurrency=0` (H-03). | — |
 | S7 | Log retention for staging | Provisional 7 days is in the template; approver confirms for staging | VIT-OQ-009 |
 | S8 | Synthetic-data-only rule | Staging receives synthetic reports only and no real customer data until VIT-API-006 is approved | VIT-API-006 |
 | S9 | Deploy identity | Least-privilege deployer and CloudFormation execution roles per `infra/aws/README.md` | VIT-NFR-004 |
 | S10 | Teardown owner | Named person who deletes the stack **and** the retained table after testing | — |
 
-### S6: staging origin is currently impossible to test in a browser
+### S6: staging origin (H-01, intake contract of fix round 1)
 
-`infra/aws/template.yaml` restricts `IntakeOrigin` to `AllowedValues: [https://vitium.echelonfoundry.com]`. `service/aws-handler.mjs` refuses to start unless `ALLOWED_ORIGIN === "https://vitium.echelonfoundry.com"` and `CHALLENGE_HOSTNAME === "vitium.echelonfoundry.com"`. As a result, a staging stack only accepts browser traffic from the production site, whose public config must stay `enabled: false`. There are two options:
+The fix-round-1 intake template (branch `p0/fix1-intake`, commit `598ea6c`; not yet on `p0/integration` at the time of writing) takes two parameters:
 
-- **(a) Lowest risk, provisional:** run staging E2E as **non-browser HTTP tests** that send `Origin: https://vitium.echelonfoundry.com` against the execute-api URL. Turnstile must still pass, which needs a real token for the canonical hostname, so a browser is still required to obtain tokens. Without one, only the negative tests below can run.
-- **(b)** The intake agent adds a staging origin and hostname, for example a separate Pages project or `staging.vitium.echelonfoundry.com`, as an explicit `AllowedValues` entry selected only when `EnvironmentName=staging`. A matching Turnstile widget hostname is also needed. This is handoff H-01.
+- `IntakeOrigin`, matching `^https://([a-z0-9-]+\.)?vitium\.echelonfoundry\.com$`
+- `ChallengeHostname`, matching `^([a-z0-9-]+\.)?vitium\.echelonfoundry\.com$`
+
+A CloudFormation `Rules` block forces both to the canonical values when `EnvironmentName=production`. Wildcards and other domains are not accepted. **No staging hostname has been chosen** (D-24). Until one is chosen, served and given a Turnstile widget, there are two options:
+
+- **(a) Non-browser only:** run the negative E2E tests (E5, E6, E7, E12) with `Origin: <IntakeOrigin>` against the execute-api URL. Positive tests (E1–E4) need a real Turnstile token for `ChallengeHostname`, which requires a browser page served on that hostname.
+- **(b) Full browser E2E:** choose `<label>.vitium.echelonfoundry.com`, serve a staging copy of `site/` there with its own (staging-only) public config, create a Turnstile widget for that hostname, and deploy with the overrides below.
+
+The staging site's public config is a separate artifact. The production `site/public-config.mjs` stays `enabled: false`.
+
+### Body cap
+
+The intake body cap is **24 KiB (24,576 bytes)**, from `service/limits.mjs` `INTAKE_LIMITS.maxBodyBytes`. Bodies above it get 413 `payload_too_large` before decoding and parsing. The cap was raised from 16 KiB because a report with every field at maximum length plus the maximum challenge token measured about 16.6 KB. API Gateway HTTP APIs have a fixed 10 MB ceiling that cannot be lowered, so this application cap is the effective limit.
 
 ## Commands (operator only, not executed)
 
@@ -43,6 +55,11 @@ sam deploy \
   --resolve-s3 \
   --role-arn <CLOUDFORMATION_EXECUTION_ROLE_ARN> \
   --parameter-overrides EnvironmentName=staging TurnstileSecretArn=<SECRET_ARN> \
+      IntakeOrigin=https://<STAGING_LABEL>.vitium.echelonfoundry.com \
+      ChallengeHostname=<STAGING_LABEL>.vitium.echelonfoundry.com \
+      ReservedConcurrency=<4, or 0 if the account quota is 10> \
+      TableDeletionProtection=false \
+      PermissionsBoundaryArn=<BOUNDARY_POLICY_ARN or empty> \
   --tags Application=vitium Environment=staging \
   --no-execute-changeset                                 # review the change set first
 aws cloudformation describe-change-set --stack-name vitium-intake-staging --change-set-name <NAME>
@@ -63,7 +80,7 @@ Every test uses synthetic data. Record request IDs, HTTP status and the DynamoDB
 | E3 | Same key, changed body | Typed conflict and no overwrite | VIT-AC-006 |
 | E4 | 20 concurrent identical submissions | Exactly one item; all responses agree on the reference | VIT-AC-006 |
 | E5 | Missing, invalid, expired and reused Turnstile token | Typed 4xx and no item written | VIT-AC-005 |
-| E6 | Wrong Origin, no Origin, GET, wrong path, wrong content type, body larger than 16 KiB, malformed JSON, unknown properties | 403/404/415/413/400, no item, no stack trace | VIT-AC-004 |
+| E6 | Wrong Origin, no Origin, GET, wrong path, wrong content type, body of exactly 24,576 bytes (must be accepted or validated, not 413) and of 24,577 bytes (must be 413), malformed JSON, unknown properties | 403/404/415/413/400, no item, no stack trace | VIT-AC-004 |
 | E7 | Burst above stage throttle (2 rps / burst 4) | 429 from API Gateway and no unbounded writes. **Global, not per-IP.** | VIT-AC-005 |
 | E8 | Revoke `secretsmanager:GetSecretValue` temporarily (in staging) | 503 `service_unavailable`, no receipt, no item | VIT-AC-007 |
 | E9 | Deny `dynamodb:PutItem` temporarily (in staging) | 503 with no false receipt | VIT-AC-007 |

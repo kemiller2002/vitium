@@ -111,8 +111,14 @@ export const extractSameOriginAssets = (html, pageUrl = CANONICAL_URL) => {
   return Object.freeze([...new Set(resolved.filter(u => u.origin === origin).map(u => u.href))]);
 };
 
+// Static imports, side-effect imports, `export ... from` re-exports and literal dynamic import().
+const MODULE_SPECIFIER_PATTERNS = Object.freeze([
+  /\bimport\s+(?:[^"'`;]*?\s+from\s+)?["']([^"']+)["']/g,
+  /\bexport\s+(?:\*|\*\s+as\s+\w+|\{[^}]*\})\s*from\s*["']([^"']+)["']/g,
+  /\bimport\s*\(\s*["']([^"']+)["']\s*\)/g
+]);
 export const extractModuleImports = (js, moduleUrl) =>
-  Object.freeze([...new Set([...js.matchAll(/\bimport\s+(?:[^"'`;]*?\s+from\s+)?["']([^"']+)["']/g)]
+  Object.freeze([...new Set(MODULE_SPECIFIER_PATTERNS.flatMap(re => [...js.matchAll(re)])
     .map(m => m[1]).filter(s => s.startsWith("./") || s.startsWith("../") || s.startsWith("/"))
     .map(s => new URL(s, moduleUrl).href))]);
 

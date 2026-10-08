@@ -2,7 +2,7 @@
 // No network: every effect is injected with fixtures.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import {
   evaluateCname, classifyNetworkError, evaluateDocumentResponse, evaluateCanonical,
   evaluateNoGithubIo, extractSameOriginAssets, extractModuleImports, evaluateAssets,
@@ -60,13 +60,38 @@ test("github.io references anywhere in served text fail; committed site has none
   assert.equal(reasonOf(evaluateNoGithubIo('<meta property="og:url" content="http://x.github.io">')), "GITHUB_IO_REFERENCE");
 });
 
-test("asset extraction finds exactly the committed same-origin assets and ignores the CDN", () => {
-  const assets = extractSameOriginAssets(siteHtml, CANONICAL_URL);
-  assert.deepEqual([...assets].sort(), [`${CANONICAL_URL}app.mjs`, `${CANONICAL_URL}styles.css`].sort());
-  assert.ok(assets.every(a => !a.includes("cdn.jsdelivr.net")));
-  const imports = extractModuleImports(read("site/app.mjs"), `${CANONICAL_URL}app.mjs`);
-  assert.deepEqual([...imports].sort(), [`${CANONICAL_URL}public-config.mjs`, `${CANONICAL_URL}submission.mjs`].sort());
+// Expected asset set is DERIVED from the committed site by following references
+// from index.html through every same-origin module import, so new modules do not
+// require editing this test. Independent guard: every committed site file other
+// than index.html must be reachable (no orphaned/unchecked published file), and the
+// known core assets must be in the closure.
+const SITE_DIR = new URL("../site/", import.meta.url);
+const committedSiteFiles = readdirSync(SITE_DIR).filter(f => statSync(new URL(f, SITE_DIR)).isFile()).sort();
+const crawlCommittedSite = () => {
+  const roots = extractSameOriginAssets(siteHtml, CANONICAL_URL);
+  const step = (seen, queue) => {
+    if (queue.length === 0) return seen;
+    const [next, ...rest] = queue;
+    const rel = next.slice(CANONICAL_URL.length);
+    const found = /\.m?js$/.test(rel) ? extractModuleImports(read("site/" + rel), next).filter(u => !seen.includes(u)) : [];
+    return step([...seen, ...found], [...rest, ...found]);
+  };
+  return Object.freeze(step([...roots], [...roots]).sort());
+};
+
+test("asset closure derived from the committed site covers every published file and ignores the CDN", () => {
+  const closure = crawlCommittedSite();
+  const expected = committedSiteFiles.filter(f => f !== "index.html").map(f => CANONICAL_URL + f).sort();
+  assert.deepEqual(closure, expected, "every committed site file must be referenced (and every reference must exist)");
+  for (const core of ["app.mjs", "styles.css", "submission.mjs", "public-config.mjs"]) {
+    assert.ok(closure.includes(CANONICAL_URL + core), `core asset ${core} missing from closure`);
+  }
+  assert.ok(closure.every(a => a.startsWith(CANONICAL_URL)), "only same-origin assets");
+  assert.ok(extractSameOriginAssets(siteHtml, CANONICAL_URL).every(a => !a.includes("cdn.jsdelivr.net")));
   assert.deepEqual(extractModuleImports('import x from "https://cdn.example/x.js"; import "./y.mjs";', `${CANONICAL_URL}a.mjs`), [`${CANONICAL_URL}y.mjs`]);
+  assert.deepEqual(
+    [...extractModuleImports('import {a} from "./b.mjs";\nexport { c } from "./d.mjs";\nexport * from "../e.mjs";\nconst f = await import("./f.mjs");', `${CANONICAL_URL}x/a.mjs`)].sort(),
+    [`${CANONICAL_URL}e.mjs`, `${CANONICAL_URL}x/b.mjs`, `${CANONICAL_URL}x/d.mjs`, `${CANONICAL_URL}x/f.mjs`]);
 });
 
 test("assets: any non-200 or transport error fails", () => {
@@ -94,14 +119,15 @@ test("summarize returns the first failing exit code and ok only when every check
 });
 
 // ---- whole program with injected fixture effects ----
-const siteFiles = { "": siteHtml, "app.mjs": read("site/app.mjs"), "styles.css": read("site/styles.css"), "public-config.mjs": read("site/public-config.mjs"), "submission.mjs": read("site/submission.mjs") };
+// Serve every committed site file from disk; anything else is 404.
+const siteFiles = Object.freeze(Object.fromEntries([["", siteHtml], ...committedSiteFiles.filter(f => f !== "index.html").map(f => [f, read("site/" + f)])]));
+const served = (url, body, status = 200, authorized = true) => ({ ok: true, value: { url, status, headers: {}, body, tls: { authorized } } });
 const fixtureGet = (overrides = {}) => async url => {
   if (overrides[url]) return overrides[url];
   const path = url.slice(CANONICAL_URL.length);
-  return path in siteFiles
-    ? { ok: true, value: { url, status: 200, headers: {}, body: siteFiles[path], tls: { authorized: true } } }
-    : { ok: true, value: { url, status: 404, headers: {}, body: "", tls: { authorized: true } } };
+  return path in siteFiles ? served(url, siteFiles[path]) : served(url, "", 404);
 };
+const failedChecks = r => r.checks.filter(c => !c.ok).map(c => c.name);
 const goodDns = async () => ({ ok: true, value: ["kemiller2002.github.io"] });
 const now = () => new Date("2026-10-08T00:00:00Z");
 
@@ -112,21 +138,30 @@ test("verifyPublicSite passes against the committed site served from fixtures", 
   assert.deepEqual(r.checks.map(c => c.name), ["dns-cname", "tls-valid", "document-status", "canonical", "same-origin-assets", "no-github-io", "no-secrets"]);
 });
 
-test("verifyPublicSite fails closed for NXDOMAIN, proxy denial, missing asset and leaked secret", async () => {
+test("verifyPublicSite fails closed; each fixture isolates exactly one fault", async () => {
   const nx = await verifyPublicSite({ resolve: async () => ({ ok: false, error: { code: "ENOTFOUND" } }), get: async () => ({ ok: false, error: { code: "ENOTFOUND" } }), now });
   assert.equal(nx.ok, false);
   assert.equal(nx.exit, Reason.DNS_NXDOMAIN.exit);
 
   const blocked = await verifyPublicSite({ resolve: goodDns, get: async () => ({ ok: false, error: { code: "PROXY_DENIED" } }), now });
   assert.equal(blocked.exit, Reason.NETWORK_BLOCKED.exit);
+  assert.deepEqual(failedChecks(blocked), ["https-reachable"]);
 
-  const missing = await verifyPublicSite({ resolve: goodDns, get: fixtureGet({ [`${CANONICAL_URL}submission.mjs`]: { ok: true, value: { status: 404, headers: {}, body: "", tls: { authorized: true } } } }), now });
+  // submission.mjs is only reachable transitively (index.html -> app.mjs -> state.mjs -> submission.mjs).
+  assert.doesNotMatch(read("site/app.mjs"), /from\s+["']\.\/submission\.mjs["']/, "fixture premise: submission.mjs must be a transitive import");
+  const missing = await verifyPublicSite({ resolve: goodDns, get: fixtureGet({ [`${CANONICAL_URL}submission.mjs`]: served(`${CANONICAL_URL}submission.mjs`, "", 404) }), now });
   assert.equal(missing.exit, Reason.ASSET_FAILED.exit, "transitively imported module must be fetched and checked");
+  assert.deepEqual(failedChecks(missing), ["same-origin-assets"]);
 
+  // Keep the real module content (so its imports and the asset check stay green) and append a leaked key.
   const leaked = ["AK", "IA", "Z".repeat(16)].join("");
-  const secret = await verifyPublicSite({ resolve: goodDns, get: fixtureGet({ [`${CANONICAL_URL}public-config.mjs`]: { ok: true, value: { status: 200, headers: {}, body: `export const k="${leaked}"`, tls: { authorized: true } } } }), now });
+  const configUrl = `${CANONICAL_URL}public-config.mjs`;
+  const secret = await verifyPublicSite({ resolve: goodDns, get: fixtureGet({ [configUrl]: served(configUrl, `${siteFiles["public-config.mjs"]}\nexport const k="${leaked}";`) }), now });
   assert.equal(secret.exit, Reason.SECRET_FOUND.exit);
+  assert.deepEqual(failedChecks(secret), ["no-secrets"]);
+  assert.ok(!JSON.stringify(secret).includes(leaked), "report must not echo the leaked value");
 
-  const untrusted = await verifyPublicSite({ resolve: goodDns, get: fixtureGet({ [CANONICAL_URL]: { ok: true, value: { status: 200, headers: {}, body: siteHtml, tls: { authorized: false } } } }), now });
+  const untrusted = await verifyPublicSite({ resolve: goodDns, get: fixtureGet({ [CANONICAL_URL]: served(CANONICAL_URL, siteHtml, 200, false) }), now });
   assert.equal(untrusted.exit, Reason.TLS_INVALID.exit);
+  assert.deepEqual(failedChecks(untrusted), ["tls-valid"]);
 });
