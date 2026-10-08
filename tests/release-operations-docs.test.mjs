@@ -1,0 +1,56 @@
+// VIT-NFR-005 / VIT-API-006 / VIT-API-007: operational runbooks exist, link the right
+// acceptance IDs, and keep undecided policy explicitly undecided (no invented owners/numbers).
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync, existsSync } from "node:fs";
+
+const read = p => readFileSync(new URL("../" + p, import.meta.url), "utf8");
+const OPS = ["PAGES-DNS-TLS", "STAGING-READINESS", "INCIDENT-AND-ESCALATION", "ROLLBACK-AND-DR", "DATA-HANDLING", "OPERATOR-DECISIONS"]
+  .map(n => `docs/operations/${n}.md`);
+
+test("all operations runbooks exist", () => {
+  for (const p of OPS) assert.ok(existsSync(new URL("../" + p, import.meta.url)), p);
+});
+
+test("owner tables use UNASSIGNED rather than invented people", () => {
+  const incident = read("docs/operations/INCIDENT-AND-ESCALATION.md");
+  const rows = incident.split("\n").filter(l => /^\| (Security contact|Privacy\/data owner|Triage\/moderation operator|AWS account operator|Repository\/Pages operator) \|/.test(l));
+  assert.equal(rows.length, 5);
+  for (const row of rows) {
+    const [, , , primary, backup] = row.split("|").map(s => s.trim());
+    assert.equal(primary, "UNASSIGNED", row);
+    assert.equal(backup, "UNASSIGNED", row);
+  }
+  const register = read("docs/operations/OPERATOR-DECISIONS.md");
+  const decisionRows = register.split("\n").filter(l => /^\| D-\d{2} \|/.test(l));
+  assert.ok(decisionRows.length >= 20);
+  for (const row of decisionRows) assert.match(row.split("|")[3], /UNASSIGNED/, row);
+});
+
+test("retention, RPO/RTO and deadlines are not invented", () => {
+  const data = read("docs/operations/DATA-HANDLING.md");
+  const schedule = data.split("## 2.")[1].split("## 3.")[0];
+  const policyRows = schedule.split("\n").filter(l => /^\| (Unreviewed|Rejected|Accepted)/.test(l));
+  assert.equal(policyRows.length, 3);
+  policyRows.forEach(r => assert.match(r, /\| UNDECIDED \| UNDECIDED \| UNASSIGNED \|/));
+  const dr = read("docs/operations/ROLLBACK-AND-DR.md");
+  assert.match(dr, /RPO\/RTO: \*\*operator decisions, not set here/);
+  assert.doesNotMatch(dr, /RPO\s*(=|:|of)\s*\d|RTO\s*(=|:|of)\s*\d/i);
+});
+
+test("register covers every required operator action and maps to acceptance and VIT-OQ IDs", () => {
+  const register = read("docs/operations/OPERATOR-DECISIONS.md");
+  for (const topic of ["Enable Pages", "DNS CNAME", "Enforce HTTPS", "AWS account", "region", "Turnstile", "Moderation", "Retention", "Privacy notice", "Budget", "Security contact"]) {
+    assert.match(register, new RegExp(topic, "i"), topic);
+  }
+  for (const id of ["VIT-AC-014", "VIT-AC-015", "VIT-AC-008", "VIT-OQ-008", "VIT-OQ-009"]) assert.ok(register.includes(id), id);
+});
+
+test("runbooks never instruct enabling intake or deploying without approval", () => {
+  const staging = read("docs/operations/STAGING-READINESS.md");
+  assert.match(staging, /\*\*NOT DEPLOYED\.\*\*/);
+  assert.match(staging, /--stack-name vitium-intake-staging/);
+  assert.match(staging, /--no-execute-changeset/);
+  assert.doesNotMatch(staging, /--stack-name vitium-intake-production|--guided/);
+  assert.match(read("docs/operations/ROLLBACK-AND-DR.md"), /enabled: false/);
+});
