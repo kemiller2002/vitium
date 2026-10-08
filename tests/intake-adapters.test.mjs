@@ -16,7 +16,9 @@ const err = name => Object.assign(new Error("x"), {name});
 
 test("T-30 dynamo store maps SDK outcomes to typed results and never throws", async () => {
   const run = send => makeDynamoStore({client:{send}, tableName:"t", commands:{PutItemCommand:Put, GetItemCommand:Get}}).putOnce(item);
-  assert.deepEqual(await run(async () => ({})), {ok:true, value:{created:true}});
+  const puts = [];
+  assert.deepEqual(await run(async c => { puts.push(c); return {}; }), {ok:true, value:{created:true}});
+  assert.equal(puts[0].input.ConditionExpression, "attribute_not_exists(pk)", "create must be conditional");
   assert.deepEqual(await run(async () => { throw err("ThrottlingException"); }), {ok:false, error:"throttled"});
   assert.deepEqual(await run(async () => { throw err("InternalServerError"); }), {ok:false, error:"unavailable"});
   const replay = await run(async c => { if (c.kind === "put") throw err("ConditionalCheckFailedException");

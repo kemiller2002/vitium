@@ -92,3 +92,15 @@ test("D-05 time-based (v1) idempotency keys are refused; only random v4 keys are
   assert.equal(reply.statusCode,400);
   assert.equal(store.records.size,0);
 });
+
+// D-06 (HANDOFF to the typed-domain agent; report-domain.mjs is outside intake/security ownership).
+// The legacy credential regex `sk-[A-Za-z0-9_-]{18,}` has no word boundary, so ordinary
+// hyphenated words ending in "sk" ("task-", "desk-", "disk-") followed by 18+ characters are
+// refused as credentials. Marked todo so it is reported without failing `npm test`;
+// remove {todo} once report-domain.mjs adds \b (the intake redactor already has it).
+test("D-06 hyphenated words containing 'sk-' are not mistaken for API keys",{todo:"handoff: report-domain.mjs credential regex lacks \\b"},async()=>{
+  const {store,handle}=fixture();
+  const reply=await handle(event(valid({title:"The task-management-dashboard-widget is blank"})));
+  assert.equal(reply.statusCode,201);
+  assert.equal(store.records.size,1);
+});
