@@ -11,6 +11,8 @@ const secretRules = Object.freeze([
   {kind:"url-credentials", pattern:/\b([a-z][a-z0-9+.-]*:\/\/)[^\s\/@:]+:[^\s\/@]+@/gi, keep:"$1"},
   // Keep the parameter name, drop "=" and value (so no residual "name=value" assignment).
   {kind:"url-secret-parameter", pattern:/([?&;](?:access_token|refresh_token|id_token|token|api_key|apikey|key|secret|client_secret|password|passwd|pwd|sig|signature|x-amz-signature|x-amz-credential|x-amz-security-token|code|auth))=[^\s&#;]+/gi, keep:"$1 "},
+  // Servlet/PHP-style session ids carried as URL path parameters (";jsessionid=...").
+  {kind:"url-session-parameter", pattern:/(;(?:jsessionid|phpsessid|sessionid|sid))=[^\s;\/?#]+/gi, keep:"$1=[redacted]", raw:true},
   // Requires a digit in the value so prose such as "Basic authentication" is not redacted.
   {kind:"authorization-header", pattern:/\b(Bearer|Basic|Token)\s+(?=[A-Za-z0-9._~+\/=-]*\d)[A-Za-z0-9._~+\/=-]{16,}/gi, keep:"$1 "},
   {kind:"jwt", pattern:/\beyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}/g},
@@ -20,7 +22,7 @@ const secretRules = Object.freeze([
   {kind:"api-secret-key", pattern:/\b(?:sk|rk|pk)[-_](?:live|test|proj)?[-_]?[A-Za-z0-9_-]{18,}/g},
   // Labelled assignment: keep the label, drop the separator and value so the remaining
   // text cannot be mistaken for a credential assignment by downstream checks.
-  {kind:"credential-assignment", pattern:/\b(password|passwd|passphrase|pwd|secret|client[_ -]?secret|api[_ -]?key|access[_ -]?key|access[_ -]?token|auth[_ -]?token|aws_secret_access_key|private[_ -]?key)\s*[:=]\s*(?!\[redacted\])\S{4,}/gi, keep:"$1 "}
+  {kind:"credential-assignment", pattern:/\b(password|passwd|passphrase|pwd|secret|client[_ -]?secret|api[_ -]?key|access[_ -]?key|access[_ -]?token|auth[_ -]?token|aws_secret_access_key|private[_ -]?key|token|refresh[_ -]?token|session[_ -]?id)\s*[:=]\s*(?!\[redacted\])\S{4,}/gi, keep:"$1 "}
 ]);
 
 const luhn = digits => {
@@ -39,11 +41,11 @@ export function redactText(input) {
   if (typeof input !== "string" || !input) return Object.freeze({text: input, findings: Object.freeze([])});
   const found = [];
   let text = input;
-  for (const {kind, pattern, keep} of secretRules) {
+  for (const {kind, pattern, keep, raw} of secretRules) {
     text = text.replace(pattern, (...match) => {
       found.push(kind);
-      const prefix = keep ? keep.replace(/\$(\d)/g, (_, n) => match[Number(n)] ?? "") : "";
-      return prefix + PLACEHOLDER;
+      const expanded = keep ? keep.replace(/\$(\d)/g, (_, n) => match[Number(n)] ?? "") : "";
+      return raw ? expanded : expanded + PLACEHOLDER;
     });
   }
   text = text.replace(cardPattern, candidate => {

@@ -25,6 +25,9 @@ const catalog = Object.freeze({
   service_unavailable:  {category:"unavailable",status:503, retryable:true,  message:"Reporting is temporarily unavailable."}
 });
 
+/** Every wire error code the HTTP adapter (and aws-handler) can emit. */
+export const ERROR_CODES = Object.freeze(Object.keys(catalog));
+
 /** Build a typed failure. `detail` is an optional reporter-safe message override (validation only). */
 export function intakeFailure(code, detail) {
   const entry = catalog[code] ?? catalog.service_unavailable;

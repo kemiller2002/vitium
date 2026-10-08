@@ -3,6 +3,8 @@
 // emulator in tests/integration. It never throws: every outcome is a Result value.
 //
 // Write protocol (VIT-API-004):
+//   0. lookup(pk): strongly-consistent projected GetItem, used by the core to answer a retry
+//      of an already-stored request without a fresh challenge (VF-010).
 //   1. PutItem with ConditionExpression attribute_not_exists(pk)  -> created
 //   2. On ConditionalCheckFailedException: strongly-consistent GetItem that projects ONLY
 //      reference, payloadHash, receivedAt, disposition (never the report body). The intake
@@ -42,7 +44,21 @@ export function makeDynamoStore({client, tableName, commands}) {
     throw new TypeError("DynamoDB store requires client, table name and commands.");
   }
   const {PutItemCommand, GetItemCommand} = commands;
+  const readReplay = pk => client.send(new GetItemCommand({
+    TableName: tableName, Key:{pk:{S:pk}}, ConsistentRead: true,
+    ProjectionExpression: REPLAY_ATTRIBUTES.map((_, i) => "#a" + i).join(","),
+    ExpressionAttributeNames: Object.fromEntries(REPLAY_ATTRIBUTES.map((name, i) => ["#a" + i, name]))
+  }));
   return Object.freeze({
+    /** Read-only replay lookup (VF-010): projects receipt attributes only, never the report. */
+    async lookup(pk) {
+      try {
+        const found = await readReplay(pk);
+        return found?.Item ? ok({found:true, existing: decodeReplay(found.Item)}) : ok({found:false});
+      } catch (error) {
+        return fail(classify(error));
+      }
+    },
     async putOnce(item) {
       try {
         await client.send(new PutItemCommand({
@@ -55,11 +71,7 @@ export function makeDynamoStore({client, tableName, commands}) {
         if (error?.name !== "ConditionalCheckFailedException") return fail(classify(error));
       }
       try {
-        const found = await client.send(new GetItemCommand({
-          TableName: tableName, Key:{pk:{S:item.pk}}, ConsistentRead: true,
-          ProjectionExpression: REPLAY_ATTRIBUTES.map((_, i) => "#a" + i).join(","),
-          ExpressionAttributeNames: Object.fromEntries(REPLAY_ATTRIBUTES.map((name, i) => ["#a" + i, name]))
-        }));
+        const found = await readReplay(item.pk);
         if (!found?.Item) return fail("unavailable");
         return ok({created:false, existing: decodeReplay(found.Item)});
       } catch (error) {

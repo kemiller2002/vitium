@@ -7,14 +7,22 @@
 // Ports (all injected, none global):
 //   store.putOnce(item)       -> Result<{created:true} | {created:false, existing:{reference,payloadHash,receivedAt,disposition?}}, "unavailable"|"throttled">
 //                                (a legacy plain {created,...} value is also accepted; a rejected promise is "unavailable")
+//   store.lookup(pk)          -> Result<{found:false} | {found:true, existing:{reference,payloadHash,receivedAt}}, "unavailable"|"throttled">
+//                                OPTIONAL read-only port. When present, a retry of a stored request is answered
+//                                WITHOUT a fresh challenge (VF-010); without it, every request needs a challenge.
 //   verifyChallenge(token)    -> Result<boolean, "unavailable"|"misconfigured">   (legacy plain boolean accepted)
 //   now()                     -> ISO-8601 string
 //   reference()               -> opaque high-entropy receipt reference
 //
 // Ordering guarantees (each guarded by a mutation-tested test):
-//   validate -> verify challenge -> persist -> receipt. No receipt without a confirmed durable write.
+//   validate -> [lookup: known key? same canonical hash -> original receipt | different -> 409]
+//            -> verify challenge -> persist -> receipt.
+//   Nothing is ever WRITTEN without a verified challenge; no receipt without a confirmed durable
+//   write (or a durable record found by lookup). A replay discloses only what the caller already
+//   proved it has: the full canonical body under the same random key.
 import { IntakeError, normalizeReport, makeReference, payloadHash, assertIdempotencyKey } from "./report-domain.mjs";
 import { ok, fail, intakeFailure } from "./errors.mjs";
+import { INTAKE_LIMITS } from "./limits.mjs";
 import { screenReport, redactText, hasUnsafeDisplayCharacters, textFields } from "./redaction.mjs";
 
 const RANDOM_UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -29,7 +37,8 @@ export function parseIdempotencyKey(key) {
 
 /** Pure: shape check for the one-time challenge token (never stored, never logged). */
 export const checkChallengeShape = token =>
-  typeof token === "string" && token.length >= 12 && token.length <= 4096 && /^[\x21-\x7e]+$/.test(token)
+  typeof token === "string" && token.length >= INTAKE_LIMITS.minChallengeTokenChars &&
+  token.length <= INTAKE_LIMITS.maxChallengeTokenChars && /^[\x21-\x7e]+$/.test(token)
     ? ok(token) : fail(intakeFailure("challenge_required"));
 
 /**
@@ -37,11 +46,27 @@ export const checkChallengeShape = token =>
  * Credentials are redacted BEFORE domain validation so they are never stored, hashed or
  * echoed; the domain validator (report-domain.mjs) then enforces fields, sizes and URLs.
  */
-export function prepareReport(raw) {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return fail(intakeFailure("invalid_input","Report must be an object."));
+// Mandatory free-text fields that render as nothing (only whitespace / format characters
+// such as zero-width space, ZWJ, word joiner, BOM) are refused like empty ones.
+const MANDATORY_TEXT = Object.freeze(["title","actual","expected"]);
+const visiblyEmpty = value => typeof value === "string" && value.replace(/[\s\p{Cf}]/gu, "") === "";
+
+/** Pure: NFC-normalize every string field so canonically equivalent text is one payload (VF-008). */
+export function canonicalizeRaw(raw) {
+  return Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, typeof v === "string" ? v.normalize("NFC") : v]));
+}
+
+export function prepareReport(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return fail(intakeFailure("invalid_input","Report must be an object."));
   for (const name of textFields) {
-    if (hasUnsafeDisplayCharacters(raw[name])) return fail(intakeFailure("invalid_input","The report contains invalid characters."));
+    const value = input[name];
+    if (typeof value === "string" && !value.isWellFormed()) return fail(intakeFailure("invalid_input","The report contains invalid characters."));
+    if (hasUnsafeDisplayCharacters(value)) return fail(intakeFailure("invalid_input","The report contains invalid characters."));
   }
+  for (const name of MANDATORY_TEXT) {
+    if (visiblyEmpty(input[name])) return fail(intakeFailure("invalid_input","Please fill in every required field."));
+  }
+  const raw = canonicalizeRaw(input);
   // pageUrl is excluded from pre-redaction: the domain validator strips userinfo, query and
   // fragment itself; the remaining path is screened after normalization below.
   const {report: screenedRaw, screening} = screenReport({...raw, pageUrl: undefined});
@@ -87,15 +112,17 @@ export function buildObservation({storageKey, report, screening, reference, rece
   });
 }
 
-/** Pure: the reporter-facing receipt. Acknowledges durable storage only; grants no access. */
-export const receiptFor = ({reference, receivedAt, disposition, screening}, replayed) => Object.freeze({
-  schemaVersion: "1.0",
+/**
+ * Pure: the reporter-facing receipt. Acknowledges durable storage only; grants no access.
+ * Deliberately identical for received and quarantined observations: exposing the screening
+ * outcome would give anonymous callers an oracle for the secret/vulnerability detectors.
+ */
+export const receiptFor = ({reference, receivedAt}, replayed) => Object.freeze({
+  schemaVersion: INTAKE_LIMITS.schemaVersion,
   reference,
   receivedAt,
   status: "received",
-  disposition: disposition === "quarantined" ? "quarantined" : "received",
-  replayed,
-  notices: Object.freeze(!replayed && screening?.redactions?.length ? ["credential-redacted"] : [])
+  replayed
 });
 
 /** Pure: interpret a store outcome for a candidate item. */
@@ -124,6 +151,18 @@ async function settleChallenge(verify, token) {
   if (result) return result.ok ? ok(result.value === true) : fail(result.error === "misconfigured" ? "misconfigured" : "unavailable");
   return ok(value === true);
 }
+async function settleLookup(store, pk) {
+  if (typeof store.lookup !== "function") return ok({found:false});
+  let value;
+  try { value = await store.lookup(pk); } catch { return fail("unavailable"); }
+  const result = asResult(value);
+  if (!result) return fail("unavailable");
+  if (!result.ok) return result;
+  const v = result.value;
+  if (v?.found === false) return ok({found:false});
+  if (v?.found === true && v.existing && typeof v.existing === "object") return ok(v);
+  return fail("unavailable");
+}
 async function settleStore(store, item) {
   let value;
   try { value = await store.putOnce(item); } catch { return fail("unavailable"); }
@@ -141,6 +180,16 @@ export function makeIntake({store, verifyChallenge, now = () => new Date().toISO
       if (!prepared.ok) return prepared;
       const storageKey = parseIdempotencyKey(idempotencyKey);
       if (!storageKey.ok) return storageKey;
+      const pk = "REQUEST#" + storageKey.value;
+      const hash = payloadHash(prepared.value.report);
+
+      // Idempotent replay (VF-010): a known key is answered from durable state, before and
+      // without the challenge. Different canonical content under the key is a 409 that
+      // reveals nothing stored. Nothing is written on this path.
+      const known = await settleLookup(store, pk);
+      if (!known.ok) return fail(intakeFailure(known.error === "throttled" ? "throttled" : "storage_unavailable"));
+      if (known.value.found) return decideReceipt({payloadHash: hash}, ok({created:false, existing:known.value.existing}));
+
       const token = checkChallengeShape(challengeToken);
       if (!token.ok) return token;
 

@@ -4,8 +4,9 @@
 // the allow-listed record from adapters/safe-log.mjs through an injected logger.
 import { intakeFailure, failureBody } from "./errors.mjs";
 import { intakeLogRecord } from "./adapters/safe-log.mjs";
+import { INTAKE_LIMITS } from "./limits.mjs";
 
-export const MAX_BODY_BYTES = 16_384;
+export const MAX_BODY_BYTES = INTAKE_LIMITS.maxBodyBytes;
 export const ROUTE = "/api/v1/reports";
 // Upper bound on the base64 text for MAX_BODY_BYTES, checked before decoding.
 const MAX_BASE64_CHARS = Math.ceil(MAX_BODY_BYTES / 3) * 4;
@@ -76,7 +77,7 @@ export function createHttpHandler(intake, {allowedOrigin = "https://vitium.echel
     const receipt = result.value;
     const status = receipt.replayed ? 200 : 201;
     emit({requestId, status, code: receipt.replayed ? "replayed" : "accepted",
-      disposition: receipt.disposition, flags: result.screening?.flags,
+      disposition: result.screening?.disposition, flags: result.screening?.flags,
       redactions: result.screening?.redactions, replayed: receipt.replayed});
     return response(status, receipt, allowedOrigin, requestId);
   };
