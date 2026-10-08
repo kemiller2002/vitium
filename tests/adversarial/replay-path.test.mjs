@@ -41,10 +41,16 @@ test("VIT-AC-009: a replay or conflict never echoes stored report content", asyn
   const h = harness();
   await send(h, validRequest({ actual: "UNIQUE-STORED-TEXT-42" }), IDEMPOTENCY_KEY, CHALLENGE);
   const replay = parse(await send(h, validRequest({ actual: "UNIQUE-STORED-TEXT-42" }), IDEMPOTENCY_KEY));
-  const conflict = parse(await send(h, validRequest({ actual: "other" }), IDEMPOTENCY_KEY));
+  // Fix round 3 (VF-023 contract): an UNCHALLENGED conflict must look exactly like an unused
+  // key, so it is a 403 here; the 409 is only reachable with a fresh valid challenge.
+  const unchallengedConflict = parse(await send(h, validRequest({ actual: "other" }), IDEMPOTENCY_KEY));
+  const unusedKey = parse(await send(h, validRequest({ actual: "other" }), OTHER));
+  assert.equal(unchallengedConflict.status, unusedKey.status, "unchallenged conflict distinguishable by status");
+  assert.equal(unchallengedConflict.raw, unusedKey.raw, "unchallenged conflict distinguishable by body");
+  const conflict = parse(await send(h, validRequest({ actual: "other" }), IDEMPOTENCY_KEY, CHALLENGE + "-fresh"));
   assert.equal(replay.status, 200);
   assert.equal(conflict.status, 409);
-  for (const r of [replay, conflict]) assert.ok(!r.raw.includes("UNIQUE-STORED-TEXT-42"));
+  for (const r of [replay, unchallengedConflict, unusedKey, conflict]) assert.ok(!r.raw.includes("UNIQUE-STORED-TEXT-42"));
   assert.deepEqual(Object.keys(replay.body).sort(), ["receivedAt", "reference", "replayed", "schemaVersion", "status"]);
   assert.deepEqual(Object.keys(conflict.body).sort(), ["category", "code", "message", "retryable"]);
 });
