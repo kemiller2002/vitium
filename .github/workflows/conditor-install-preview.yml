@@ -50,6 +50,11 @@ jobs:
               exit 1
             fi
             install -m 755 "$executable" "$RUNNER_TEMP/bin/$repo"
+            # Native archives may ship a launcher plus a neighboring *-bin executable.
+            sidecar="$(dirname "$executable")/$repo-bin"
+            if [ -f "$sidecar" ]; then
+              install -m 755 "$sidecar" "$RUNNER_TEMP/bin/$repo-bin"
+            fi
           done
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - uses: actions/setup-node@v4
