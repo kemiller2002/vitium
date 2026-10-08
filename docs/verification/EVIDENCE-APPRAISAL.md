@@ -85,3 +85,68 @@ Unless stated otherwise, every reproduction runs from the repository root on thi
 - The page CSP blocks inline script, which is good. axe is injected through CDP `evaluate` for that reason (`addScriptTag` was refused by CSP).
 - The CSP `connect-src` makes Chromium log a refused preload of the Forma stylesheet ("Connecting to … violates connect-src"). The stylesheet itself loads under `style-src`; this is console noise, not a failure.
 - `form-action https://github.com` is present but the form never posts. Harmless.
+
+## Fix round 1 (branch `p0/fix1-verify` from `p0/integration` @ `2b9de54`)
+
+Scope: harness maintenance and adjudication only. No product code was changed.
+Integrated start state: `npm run test:adversarial` 95 tests / 60 pass / **4 fail** / 31 todo.
+
+### Adjudication of the 4 non-todo failures
+
+| # | Test | Verdict | Authority | Action |
+|---|---|---|---|---|
+| 37 | "replay response does not reveal the original receivedAt … beyond the reference" | **Real defect → VF-020** (owner intake). The integrated receipt adds `disposition` and `notices`. `disposition: "quarantined"` gives an anonymous caller an oracle for the secret and vulnerability detectors: probe text, read the verdict. SEC-001 records the shape change but does not justify exposing the screening verdict. | FIX-ROUND-1 contract (replay returns the original receipt without revealing stored state); SEC-001 point 5 ("receipt is not a capability") | Assertion kept **unchanged**; marked `{ todo: "finding VF-020" }`. Confirmed passing on `p0/fix1-intake` (189fc60), whose `receiptFor` drops both fields with the same rationale. Remove the marker when that branch lands. |
+| 78 | "an observation produced by makeIntake validates against observation.schema.json" | **Real defect → VF-021** (owner domain). makeIntake emits `disposition`, `screening` and `reviewQueuePk: "QUEUE#quarantined"`; the closed schema refuses them ("must NOT have additional properties"). The schema is the stale side. | FIX-ROUND-1 contract, "Observation shape" | Assertion kept **unchanged**; marked `{ todo: "finding VF-021" }`. Confirmed passing on `p0/fix1-domain` (9bb1467). |
+| 81 | "every documented edge is executable by an authorised actor" | **Superseded test semantics, not a defect.** The test drove edges from the prose diagram in VITIUM-OPEN-DECISIONS.md and sent `classification` on every edge. The table now rejects undeclared fields (`unexpected_field`), which is stricter. DOM-001 decision 1 makes `schemas/lifecycle/transitions.v1.json` the single edge authority. | DOM-001 decisions 1 and 4 | Rewritten to read the table **directly** (independently of the service loader) and supply exactly each rule's obligations. Strengthened: one new test asserts that every evidence, field and role obligation is refused when missing (including `unspecified` evidence); another asserts that every pair absent from the table is refused even with administrator role, every evidence kind and every field. |
+| 90 | "reopening preserves the closure event and the prior history unchanged" | **Superseded test semantics, not a defect.** Reopen now requires `new-occurrence` or `triage-correction` evidence (`missing_evidence`). | DOM-001 decision 4 and "Consequences" | The test now first asserts that reopen **without** evidence and with non-qualifying (`supporting`) evidence is refused, then supplies `new-occurrence`. It still asserts the prior two events are deep-equal **and** byte-identical, the closure event and resolution evidence are retained, history is frozen and the input is not mutated. Added: the reopen event's `reopens` points at the closure (sequence 2). Close evidence follows the table rule, so the test also passes on `p0/fix1-domain`, where `resolved → closed` gains an evidence obligation. |
+
+### Findings re-checked on the integrated tree
+
+| Finding | State on `p0/integration` | Closing commit | Marker change |
+|---|---|---|---|
+| VF-001 error summary + `aria-describedby` | **closed by integration** (browser, 3 viewports) | 6d2be13 | `test.fail` removed, assertion unchanged |
+| VF-002 hints associated | **closed by integration** | 6d2be13 | `test.fail` removed |
+| VF-003 silent truncation | **closed by integration** | 6d2be13 | `test.fail` removed |
+| VF-013 inconsistent store reply → 503 | **closed by integration** | fa59123 | `todo` removed |
+| VF-014 undocumented edges | **closed by integration**: every executable pair is a table edge | 76fd040 (table), DOM-001 | Test re-based on the table (see #81), no marker |
+| VF-015 duplicate needs canonical ref | **closed by integration**; strengthened with malformed, wrong-kind and self references plus a positive control | 76fd040 | `todo` removed |
+| VF-015 `evidenceId` must be a real string | **closed by integration**, plus positive control | 76fd040 | `todo` removed |
+| VF-015 `resolved → closed` needs evidence | open on integration; passes on `p0/fix1-domain` (8993af7) | n/a | `todo` kept |
+| VF-016 truncated history | **NOT closed.** It passed only vacuously (`missing_evidence`, because reopen now needs evidence). With the required evidence supplied, `{revision: 2, history: []}` is still accepted. Passes on `p0/fix1-domain`. | n/a | Test corrected; `todo` kept |
+| VF-016 aliased history events | open; passes on `p0/fix1-domain` | n/a | `todo` kept |
+| VF-008 invisible/bidi | open: zero-width-only titles are stored verbatim (C1/bidi now refused). Passes on `p0/fix1-intake`. | n/a | Test now observes the full intake path |
+| VF-009 credential formats | **partially closed**: PAT, AKIA, xoxb, JWT and Bearer are redacted and quarantined (fa59123). `token=…` in free text and `;jsessionid=` in page URLs still persist. Passes on `p0/fix1-intake`. | n/a | Test now asserts SEC-001 semantics (never stored or echoed, record quarantined) instead of "refused" |
+| VF-010 lost-response retry | open; passes on `p0/fix1-intake` (06af070) with the harness store modelling the new read-only `lookup` port | n/a | `todo` kept |
+| VF-004, VF-005, VF-006, VF-007, VF-011, VF-012, VF-017, VF-018 | open on integration (VF-006/007/012/017 pass on `p0/fix1-domain`) | n/a | `todo` kept |
+
+Why tests were re-expressed for SEC-001 (VF-008/009): the integration replaced "refuse credentials" with "redact then quarantine" (SEC-001 decision 1). The tests now assert that the canary never appears in any stored record or reply **and** that the record is quarantined. This is no weaker for confidentiality, and it adds the quarantine obligation.
+
+### Harness changes
+- `tests/verification/canaries.mjs`: every fake credential is assembled at runtime. `node scripts/secret-scan.mjs` reports no findings in `tests/adversarial/`, `tests/browser/` or `tests/verification/`.
+- `tests/verification/contracts.mjs`: the in-memory store implements the read-only `lookup(pk)` replay port (receipt projection only), matching `service/adapters/dynamodb-store.mjs` on `p0/fix1-intake`.
+- Body-size tests follow `http.MAX_BODY_BYTES`, bounded to [16384, 24576], the documented contract range.
+- Mutation runner:
+  - Copies the whole tree (generated governance state included).
+  - Scores kills **differentially** against an unmutated control run, so the 7 pre-existing `npm test` failures on integration cannot count as kills. Self-tested in `harness-self.test.mjs`.
+  - 44 mutants (was 20), retargeted to `service/lifecycle.mjs`, `service/redaction.mjs`, `site/state.mjs`, `site/private-intake.mjs` and `site/view.mjs`.
+- Browser spec changes:
+  - Locates `<summary>` by tag.
+  - Accepts focus on the error summary, which the stricter VF-001 test requires.
+  - Accepts focus anywhere inside `#review` (the state machine focuses the `review-title` heading).
+  - Tolerates a private control that is absent from the DOM while the gate is disabled (template-only; stronger than "hidden").
+
+### Mutation appraisal on `p0/integration` (unit + adversarial, differential)
+
+Control: `npm test` exit 1 with 7 pre-existing failures; adversarial exit 0.
+- Killed: **41 / 44**. Unit alone kills 39/44. Adversarial alone kills 22/44. M12 (HTML-only product) and M06 (truthy challenge) are killed only by adversarial.
+- **Survivors after the first run:** M24 (page-URL path not screened), M38 (reducer skips receipt re-validation), M43 (challenge not required before send).
+- New `tests/adversarial/reducer-and-screening.test.mjs`: re-running with `--only=M24,M38,M43` kills M24.
+- M38 and M43 are **equivalent mutants** at the public API:
+  - `classifyOutcome` already calls `parseReceipt` on the same raw outcome, so the reducer's second check computes the same value.
+  - `buildPrivateRequest` independently refuses a missing or short token with the same `challenge_required` code.
+  - Both remaining guards are defence in depth. They are reported, not filed as findings.
+
+### New findings this round
+- **VF-020** (medium, VIT-AC-009, SEC-001 point 5, owner intake): the receipt exposes `disposition` and `notices`, an oracle for the screening detectors. Repro: `node --test --test-name-pattern="replay response does not reveal" tests/adversarial/intake-abuse.test.mjs` (marked todo).
+- **VF-021** (medium, VIT-DOM-003, owner domain): `observation.schema.json` refuses the observation shape makeIntake produces. Repro: `node --test --test-name-pattern="observation produced by makeIntake" tests/adversarial/schema-runtime.test.mjs` (marked todo).
+- **VF-022** (low, VIT-NFR-004, owner ops): `scripts/secret-scan.mjs` scans the gitignored `tests/browser/.output/`. Playwright's `error-context.md` and HTML report contain the runtime-assembled canary from the VF-004 test, so a local or CI scan after a browser run reports about 10 false positives. Add `.output` (or honour `.gitignore`) in `EXCLUDED_DIRS`, and do not run the scanner over browser artifacts.
