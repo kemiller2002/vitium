@@ -64,6 +64,29 @@ test("I-10 advancing quarantined -> accepted-for-triage moves it to the pending 
   assert.equal(shown.state, "rejected");
   assert.equal(shown.revision, 2);
   assert.equal(shown.history[0].actor, "arn:aws:iam::000000000000:user/emulator-operator");
+  assert.equal(shown.history[0].provenance, "authenticated-human", "strict path records provenance, never 'unrecorded'");
+  assert.deepEqual(shown.history[0].evidence, []);
+});
+
+test("I-13 strict path: typed evidence and declared fields are recorded; undeclared fields and bad evidence are refused", async () => {
+  const key = await submit("Strict path");
+  let r = await cli(["advance", "--key=" + key, "--to=accepted-for-triage", "--reason=ok", "--evidence=supporting:EV-1"]);
+  assert.equal(r.code, 0, r.err);
+  r = await cli(["advance", "--key=" + key, "--to=classified", "--reason=bug", "--severity=high"]);
+  assert.equal(r.code, 5, "classification is a required field");
+  assert.match(r.err, /missing_field/);
+  r = await cli(["advance", "--key=" + key, "--to=classified", "--reason=bug", "--classification=ui-defect", "--severity=high", "--evidence=reproduction:RUN-42"]);
+  assert.equal(r.code, 0, r.err);
+  const shown = JSON.parse((await cli(["show", "--key=" + key])).out);
+  assert.deepEqual(shown.history[0].evidence, [{kind:"supporting", ref:"EV-1"}]);
+  assert.deepEqual(shown.history[1].fields, {classification:"ui-defect", severity:"high"});
+  assert.deepEqual(shown.history[1].evidence, [{kind:"reproduction", ref:"RUN-42"}]);
+  assert.equal(shown.history[1].legacyEvidence, undefined);
+  const k2 = await submit("bad evidence");
+  assert.equal((await cli(["advance", "--key=" + k2, "--to=rejected", "--reason=x", "--evidence=made-up-kind:1"])).code, 5);
+  assert.equal((await cli(["advance", "--key=" + k2, "--to=rejected", "--reason=x", "--evidence=noref"])).code, 2);
+  assert.equal((await cli(["advance", "--key=" + k2, "--to=reopened", "--reason=x"])).code, 2, "reopen without evidence refused before any AWS call");
+  assert.equal((await cli(["advance", "--key=" + k2, "--to=rejected", "--reason=x", "--duplicateOf=DEF-0001"])).code, 5, "undeclared field for edge");
 });
 
 test("I-11 stale concurrent advance is refused by the conditional update, not silently applied", async () => {
