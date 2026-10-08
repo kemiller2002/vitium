@@ -8,6 +8,10 @@
 4. After a verified Conditor install, execute work through the generated Praxis/Ordo protocols, with real identities, work items, evidence, durable checkpoints and verification. Until then, mark governance as incomplete rather than simulating success.
 5. Never claim a deployment, a CI check, an installation, a browser test or a DNS validation passed without witnessing it.
 
+## Requirements authority
+
+The canonical proposed product scope is `docs/requirements/VITIUM-REQUIREMENTS.md`; acceptance cases are in `docs/requirements/VITIUM-ACCEPTANCE.md`; pending decisions are in `docs/requirements/VITIUM-OPEN-DECISIONS.md`. Read these before planning substantive behavior. Proposed requirements are not implementation evidence or decision approval. Reference individual requirement IDs in work items and change reviews, and keep questions unresolved rather than inventing answers.
+
 ## Initial application rules
 
 1. Read `PROJECT-CHARTER.md`, `context/CURRENT-STATE.md`, `docs/REPORTING.md`, and `schemas/defect.schema.json` before editing.
