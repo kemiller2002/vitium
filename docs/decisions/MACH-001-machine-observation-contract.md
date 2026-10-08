@@ -47,7 +47,7 @@ Echelon build and engineering systems (Praxis, Ordo, Conditor, Dokimos, Tutela, 
 7. **Producer outbox policy:**
    - pure, bounded backoff with injected jitter, `Retry-After` capped, a maximum number of attempts, and an expiry that leads to dead-letter;
    - the producer's build result is returned untouched;
-   - a 2xx counts as delivered only when the body is a machine ack for exactly that `eventId` (and that principal when the entry knows it). Any other 2xx is a retryable protocol error, `ack_mismatch` (fix round 3, VF-033);
+   - a 2xx counts as delivered only when the body is a machine ack for exactly that `eventId` **and** the producer's own principal. Any other 2xx is a retryable protocol error, `ack_mismatch` (fix round 3, VF-033). The principal is always compared (fix round 4, VF-036): `createOutboxEntry` refuses an entry without the producer's principalId (`missing_principal`). A legacy `enqueue` entry without one can never be confirmed; its first 2xx dead-letters it with reason `missing-principal`, so the failure stays visible;
    - mandatory reporting becomes a separate gate.
 
 ## Alternatives considered

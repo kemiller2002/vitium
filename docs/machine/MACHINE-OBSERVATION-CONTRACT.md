@@ -149,7 +149,7 @@ A finding is routed `visibility: "private-security"`, `securityClassified: true`
 `service/machine/outbox.mjs` contains pure functions for the future shared producer binding:
 
 - `classifyDelivery`:
-  - 2xx **with a machine ack for exactly this `eventId`** (`schemaVersion: "1.0"`, `status: "recorded"`, and the entry's `principalId` when known): delivered;
+  - 2xx **with a machine ack for exactly this `eventId` and the producer's `principalId`** (`schemaVersion: "1.0"`, `status: "recorded"`): delivered. The principal is always compared (VF-036). `createOutboxEntry(envelope, now, principalId)` refuses a missing or invalid principal (`missing_principal`). A legacy `enqueue` entry without a principal is dead-lettered `missing-principal` on its first 2xx; it is never marked delivered;
   - any other 2xx (captive portal, proxy page, `{}`, another event's ack): retry, recorded as `lastError {kind: "protocol-error", code: "ack_mismatch"}` (VF-033);
   - 429, 408, 5xx, timeout, network error, `causation_unknown`: retry;
   - 401 `principal_expired`: re-authenticate;
