@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Vitium.Contracts/Vitium.Contracts.fsproj" />
+    <Project Path="src/Vitium.Client/Vitium.Client.fsproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Vitium.Client.Smoke/Vitium.Client.Smoke.fsproj" />
+  </Folder>
+</Solution>

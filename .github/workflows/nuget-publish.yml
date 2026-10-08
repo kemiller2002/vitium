@@ -1,0 +1,70 @@
+name: Publish Vitium NuGet packages
+
+# Requires owner-approved package license, release tag, GitHub environment
+# protection and the configured Kevin.m.miller nuget.org Trusted Publishing policy.
+# Never runs from push, pull_request, or a moving branch.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    if: github.repository == 'kemiller2002/vitium' && github.ref_type == 'tag' && startsWith(github.ref_name, 'vitium-nuget-v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: nuget-release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Verify release version and approved package license
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#vitium-nuget-v}"
+          test -n "$version"
+          for project in src/Vitium.Contracts/Vitium.Contracts.fsproj src/Vitium.Client/Vitium.Client.fsproj; do
+            declared="$(dotnet msbuild "$project" -getProperty:Version | tail -n 1)"
+            test "$declared" = "$version" || {
+              echo "::error::Package version and immutable release tag do not match"
+              exit 1
+            }
+            grep -Eq '<PackageLicense(Expression|File)>' "$project" || {
+              echo "::error::Owner-approved package license metadata required before public publication"
+              exit 1
+            }
+          done
+      - name: Compile and exercise consumer security tests
+        run: |
+          dotnet build src/Vitium.Client/Vitium.Client.fsproj -c Release
+          dotnet run --project tests/Vitium.Client.Smoke/Vitium.Client.Smoke.fsproj -c Release
+      - name: Build both packages from the validated release tag
+        run: |
+          mkdir -p artifacts/nuget
+          dotnet pack src/Vitium.Contracts/Vitium.Contracts.fsproj -c Release --no-build -o artifacts/nuget
+          dotnet pack src/Vitium.Client/Vitium.Client.fsproj -c Release --no-build -o artifacts/nuget
+          test "$(find artifacts/nuget -maxdepth 1 -name '*.nupkg' | wc -l)" -eq 2
+      - name: Exchange GitHub OIDC identity for a short-lived NuGet API token
+        uses: NuGet/login@v1
+        id: nuget
+        with:
+          user: Kevin.m.miller
+      - name: Publish Contracts first, then Client
+        shell: bash
+        env:
+          NUGET_API_KEY: ${{ steps.nuget.outputs.NUGET_API_KEY }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#vitium-nuget-v}"
+          dotnet nuget push "artifacts/nuget/EchelonFoundry.Vitium.Contracts.$version.nupkg" \
+            --source https://api.nuget.org/v3/index.json --api-key "$NUGET_API_KEY"
+          dotnet nuget push "artifacts/nuget/EchelonFoundry.Vitium.Client.$version.nupkg" \
+            --source https://api.nuget.org/v3/index.json --api-key "$NUGET_API_KEY"

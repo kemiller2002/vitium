@@ -69,6 +69,14 @@ Review and merge the P0 PRs; decide VF-034; then the operator gates in `docs/ope
 - Repair → failed independent verification → in-progress → rework → verification → resolved and resolved/closed → reopened → active repair are explicitly specified. The local candidate `service/triage.mjs` and tests now require verifier, outcome, candidate revision, evidence, attempt ID and reopen release metadata. Tracked in #15.
 - The state-helper tests are not proof of integrated Ordo transition governance or end-to-end Praxis remediation.
 
+## Vitium NuGet packages (2026-10-08)
+
+- Added F#/.NET 10 package projects `src/Vitium.Contracts` (`EchelonFoundry.Vitium.Contracts`) and `src/Vitium.Client` (`EchelonFoundry.Vitium.Client`) at version `0.1.0-preview.1`.
+- `Vitium.slnx`, F# consumer smoke tests, `nuget-ci.yml` compile/pack workflow and a guarded manual OIDC NuGet publishing workflow are present.
+- Actual CI [run 37817505596](https://github.com/kemiller2002/vitium/actions/runs/37817505596) **succeeded**, including build, typed transport checks, both `.nupkg` artifacts, and restoration/compilation from packages in an unrelated F# consumer.
+- Packages are **not published** to NuGet.org or deployed to any application. MIT has been approved and added to the repository `LICENSE` and both F# NuGet project files. The NuGet package owner is `Kevin.m.miller` with Trusted Publishing policy `kemiller2002/vitium`, `nuget-publish.yml`, environment `nuget-release`, glob `EchelonFoundry.Vitium.*`. Publication still needs a matching immutable version tag, GitHub environment setup/protection, and a real successful OIDC publishing run. See `docs/NUGET-PACKAGES.md`.
+- The client models machine observation and verification submission with short-lived bearer credentials, but a live machine intake server, durable producer outbox, approved service identity and actual Praxis integration remain open (#14, #15).
+
 ## Mission VIT-P0-2026-10-08 results (2026-10-08)
 
 - Seven specialist agents (governance, domain, intake/security, UX, release/ops, independent verification, build-system integrations) worked in isolated worktrees; the principal integrator merged in dependency order on `p0/integration` and attributed every specialist commit to Praxis work items VIT-P0-{GOV,DOM,INT,UX,OPS,VER,MACH,INTEG}-001.
