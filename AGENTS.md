@@ -25,6 +25,15 @@ The canonical proposed product scope is `docs/requirements/VITIUM-REQUIREMENTS.m
 9. Keep source-specific adapters behind stable ports; minimize dependencies and avoid shortcuts that compromise provider independence.
 10. Provide keyboard- and machine-operable interfaces with stable IDs/labels and visible focus. Never use styling alone to communicate error or progress.
 
+## Private intake rules
+
+- `service/report-domain.mjs` is the candidate public report validation contract; `site/submission.mjs` is the legacy GitHub handoff contract. Keep product and impact lists aligned and pass negative consistency tests.
+- `service/intake.mjs` has an explicit store and challenge verifier effect boundary. Persist private **observations** only after verified challenge; never call reports confirmed defects automatically.
+- The AWS Lambda adapter is a staging candidate, not the Echelon-qualified F#/Limen final implementation. It uses the runtime-included AWS SDK and is not released through a pinned supply-chain contract; this is an explicit unresolved architectural deviation.
+- The IAM operator CLI is for protected environments only; never expose the raw reporting table through public API endpoints.
+- `site/public-config.mjs` MUST remain disabled until operator approval, data policy, custom API domain, real backend integration and end-to-end proof.
+- Read `docs/P0-IMPLEMENTATION.md` and `infra/aws/README.md` before changing P0 service code.
+
 ## Current checks
 
 `npm test` executes node-native submission contract tests. A full real-browser and accessibility suite is not yet installed; track it in issue #2.
