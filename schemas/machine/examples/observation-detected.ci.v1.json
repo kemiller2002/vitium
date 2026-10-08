@@ -1,0 +1,40 @@
+{
+  "schemaVersion": "1.0",
+  "eventId": "6819b08b-f3b5-4a58-9a0a-4fc13be29c1a",
+  "eventType": "observation.detected",
+  "source": {
+    "system": "ci",
+    "repository": "kemiller2002/summa",
+    "installationId": "example-ci-binding",
+    "version": "example-binding-version"
+  },
+  "subject": {
+    "workItemId": "WI-0042",
+    "commit": "f6a987d3c71ad2f4ced1711528e296a42c51d9f4",
+    "runId": "pipeline-run-123",
+    "runAttempt": 1,
+    "checkId": "verify-abi",
+    "environment": "ci"
+  },
+  "finding": {
+    "category": "test-failure",
+    "summary": "Routing contract failed during regression verification",
+    "expected": "Route matches verified binding",
+    "observed": "Binding assertion failed",
+    "classification": "untriaged",
+    "confidence": "observed"
+  },
+  "evidence": [
+    {
+      "kind": "test-result",
+      "uri": "https://github.com/kemiller2002/summa/actions/runs/123",
+      "sha256": "0bd2f8e0ca4368cf179d45db22b0c92e64ee3a253b48da68610446d004f54abe"
+    }
+  ],
+  "correlation": {
+    "defectId": null,
+    "verificationAttemptId": null,
+    "causationEventId": null
+  },
+  "observedAt": "2026-10-08T12:00:00Z"
+}

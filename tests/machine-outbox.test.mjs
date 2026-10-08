@@ -1,0 +1,131 @@
+// Producer-side outbox policy (VIT-INT-015, VIT-AC-035). Requirements doc items 3 and 4:
+// retry exhaustion, 429, unavailable Vitium fail safely; the producer keeps its own build
+// result independent of Vitium availability and sees delivery errors.
+import test from "node:test";
+import assert from "node:assert/strict";
+import { DEFAULT_POLICY, enqueue, nextDelivery, classifyDelivery, reportWithDelivery, orderByCausation, checkPolicy } from "../service/machine/outbox.mjs";
+import { example } from "./machine-fixtures.mjs";
+
+const T0 = "2026-10-08T12:00:00.000Z";
+const at = ms => new Date(Date.parse(T0) + ms).toISOString();
+const policy = { ...DEFAULT_POLICY, baseDelayMs: 1000, maxDelayMs: 8000, maxAttempts: 5, expiresAfterMs: 3600000 };
+const fresh = () => enqueue(example("observation-detected.ci.v1.json"), T0);
+const step = (e, now, outcome, jitter) => { const r = nextDelivery(e, now, policy, outcome, jitter); assert.ok(r.ok, JSON.stringify(r)); return r.value; };
+
+test("classification of delivery outcomes", () => {
+  assert.equal(classifyDelivery({ kind: "response", status: 201 }), "delivered");
+  assert.equal(classifyDelivery({ kind: "response", status: 200 }), "delivered");
+  for (const s of [429, 500, 502, 503, 504, 408]) assert.equal(classifyDelivery({ kind: "response", status: s }), "retry", String(s));
+  assert.equal(classifyDelivery({ kind: "timeout" }), "retry");
+  assert.equal(classifyDelivery({ kind: "network-error" }), "retry");
+  assert.equal(classifyDelivery({ kind: "response", status: 409, body: { code: "causation_unknown" } }), "retry");
+  assert.equal(classifyDelivery({ kind: "response", status: 409, body: { code: "event_conflict" } }), "permanent");
+  assert.equal(classifyDelivery({ kind: "response", status: 401, body: { code: "principal_expired" } }), "reauthenticate");
+  for (const s of [400, 401, 403, 413]) assert.equal(classifyDelivery({ kind: "response", status: s }), "permanent", String(s));
+  assert.equal(classifyDelivery(undefined), "retry");
+});
+
+test("bounded exponential backoff, capped at maxDelayMs", () => {
+  let e = fresh();
+  const delays = [];
+  let now = T0;
+  for (let i = 0; i < 4; i++) {
+    e = step(e, now, { kind: "response", status: 503 }, 0.999999);
+    delays.push(Date.parse(e.nextAttemptAt) - Date.parse(now));
+    now = e.nextAttemptAt;
+  }
+  assert.deepEqual(delays, [1000, 2000, 4000, 8000]);
+  assert.ok(delays.every(d => d <= policy.maxDelayMs));
+  // With zero jitter delays are half of the exponential value (equal jitter), still increasing.
+  const z = step(fresh(), T0, { kind: "timeout" }, 0);
+  assert.equal(Date.parse(z.nextAttemptAt) - Date.parse(T0), 500);
+});
+
+test("429 honours Retry-After but never beyond the policy ceiling", () => {
+  const e = step(fresh(), T0, { kind: "response", status: 429, retryAfterMs: 30000 });
+  assert.equal(Date.parse(e.nextAttemptAt) - Date.parse(T0), 30000);
+  const capped = step(fresh(), T0, { kind: "response", status: 429, retryAfterMs: 10 ** 9 });
+  assert.equal(Date.parse(capped.nextAttemptAt) - Date.parse(T0), policy.maxRetryAfterMs);
+  assert.equal(capped.lastError.status, 429);
+});
+
+test("retry exhaustion dead-letters with the last error (never silently dropped)", () => {
+  let e = fresh();
+  let now = T0;
+  for (let i = 0; i < policy.maxAttempts; i++) { e = step(e, now, { kind: "response", status: 503 }); now = at((i + 1) * 10000); }
+  assert.equal(e.status, "dead-letter");
+  assert.equal(e.deadLetterReason, "retry-exhausted");
+  assert.equal(e.attempts, policy.maxAttempts);
+  assert.equal(e.lastError.status, 503);
+  assert.equal(e.nextAttemptAt, null);
+  assert.equal(step(e, at(10 ** 7), { kind: "response", status: 201 }).status, "dead-letter", "terminal");
+});
+
+test("expiry dead-letters even without a new attempt", () => {
+  const e = step(fresh(), at(policy.expiresAfterMs), undefined);
+  assert.equal(e.status, "dead-letter");
+  assert.equal(e.deadLetterReason, "expired");
+  const notYet = step(fresh(), at(1), undefined);
+  assert.equal(notYet.status, "pending");
+  assert.equal(notYet.due, true);
+});
+
+test("permanent refusals dead-letter immediately; expired credential asks for re-authentication", () => {
+  const forged = step(fresh(), T0, { kind: "response", status: 403, body: { code: "identity_mismatch" } });
+  assert.equal(forged.status, "dead-letter");
+  assert.equal(forged.deadLetterReason, "permanent-refusal");
+  assert.equal(forged.lastError.code, "identity_mismatch");
+  const expired = step(fresh(), T0, { kind: "response", status: 401, body: { code: "principal_expired" } });
+  assert.equal(expired.status, "needs-credential");
+});
+
+test("delivered entries are terminal", () => {
+  const d = step(fresh(), T0, { kind: "response", status: 201 });
+  assert.equal(d.status, "delivered");
+  assert.equal(d.deliveredAt, T0);
+  assert.equal(step(d, at(5), { kind: "response", status: 500 }).status, "delivered");
+});
+
+test("invalid policy or entry is a typed refusal, not an exception", () => {
+  assert.equal(checkPolicy({ ...policy, maxAttempts: 0 }).ok, false);
+  assert.equal(checkPolicy({ ...policy, baseDelayMs: 9000 }).ok, false);
+  assert.equal(nextDelivery(fresh(), T0, { ...policy, maxAttempts: Infinity }).error.code, "invalid_policy");
+  assert.equal(nextDelivery(null, T0, policy).error.code, "invalid_entry");
+  assert.equal(nextDelivery(fresh(), "yesterday", policy).error.code, "invalid_time");
+});
+
+test("item 4: the producer's build result is returned untouched whatever happens to delivery", () => {
+  const buildResult = Object.freeze({ status: "failed", tests: Object.freeze({ passed: 41, failed: 1 }) });
+  let e = fresh();
+  for (let i = 0; i < policy.maxAttempts; i++) e = step(e, at(i * 10000), { kind: "network-error" });
+  const pending = step(enqueue(example("verification-failed.dokimos.v1.json"), T0), T0, { kind: "response", status: 429 });
+  const report = reportWithDelivery(buildResult, [e, pending]);
+  assert.equal(report.buildResult, buildResult, "same object identity");
+  assert.deepEqual(report.buildResult, { status: "failed", tests: { passed: 41, failed: 1 } });
+  assert.equal(report.delivery.deadLettered, 1);
+  assert.equal(report.delivery.pending, 1);
+  assert.equal(report.delivery.failures.length, 2, "delivery errors are visible");
+  assert.deepEqual(report.gates, []);
+  // A passing build stays passing even when reporting fails; a mandatory policy adds a SEPARATE gate.
+  const green = Object.freeze({ status: "passed" });
+  const mandatory = reportWithDelivery(green, [e], { reportingMandatory: true });
+  assert.equal(mandatory.buildResult.status, "passed");
+  assert.deepEqual(mandatory.gates, [{ gate: "vitium-reporting", passed: false }]);
+  assert.deepEqual(reportWithDelivery(green, [step(fresh(), T0, { kind: "response", status: 201 })], { reportingMandatory: true }).gates, [{ gate: "vitium-reporting", passed: true }]);
+});
+
+test("delivery order respects causation; cycles are withheld for repair", () => {
+  const a = example("observation-detected.ci.v1.json");
+  const b = { ...example("verification-failed.dokimos.v1.json"), observedAt: "2026-10-08T11:00:00Z", correlation: { ...example("verification-failed.dokimos.v1.json").correlation, causationEventId: a.eventId } };
+  const c = { ...example("governance-violation.ordo.v1.json") };
+  const { ordered, cyclic } = orderByCausation([b, c, a]);
+  const ids = ordered.map(e => e.eventId);
+  assert.ok(ids.indexOf(a.eventId) < ids.indexOf(b.eventId), "cause before effect even though effect is older");
+  assert.equal(ordered.length, 3);
+  assert.deepEqual(cyclic, []);
+  const x = { ...a, eventId: "11111111-1111-4111-8111-111111111111", correlation: { ...a.correlation, causationEventId: "22222222-2222-4222-8222-222222222222" } };
+  const y = { ...a, eventId: "22222222-2222-4222-8222-222222222222", correlation: { ...a.correlation, causationEventId: "11111111-1111-4111-8111-111111111111" } };
+  const cyc = orderByCausation([x, y, c]);
+  assert.deepEqual(cyc.ordered.map(e => e.eventId), [c.eventId]);
+  assert.deepEqual([...cyc.cyclic].sort(), [x.eventId, y.eventId]);
+});

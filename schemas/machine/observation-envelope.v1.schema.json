@@ -1,0 +1,379 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vitium.echelonfoundry.com/schemas/machine/observation-envelope.v1.schema.json",
+  "title": "Vitium machine-observation envelope v1 (PROPOSED; no route serves it)",
+  "description": "Authenticated machine-to-machine observation from an Echelon build/engineering system (VIT-INT-013/017). Producer identity is proven by the verified workload principal at the server boundary, NEVER by source.*; source.* must merely agree with the principal. Separate from the anonymous Turnstile intake. Mirrors service/machine/contract.mjs; tests/machine-contract.test.mjs proves parity.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "eventId",
+    "eventType",
+    "source",
+    "subject",
+    "finding",
+    "evidence",
+    "correlation",
+    "observedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "eventId": {
+      "$ref": "#/$defs/eventId",
+      "description": "Random v4 UUID chosen once per logical event by the producer; the delivery idempotency key."
+    },
+    "eventType": {
+      "enum": [
+        "observation.detected",
+        "verification.failed",
+        "verification.passed",
+        "verification.inconclusive",
+        "governance.violation"
+      ]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "system",
+        "repository",
+        "installationId",
+        "version"
+      ],
+      "properties": {
+        "system": {
+          "enum": [
+            "praxis",
+            "ordo",
+            "conditor",
+            "dokimos",
+            "tutela",
+            "aegis",
+            "ci",
+            "agent",
+            "vitium"
+          ],
+          "description": "Claimed system. Must equal the verified principal's system; never proof of identity."
+        },
+        "repository": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 140,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9-]{0,38}/(?!\\.{1,2}$)[A-Za-z0-9._-]{1,100}$"
+        },
+        "installationId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "version": {
+          "$ref": "#/$defs/identifier"
+        }
+      }
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workItemId",
+        "commit",
+        "runId",
+        "checkId",
+        "environment"
+      ],
+      "properties": {
+        "workItemId": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/identifier"
+            }
+          ]
+        },
+        "commit": {
+          "type": "string",
+          "minLength": 40,
+          "maxLength": 40,
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "runId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "runAttempt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "checkId": {
+          "$ref": "#/$defs/identifier"
+        },
+        "environment": {
+          "enum": [
+            "ci",
+            "development",
+            "staging",
+            "production"
+          ]
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "category",
+        "summary",
+        "expected",
+        "observed",
+        "classification",
+        "confidence"
+      ],
+      "properties": {
+        "category": {
+          "enum": [
+            "test-failure",
+            "build-failure",
+            "packaging-failure",
+            "integration-failure",
+            "deployment-verification-failure",
+            "regression",
+            "mutation-weakness",
+            "quality-rule",
+            "installation-failure",
+            "compatibility-failure",
+            "governance-violation",
+            "security-rule",
+            "runtime-fault",
+            "agent-suspicion",
+            "infrastructure-error",
+            "flaky-test"
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^(?! )(?!.* $)[^\\u0000-\\u001f\\u007f-\\u009f\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2069\\ufeff]+$"
+        },
+        "expected": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000,
+          "pattern": "^(?! )(?!.* $)[^\\u0000-\\u001f\\u007f-\\u009f\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2069\\ufeff]+$"
+        },
+        "observed": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000,
+          "pattern": "^(?! )(?!.* $)[^\\u0000-\\u001f\\u007f-\\u009f\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2069\\ufeff]+$"
+        },
+        "classification": {
+          "enum": [
+            "untriaged"
+          ],
+          "description": "Producers may only submit untriaged findings."
+        },
+        "confidence": {
+          "enum": [
+            "observed",
+            "suspected"
+          ]
+        }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "uri",
+          "sha256"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "test-result",
+              "build-log-reference",
+              "artifact",
+              "attestation",
+              "coverage-report",
+              "mutation-report",
+              "diagnostic-reference",
+              "sbom"
+            ]
+          },
+          "uri": {
+            "type": "string",
+            "minLength": 9,
+            "maxLength": 512,
+            "pattern": "^https://(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)+[A-Za-z]{2,63}(?::[0-9]{1,5})?(?:/[A-Za-z0-9._~!$&'()*+,;=:@%-]*)*$"
+          },
+          "sha256": {
+            "type": "string",
+            "minLength": 64,
+            "maxLength": 64,
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      }
+    },
+    "correlation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "defectId",
+        "verificationAttemptId",
+        "causationEventId"
+      ],
+      "properties": {
+        "defectId": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 16,
+              "pattern": "^DEF-[0-9]{4,12}$"
+            }
+          ]
+        },
+        "verificationAttemptId": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/identifier"
+            }
+          ]
+        },
+        "causationEventId": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/eventId"
+            }
+          ]
+        },
+        "originMarker": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 135,
+              "pattern": "^vitium/[A-Za-z0-9._:-]{1,128}$",
+              "description": "Echo marker. Present only on events Vitium itself caused; such events are dropped as echoes."
+            }
+          ]
+        }
+      }
+    },
+    "observedAt": {
+      "type": "string",
+      "minLength": 20,
+      "maxLength": 40,
+      "pattern": "^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2}):(\\d{2})(?:\\.\\d{1,9})?(?:Z|[+-](\\d{2}):(\\d{2}))$",
+      "description": "ISO-8601 instant with offset; calendar ranges are additionally checked at runtime."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "eventType": {
+            "enum": [
+              "verification.failed",
+              "verification.passed",
+              "verification.inconclusive"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "correlation": {
+            "properties": {
+              "verificationAttemptId": {
+                "$ref": "#/$defs/identifier"
+              },
+              "defectId": {
+                "type": "string",
+                "minLength": 8,
+                "maxLength": 16,
+                "pattern": "^DEF-[0-9]{4,12}$"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "eventType": {
+            "const": "governance.violation"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "finding": {
+            "properties": {
+              "category": {
+                "const": "governance-violation"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "finding": {
+            "properties": {
+              "category": {
+                "const": "governance-violation"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "eventType": {
+            "const": "governance.violation"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "eventId": {
+      "type": "string",
+      "minLength": 36,
+      "maxLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/+@-]{0,127}$"
+    }
+  }
+}

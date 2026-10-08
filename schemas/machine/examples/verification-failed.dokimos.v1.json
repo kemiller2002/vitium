@@ -1,0 +1,40 @@
+{
+  "schemaVersion": "1.0",
+  "eventId": "a377d67f-0a69-4c32-8b70-7dfd6c847762",
+  "eventType": "verification.failed",
+  "source": {
+    "system": "dokimos",
+    "repository": "kemiller2002/summa",
+    "installationId": "example-dokimos-binding",
+    "version": "example-binding-version"
+  },
+  "subject": {
+    "workItemId": "WI-0042",
+    "commit": "1e5c0b7d2f0a4b8c9d3e6f7a8b9c0d1e2f3a4b5c",
+    "runId": "verify-run-124",
+    "runAttempt": 1,
+    "checkId": "regression-routing-contract",
+    "environment": "ci"
+  },
+  "finding": {
+    "category": "regression",
+    "summary": "Targeted regression test still fails on the candidate revision",
+    "expected": "Route matches verified binding",
+    "observed": "Binding assertion failed for route group 7",
+    "classification": "untriaged",
+    "confidence": "observed"
+  },
+  "evidence": [
+    {
+      "kind": "test-result",
+      "uri": "https://github.com/kemiller2002/summa/actions/runs/124",
+      "sha256": "caa187b6549ed373bf337970d164effbef04d0030ce26ea47d81cb5ea6cbcc2f"
+    }
+  ],
+  "correlation": {
+    "defectId": "DEF-0042",
+    "verificationAttemptId": "VA-0042-1",
+    "causationEventId": null
+  },
+  "observedAt": "2026-10-08T13:00:00Z"
+}
