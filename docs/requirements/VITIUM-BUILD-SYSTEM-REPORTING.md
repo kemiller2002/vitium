@@ -4,6 +4,8 @@ Status: **proposed contract; not a deployed service or existing Praxis integrati
 Canonical service: Vitium, at https://vitium.echelonfoundry.com/  
 Applies to: Praxis, Ordo, Conditor, Dokimos, Tutela, Aegis, CI/build jobs and authorized engineering agents.
 
+> **Implementation status (2026-10-08):** a Vitium-side candidate of this contract, its producer outbox and the rework lifecycle exist in `service/` with unit tests for required tests 1–8; see `docs/requirements/P0-TRACEABILITY.md` and `docs/decisions/VIT-ADR-001-machine-observations-and-rework-lifecycle.md`. It is still not a deployed service, and required test 9 (qualified Ordo) is open.
+
 ## Design intent
 
 Every Echelon engineering system should be able to report a verified observation (or verification attempt result) to Vitium without copying customer secrets or requiring a human to create a GitHub Issue. Vitium correlates reports into defects and their repair/verification cycles; the originating system remains authoritative for its own test/build/work status.

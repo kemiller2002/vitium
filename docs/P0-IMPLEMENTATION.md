@@ -20,6 +20,8 @@ This file distinguishes code present from independently verified operation. Prod
 | Security and privacy | No secrets in static frontend; challenge secret read via Secrets Manager; no anonymous read endpoint | Privacy notice, retention, data ownership, deletion, secret rotation and authenticated private review need operator approval (#13) |
 | Echelon lifecycle governance | conditor.json, Conditor plan workflow, isolated installation preview | Read-only Conditor plan verified; actual installed files/lock, Praxis/Ordo evidence and F#/Limen migration not committed (#5,#6) |
 | User confirmation/status | Receipt acknowledgement only after HTTP success; no fake "fixed" state | No live E2E. Anonymous status capability and notifications belong to later #12 |
+| Machine observations from Echelon systems (#14) | service/machine-*.mjs, schemas/machine-observation.schema.json; separate authenticated route, never Turnstile | Unit tests for idempotency, scope, forgery, expiry, echo suppression, outbox outage/retry; no deployed endpoint, OIDC verifier, producer or real store |
+| Failed-verification rework and reopening (#15) | service/triage.mjs, service/verification-proposals.mjs | Unit tests for multiple failed iterations, recurrence, self-certification, stale/out-of-order results, agent budget; Ordo authority outstanding |
 | Production domain | vitium.echelonfoundry.com and proposed API intake.vitium.echelonfoundry.com | DNS/Pages/TLS must be configured, verified and continuously monitored (#7) |
 
 ## What tests establish
