@@ -1,0 +1,38 @@
+name: Conditor read-only planning
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'conditor.json'
+      - '.github/workflows/conditor-plan.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  attestations: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify pinned Conditor native release integrity
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/vitium-conditor"
+          cd "$RUNNER_TEMP/vitium-conditor"
+          gh release download v0.5.0 --repo kemiller2002/conditor \
+            --pattern 'conditor-linux-x64' --pattern 'checksums.txt'
+          grep -E 'conditor-linux-x64$' checksums.txt | sha256sum --check -
+          gh attestation verify ./conditor-linux-x64 --repo kemiller2002/conditor
+          chmod +x ./conditor-linux-x64
+          printf '%s\n' "$RUNNER_TEMP/vitium-conditor" >> "$GITHUB_PATH"
+          ln -s ./conditor-linux-x64 ./conditor
+      - name: Show capability compatibility
+        run: conditor compatibility --json
+      - name: Produce Conditor read-only plan
+        run: conditor plan --target . --manifest ./conditor.json
