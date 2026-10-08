@@ -1,0 +1,117 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Vitium P0 private intake candidate. Operator review and production configuration required.
+
+Parameters:
+  TurnstileSecretArn:
+    Type: String
+    Description: ARN of existing Secrets Manager secret containing Cloudflare Turnstile siteverify secret.
+    AllowedPattern: '^arn:aws[a-zA-Z-]*:secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:.+$'
+  EnvironmentName:
+    Type: String
+    Default: staging
+    AllowedValues: [staging, production]
+  IntakeOrigin:
+    Type: String
+    Default: https://vitium.echelonfoundry.com
+    AllowedValues: [https://vitium.echelonfoundry.com]
+
+Resources:
+  ReportsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Application
+          Value: vitium
+        - Key: Classification
+          Value: confidential-intake
+
+  IntakeApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: !Ref EnvironmentName
+      DefinitionBody:
+        openapi: '3.0.1'
+        info:
+          title: Vitium private intake
+          version: '1.0'
+        paths: {}
+      CorsConfiguration:
+        AllowOrigins:
+          - !Ref IntakeOrigin
+        AllowMethods:
+          - POST
+          - OPTIONS
+        AllowHeaders:
+          - content-type
+          - idempotency-key
+        MaxAge: 300
+      DefaultRouteSettings:
+        ThrottlingRateLimit: 2
+        ThrottlingBurstLimit: 4
+
+  IntakeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: Accepts private observations only after Cloudflare Turnstile verification.
+      CodeUri: ../../service/
+      Handler: aws-handler.handler
+      Runtime: nodejs22.x
+      Architectures: [arm64]
+      MemorySize: 256
+      Timeout: 15
+      ReservedConcurrentExecutions: 4
+      Environment:
+        Variables:
+          REPORTS_TABLE_NAME: !Ref ReportsTable
+          TURNSTILE_SECRET_ARN: !Ref TurnstileSecretArn
+          ALLOWED_ORIGIN: !Ref IntakeOrigin
+          CHALLENGE_HOSTNAME: vitium.echelonfoundry.com
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:PutItem
+                - dynamodb:GetItem
+              Resource: !GetAtt ReportsTable.Arn
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref TurnstileSecretArn
+      Events:
+        Report:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref IntakeApi
+            Path: /api/v1/reports
+            Method: POST
+            PayloadFormatVersion: '2.0'
+
+  IntakeFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${IntakeFunction}'
+      RetentionInDays: 7
+
+Outputs:
+  CandidateApiUrl:
+    Description: Candidate URL for smoke tests, not approved canonical public endpoint.
+    Value: !Sub 'https://${IntakeApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${EnvironmentName}/api/v1/reports'
+  PrivateTableName:
+    Value: !Ref ReportsTable
+  PendingCustomDomain:
+    Value: intake.vitium.echelonfoundry.com
