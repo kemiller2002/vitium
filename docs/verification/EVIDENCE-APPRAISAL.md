@@ -415,3 +415,71 @@ V05 was re-pointed to `&& author && sameActor(author, command.actor)) {` and MC0
 - CDN blocked: 66 passed.
 - Forma file mode: 66 passed.
 - axe: 0 violations in both modes; no overflow at 320, 375 or 1280.
+
+## Fix round 5: final ledger pass on `p0/integration` @ `691097c` (branch `p0/fix5-verify`)
+
+The final status tables are in P0-THREAT-TEST-MATRIX § "FINAL ledger, fix round 5".
+
+### Marker removals
+
+`git diff 32f5516 691097c -- tests/adversarial tests/verification tests/browser` contains exactly two changed lines in `round4-bypass.test.mjs`. Each one only deletes `{ todo: "finding VF-035" }, ` or `{ todo: "finding VF-036" }, `. No assertion changed. The VF-034 marker is still present.
+
+### Bypass variants (`tests/adversarial/round5-bypass.test.mjs`, 6 tests, all pass)
+
+- **VF-035** (`service/operator-identity.mjs`, b15dc78). Every one of these was classified `agent`:
+  - assumed-role ARN with trailing space, leading space, or newline;
+  - lower-case role name; zero-width character in the role name;
+  - `assumed-role/Triager/../Other` and `assumed-role/Other/../Triager`;
+  - role path in the session ARN; extra path segment after the session;
+  - GovCloud session for an `aws`-partition allow-list entry, and the reverse; `aws-cn`;
+  - another account;
+  - IAM user, root, `federated-user`;
+  - upper-case `ARN:AWS:STS`; `""`, `null`, a number.
+
+  Allow-list `*`, `role/*`, a name with a space, a zero-width suffix, and a trailing garbage entry each fail the **whole** configuration. Unset or blank means nobody is human. A non-array allow-list classifies as `agent`. `decide()` without provenance (or with a case or whitespace variant of `authenticated-human`) fails `human_verifier_required`. The control works: an allow-listed role session in its own partition, including GovCloud, is `authenticated-human`.
+  - Note: an allow-list entry `role/../Triager` or `role/a/../Triager` parses to role name `Triager`. That is harmless, because IAM role paths cannot contain `..` and the match uses the exact role name; recorded only.
+- **VF-036** (`service/machine/outbox.mjs`, d40bbae). These entries all dead-letter `missing-principal` on a 2xx and are never delivered: an entry from `enqueue()` without a principal, a whitespace-padded principal (stored as `null`), and a principal cleared to `undefined` after creation. `createOutboxEntry` without a principal returns `missing_principal`. With a principal, only an exact match is delivery (trailing space, upper case and zero-width are not).
+
+### VF-034 containment, checked independently
+
+Commit 633aabe; probe in `scratchpad/verif/probe-vf034.mjs`.
+- A legacy self-pass still resolves (expected; the finding stays open), and the event is marked `legacyUnguarded: true`.
+- No module under `service/` references `tryTransition` or `transition(` outside `triage.mjs` and `lifecycle.mjs`.
+- The strict path refuses to close a legacy-unguarded resolution (`unverified_resolution`).
+- **Residuals for the user decision (not new findings):**
+  1. The legacy path itself can still move that resolution to `closed`.
+  2. The marker lives in caller-supplied history. A strict caller that strips `legacyUnguarded` from the history it passes can close it. In storage that would require tampering with the persisted record, which the IAM boundary controls.
+
+  Status: **open, contained, pending user decision (DOM-001 §29).**
+
+### Mutation appraisal
+
+- R307 re-pointed to `  const trusted = {context:{provenance:kind}};`.
+- R313 re-pointed to the new `isAckFor` branch.
+- R501–R510 added for `operator-identity.mjs` and the triage-cli wiring: account / partition / case matching, any-ARN-is-human, unanchored session ARN, trim, malformed entry dropped, non-array list, any provenance string trusted, invalid config ignored.
+- R511–R512 added for the VF-036 outbox.
+
+Total **114** mutants; the control is green in all three suites.
+
+| Suite | Kills (of 114) |
+|---|---|
+| `npm test` | 98 |
+| `test:adversarial` | 74 |
+| `test:integration` | 20 |
+| union | **108** |
+
+- R506 (trim) and R508 (non-array list) are killed **only** by the new adversarial tests.
+- Survivors: **M23, M38, M43, M48, M57, R309**, all equivalent, as recorded in rounds 2–4.
+
+### Final counts
+
+| Command | Result |
+|---|---|
+| `npm test` | 309 / 309 |
+| `npm run test:adversarial` | 148 tests, 146 pass, 0 fail, 2 todo (VF-018, VF-034) |
+| `npm run test:integration` | 30 / 30 |
+| Secret scan | 0 blocked (327 files) |
+| Browser, CDN blocked | 66 passed |
+| Browser, Forma file mode | 66 passed |
+
+axe reports 0 violations in both browser modes.

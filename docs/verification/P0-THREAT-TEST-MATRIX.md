@@ -1,9 +1,95 @@
 # Vitium P0 threat / test matrix
 
-Status: **phase-1 independent verification against baseline `main` @ `bba1d59`**. Branch `p0/verification-harness`.
+Status: **final ledger in § "FINAL ledger, fix round 5"** (earlier sections are history). Originally: phase-1 independent verification against baseline `main` @ `bba1d59`. Branch `p0/verification-harness`.
 Author role: independent verification agent (VIT-P0-2026-10-08). This document does **not** certify code written by other agents and promotes **no** scenario to `verified-passed`: every P0 scenario below also depends on deployment, operator or governance evidence that does not exist.
 
 Status vocabulary follows `docs/requirements/VITIUM-ACCEPTANCE.md`: `not-started`, `in-progress`, `blocked`, `executed-failed`, `verified-passed`. A check line can be `executed-pass`, `executed-fail (finding)` or `not-executed`.
+
+## FINAL ledger, fix round 5 (`p0/fix5-verify` from `p0/integration` @ `691097c`)
+
+**This section is the current authority. Every section below it is history.**
+
+**Local environment:** sandbox, Node v22.22.0. Browser: Chromium 153.0.8010.0 via `@sparticuz/chromium@153.0.0` and `@playwright/test@1.63.0` at 320 / 375 / 1280. Forma CDN blocked, plus file mode with the npm 0.3.0 `dist/all.css` at the pinned URL. `test:integration` on dynalite, with the owners' labelled TransactWriteItems shim.
+
+**CI witnessed:** run 37813042099 "Conditor governance verification" and run 37813042172 "Praxis validation", both completed / success on `a8532cb` (an ancestor of `691097c`), re-checked via `gh api`. **No CI run of `691097c` has been witnessed;** `test.yml`, `p0-service.yml` and `browser.yml` (cdn and blocked) are pending.
+
+### Commands and outputs (`691097c` + this branch's test/doc changes)
+
+| Command | Output |
+|---|---|
+| `npm test` | 309 tests, 309 pass, 0 fail, 0 todo |
+| `npm run test:adversarial` | 148 tests, 146 pass, 0 fail, 2 todo (VF-018, VF-034) |
+| `npm run test:integration` | 30 tests, 30 pass |
+| `node scripts/secret-scan.mjs` | `[git]` 327 text files, 0 blocked |
+| `VITIUM_LOCAL_CHROMIUM=sparticuz npm run test:browser` (CDN blocked) | 66 passed, 0 failed, 0 flaky; axe 0 violations; no overflow |
+| same + `VITIUM_FORMA_CSS_FILE=…/dist/all.css` | 66 passed, 0 failed; axe 0 violations |
+| `node tests/verification/mutation-appraisal.mjs --suites=unit,adversarial,integration` (114 mutants) | 108 killed (unit 98, adversarial 74, integration 20); 6 survivors, all equivalent: M23, M38, M43, M48, M57, R309 |
+
+### Final finding status
+
+| ID | Status | Closing commit / owner | Note |
+|---|---|---|---|
+| VF-001..003 | closed | 6d2be13 / 281655e | browser |
+| VF-004, VF-005 | closed | 9e5ac50 (+9bb1467) | |
+| VF-006, VF-007, VF-012, VF-021 | closed | 9bb1467 | |
+| VF-008, VF-009, VF-010 | closed | 06af070 | |
+| VF-011 | closed | 041318d | |
+| VF-013 | closed | fa59123 | |
+| VF-014 | closed | 76fd040 | |
+| VF-015, VF-016, VF-017 | closed | 8993af7 | |
+| VF-019 | closed | (suite sensitivity) | only equivalent mutants survive |
+| VF-020 | closed | 189fc60 | |
+| VF-022 | closed | e172749 | |
+| VF-023 | closed | 159cec5 | |
+| VF-024 | closed with accepted residual | 159cec5 | well-formed fake token costs one read; recorded in SEC-001 |
+| VF-025..028 | closed | cc67767 / 41ad546 | bypass variants refused (round 4) |
+| VF-029..033 | closed | 418b86f / 04e4db8 | bypass variants refused (round 4) |
+| VF-035 | closed | b15dc78 (+75de90f test retarget) | round-5 variants refused: role-path tricks, `..` segments, partition swap (incl. GovCloud), account swap, case, leading/trailing whitespace, newline, zero-width, IAM user/root/federated, malformed or wildcard allow-list, non-array list, missing provenance in `decide()` |
+| VF-036 | closed | d40bbae | round-5 variants refused: principal-less, whitespace-padded and post-hoc-cleared principals dead-letter `missing-principal`; exact principal match only |
+| **VF-018** | **open, blocked** | ux / ops | SRI needs the jsDelivr bytes from an unblocked network (UX-0001 UX-G1) |
+| **VF-034** | **open, contained, pending user decision** | domain (633aabe containment); decision: Kevin, per DOM-001 §29 | Legacy `tryTransition` still allows self-pass and non-human pass. Containment verified: no `service/` module calls it; such events carry `legacyUnguarded: true`; the strict path refuses to close them (`unverified_resolution`). Residual: the legacy path can itself close a legacy resolution; and a caller that supplies history with the marker stripped is not detected (history is caller-supplied; durable storage would need to be tampered with) |
+
+### Final per-scenario status (VIT-AC-001..015, 032..036)
+
+No scenario is `verified-passed`.
+
+| Scenario | Status | Local evidence on `691097c` | Blocking |
+|---|---|---|---|
+| VIT-AC-001 | blocked | Browser, both CSS modes: keyboard completion, error-summary focus with linked errors, no silent truncation, no overflow, axe 0 | Canonical site live (AC-014); manual screen-reader session; CI browser leg |
+| VIT-AC-002 | in-progress | Review / Edit / Continue; safe GitHub URL; every external request aborted; credential text blocked | CI browser leg; canonical site |
+| VIT-AC-003 | blocked | Wire body accepted by service and schema; receipt only after a durable write; gate off | AWS staging, Turnstile key, intake domain, operator approval |
+| VIT-AC-004 | in-progress | All validation, unicode, hostile-input and schema/runtime tests pass | CI leg |
+| VIT-AC-005 | blocked | Challenge before write; malformed-token pre-filter | Per-source throttling; AWS load test |
+| VIT-AC-006 | blocked | Idempotency, conflict, NFC and lost-response retry pass locally and on dynalite | Real DynamoDB |
+| VIT-AC-007 | blocked | No receipt on store failure | AWS staging; GitHub sync (P1) |
+| VIT-AC-008 | blocked | Redaction, quarantine, site parity | Designated operator (VIT-OQ-008) |
+| VIT-AC-009 | in-progress | Unchallenged conflict byte-identical to an unused key; no read route; receipt is not a capability | CI leg |
+| VIT-AC-010 | in-progress | Product/impact parity; registry and migration tests pass | Registry tests not independently adjudicated; CI leg |
+| VIT-AC-011 | in-progress | No observation → defect edge; transactional promote (CL02/CL03 killed) | Ordo/Fides authority; real DynamoDB TransactWriteItems |
+| VIT-AC-012 | in-progress | Table-driven lifecycle suite passes | Candidate (non-Ordo) authority; CI leg |
+| VIT-AC-013 | in-progress | n/a locally | CI governance runs 37813042099 / 37813042172 witnessed on `a8532cb`; qualified Ordo transition authority not claimed |
+| VIT-AC-014 | blocked | n/a | Operator Pages/DNS/TLS |
+| VIT-AC-015 | blocked | Git-aware scan 0; no secrets in assets or responses; allow-listed logs | Deployed-Lambda log canary; VF-018 |
+| VIT-AC-032 | in-progress | Authenticated, scoped, untriaged, private, never auto-promoted; VF-029..031 closed | No machine endpoint or real producer (P1); CI leg |
+| VIT-AC-033 | in-progress | ≥ 2 failed iterations then an independent human pass; stale/old/missing refused; dynalite I-20 | Ordo authority; CI leg; VF-034 (legacy path, contained) |
+| VIT-AC-034 | in-progress | Reopen-and-resume all-or-nothing, history byte-identical, one conditional write | Ordo authority; real DynamoDB |
+| VIT-AC-035 | in-progress | VF-030, 031, 033, 036 closed; bounded outbox; build result untouched; echo bound to principal | No real producer or endpoint (P1); CI leg |
+| VIT-AC-036 | in-progress | Independence canonical and author-bound; human verifier for passes; budget fail-closed incl. the triage-cli boundary (VF-035 closed); inconclusive neither pass nor fail | **VF-034 open-contained** pending user decision (DOM-001 §29); Ordo authority; CI leg |
+
+### Final per-requirement status (new P0 requirements and mission §7 gates)
+
+| Requirement / gate | Status | Evidence | Open |
+|---|---|---|---|
+| VIT-LCY-010 | in-progress | Failed result returns to work with verifier, attempt, candidate and evidence (V01/V03/V04/V11 killed) | Ordo authority; CI leg |
+| VIT-LCY-011 | in-progress | Reopen-and-resume both events, all-or-nothing (V09, CL01 killed) | Ordo authority; real DynamoDB |
+| VIT-VER-009 | in-progress | Strict path: canonical independence (R303), author bound (R301/R302), human verifier (R306), caller classification (R501–R510) all killed | VF-034 open-contained (legacy entry point) pending user decision; Ordo authority |
+| VIT-INT-013 | in-progress | Versioned closed envelope with own-key checks (R308), principal brand (MC01/MC02), scope (MC04–MC07); separate from public intake | Proposed contract only, no endpoint; CI leg |
+| §7 gate 1: producer contract and identity model reviewed; untrusted claims denied | in-progress | Independent review in rounds 3–5; forged principals, source claims, echo markers and foreign acks refused | No real producer; CI leg |
+| §7 gate 2: ≥ 2 failed iterations before a pass, then a later recurrence | in-progress | Local and dynalite tests pass | CI leg; Ordo |
+| §7 gate 3: evidence and candidate history never disappear | in-progress | Byte-identical history checks across fail / pass / reopen | CI leg |
+| §7 gate 4: bounded autonomous repair stops and escalates | in-progress | Lifecycle fail-closed budget (R304/R305) and the triage-cli boundary allow-list (R501–R510, VF-035 closed) | CI leg; IAM allow-list must be configured by the operator (no defaults = everyone is an agent) |
+| §7 gate 5: no deployment claims without evidence | in-progress | Machine contract "proposed, no route"; `ordoAuthorized:false`; this ledger claims no deployment | Re-check at release |
+
 
 ## Final status, fix round 4 (confirmation pass, `p0/fix4-verify` from `p0/integration` @ `ef8f359`)
 
@@ -471,6 +557,6 @@ Full reproductions are in the verification report; the summary is in `docs/verif
 | VF-031 | medium | INT-016, AC-035 | machine | Cross-principal eventId replay gets a replay ack (fix round 3) |
 | VF-032 | medium | VER-010, AC-036 | machine | Re-run after inconclusive refused on the machine path (fix round 3) |
 | VF-033 | low | AC-035 | machine | Outbox treats any 2xx as delivered (fix round 3) |
-| VF-034 | medium | VER-006/009, AC-036 | domain | Legacy entry point allows self-pass and non-human pass (fix round 4) |
-| VF-035 | high | VER-011, §7 gate 4 | domain/ops | triage-cli maps every IAM principal (incl. agent workloads) to authenticated-human (fix round 4) |
-| VF-036 | low | AC-035 | machine | Principal-less outbox entry accepts a foreign ack (fix round 4) |
+| VF-034 | medium | VER-006/009, AC-036 | domain | Legacy entry point allows self-pass and non-human pass (fix round 4) — open, contained (633aabe), pending user decision |
+| VF-035 | high | VER-011, §7 gate 4 | domain/ops | triage-cli maps every IAM principal (incl. agent workloads) to authenticated-human (fix round 4) — closed b15dc78 |
+| VF-036 | low | AC-035 | machine | Principal-less outbox entry accepts a foreign ack (fix round 4) — closed d40bbae |
