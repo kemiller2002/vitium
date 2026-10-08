@@ -51,7 +51,7 @@ export function transition(record, command) {
   if (verifying) {
     if (!["verifier","administrator"].includes(command.role) || !has(command.evidenceId) ||
         !has(command.attemptId) || !has(command.candidateRevision)) {
-      throw new TransitionError("Independent verifier, attempt, revision and result evidence are required.");
+      throw new TransitionError("Independent verification requires a verifier, attempt, revision and result evidence.");
     }
     const expectedOutcome=command.to==="resolved" ? "passed" : "failed";
     if (command.verificationOutcome!==expectedOutcome) {
