@@ -88,12 +88,18 @@ Checks that found **no defect** on baseline: challenge verified before persist (
 
 ```json
 {"Version":"2012-10-17","Statement":[
- {"Effect":"Allow","Action":["dynamodb:Query"],"Resource":"<table-arn>/index/ReviewQueue"},
- {"Effect":"Allow","Action":["dynamodb:GetItem","dynamodb:UpdateItem"],"Resource":"<table-arn>"},
- {"Effect":"Allow","Action":["sts:GetCallerIdentity"],"Resource":"*"}]}
+ {"Sid":"ReviewQueue","Effect":"Allow","Action":["dynamodb:Query"],"Resource":"<table-arn>/index/ReviewQueue"},
+ {"Sid":"ReadAndAdvance","Effect":"Allow","Action":["dynamodb:GetItem","dynamodb:UpdateItem"],"Resource":"<table-arn>"},
+ {"Sid":"PromoteCreatesDefectOnly","Effect":"Allow","Action":["dynamodb:PutItem"],"Resource":"<table-arn>",
+  "Condition":{"ForAllValues:StringLike":{"dynamodb:LeadingKeys":["DEFECT#DEF-*"]}}},
+ {"Sid":"Identity","Effect":"Allow","Action":["sts:GetCallerIdentity"],"Resource":"*"}]}
 ```
 
-No Scan, DeleteItem, PutItem, BatchWriteItem or table admin. Require MFA in the role trust policy. CLI output must never go to public CI logs.
+- **Promotion (VIT-LCY-002, `triage-cli.mjs promote`)** uses one `TransactWriteItems` request. IAM has no `dynamodb:TransactWriteItems` action: every item in a transaction is authorized as its own `UpdateItem` or `PutItem`. So the only addition is `PutItem`, restricted by `dynamodb:LeadingKeys` to `DEFECT#DEF-*` partition keys. The operator role still cannot create or overwrite `REQUEST#` observations, and only the transaction's `attribute_not_exists(pk)` condition stops it from overwriting an existing defect.
+- **Not granted:** Scan, DeleteItem, BatchWriteItem or table admin. Require MFA in the role trust policy. CLI output must never go to public CI logs.
+- **Separation:** the public intake function role is unchanged: conditional `PutItem` plus projected `GetItem`, no `UpdateItem`, nothing on `DEFECT#`. Promotion permissions live only on the operator side.
+- **Where it lives:** the operator role is **not** modelled in `infra/aws/template.yaml`. That is deliberate, because operator principals are account- and SSO-specific and undecided (R-02). This policy is a proposal for the operator to create. It has **not** been checked by IAM Access Analyzer or exercised against real IAM.
+- **Evidence:** the emulator cannot prove transaction atomicity. dynalite 4.0.0 returns `UnknownOperationException` for `TransactWriteItems`. Tests I-30..I-35 run the CLI's transaction plan through a test-only shim that evaluates each item's condition in dynalite. Real transaction behaviour stays under blocker R-01.
 
 ## 5. Residual risks requiring operator decisions
 
