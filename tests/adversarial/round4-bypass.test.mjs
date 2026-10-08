@@ -164,7 +164,7 @@ test("VF-033 variant: with the producer principal known, an ack naming another p
   }
 });
 
-test("VIT-AC-035: an outbox entry without a known principal does not accept an ack issued to a different principal", { todo: "finding VF-036" }, () => {
+test("VIT-AC-035: an outbox entry without a known principal does not accept an ack issued to a different principal", () => {
   const e = enqueue({ eventId: "e2" }, NOW);
   const foreign = { schemaVersion: "1.0", eventId: "e2", principalId: "wl:someone-else", observationId: "OBS-9", receivedAt: NOW, status: "recorded", replayed: true };
   assert.notEqual(nextDelivery(e, NOW, DEFAULT_POLICY, { kind: "response", status: 200, body: foreign }).value.status, "delivered");

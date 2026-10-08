@@ -30,37 +30,62 @@ export function checkPolicy(p) {
   return ok(Object.freeze({ ...p }));
 }
 
-/** New outbox entry for an already-validated envelope. Pure. */
-// `principalId` (optional): the producer's own workload principal, so the ack is checked
-// against it too. Unknown before the first credential exchange; then eventId alone binds.
+const PRINCIPAL_ID = /^[A-Za-z0-9][A-Za-z0-9._:\/+@-]{0,127}$/;
+const isPrincipalId = v => typeof v === "string" && PRINCIPAL_ID.test(v);
+
+/**
+ * Producer API (VF-036): create an outbox entry. Total; returns Result<entry>.
+ * The producer's own workload principalId is REQUIRED: an ack can only prove delivery when
+ * it names the principal that sent the event, so an entry without one could never be
+ * confirmed. Refusals: missing_principal | invalid_entry.
+ */
+export function createOutboxEntry(envelope, now, principalId) {
+  if (!isObject(envelope) || typeof envelope.eventId !== "string" || !envelope.eventId) return fail("invalid_entry", "An envelope with an eventId is required.");
+  if (typeof now !== "string" || !Number.isFinite(ms(now))) return fail("invalid_entry", "now must be an ISO-8601 instant.");
+  if (!isPrincipalId(principalId)) return fail("missing_principal", "The producer's workload principalId is required to verify delivery acks.");
+  return ok(Object.freeze({ eventId: envelope.eventId, principalId, envelope, createdAt: now, attempts: 0, nextAttemptAt: now, status: "pending", lastError: null }));
+}
+
+/**
+ * Compatibility constructor that returns the entry directly (existing callers and tests).
+ * Without a valid principalId the entry is still retried and expired normally, but it is
+ * marked `principalId: null` and can NEVER be marked delivered: the first 2xx dead-letters
+ * it with reason "missing-principal" (fail closed, visible). New code uses createOutboxEntry.
+ */
 export function enqueue(envelope, now, principalId = undefined) {
   return Object.freeze({
-    eventId: envelope.eventId, envelope, createdAt: now, attempts: 0, nextAttemptAt: now, status: "pending", lastError: null,
-    ...(typeof principalId === "string" ? { principalId } : {})
+    eventId: envelope.eventId, principalId: isPrincipalId(principalId) ? principalId : null,
+    envelope, createdAt: now, attempts: 0, nextAttemptAt: now, status: "pending", lastError: null
   });
 }
 
 /**
  * Classify one delivery outcome.
  *   outcome: {kind:"response", status, retryAfterMs?, body?} | {kind:"timeout"} | {kind:"network-error"}
- *   expected: {eventId, principalId?} of the entry being delivered
- * -> "delivered" | "retry" | "reauthenticate" | "permanent"
- * A 2xx counts as delivered ONLY when the body is a machine ack for exactly this eventId
- * (and, when known, this principal) with status "recorded" (VF-033). Anything else under
- * 2xx (captive portal, proxy page, another event's ack, {}) is a retryable protocol error.
+ *   expected: {eventId, principalId} of the entry being delivered
+ * -> "delivered" | "retry" | "reauthenticate" | "permanent" | "unverifiable"
+ * A 2xx counts as delivered ONLY when the body is a machine ack for exactly this eventId AND
+ * this principal with status "recorded" (VF-033, VF-036: the principal is ALWAYS compared;
+ * an unknown expected principal matches nothing). Other 2xx bodies (captive portal, proxy
+ * page, another event's or principal's ack, {}) are a retryable protocol error. A 2xx for
+ * an entry with no principal is "unverifiable": it can never be confirmed, so it is final.
  */
 export function isAckFor(body, expected) {
-  return isObject(body) && isObject(expected) && body.schemaVersion === "1.0" && body.status === "recorded"
+  return isObject(body) && isObject(expected) && isPrincipalId(expected.principalId)
+    && body.schemaVersion === "1.0" && body.status === "recorded"
     && typeof body.eventId === "string" && body.eventId === expected.eventId
     && typeof body.observationId === "string" && typeof body.receivedAt === "string" && typeof body.replayed === "boolean"
-    && typeof body.principalId === "string" && (expected.principalId === undefined || body.principalId === expected.principalId);
+    && typeof body.principalId === "string" && body.principalId === expected.principalId;
 }
 export function classifyDelivery(outcome, expected) {
   if (!isObject(outcome)) return "retry";
   if (outcome.kind === "timeout" || outcome.kind === "network-error") return "retry";
   if (outcome.kind !== "response" || !Number.isSafeInteger(outcome.status)) return "retry";
   const s = outcome.status;
-  if (s >= 200 && s < 300) return isAckFor(outcome.body, expected) ? "delivered" : "retry";
+  if (s >= 200 && s < 300) {
+    if (!isObject(expected) || !isPrincipalId(expected.principalId)) return "unverifiable";
+    return isAckFor(outcome.body, expected) ? "delivered" : "retry";
+  }
   if (s === 429 || s === 408 || s >= 500) return "retry";
   if (s === 401 && outcome.body?.code === "principal_expired") return "reauthenticate";
   // 409 event_conflict / stale_event / attempt_conflict, 400s, 401/403 scope failures:
@@ -94,13 +119,14 @@ export function nextDelivery(entry, now, policy = DEFAULT_POLICY, outcome = unde
     return ok(Object.freeze({ ...entry, due: nowMs >= ms(entry.nextAttemptAt) }));
   }
   const attempts = entry.attempts + 1;
-  const verdict = classifyDelivery(outcome, { eventId: entry.eventId, ...(typeof entry.principalId === "string" ? { principalId: entry.principalId } : {}) });
+  const verdict = classifyDelivery(outcome, { eventId: entry.eventId, principalId: entry.principalId });
   const unacknowledged2xx = verdict !== "delivered" && outcome?.kind === "response" && outcome.status >= 200 && outcome.status < 300;
   const lastError = verdict === "delivered" ? null : Object.freeze({
     kind: unacknowledged2xx ? "protocol-error" : outcome?.kind ?? "unknown", status: outcome?.status ?? null,
-    code: unacknowledged2xx ? "ack_mismatch" : typeof outcome?.body?.code === "string" ? outcome.body.code : null
+    code: verdict === "unverifiable" ? "missing_principal" : unacknowledged2xx ? "ack_mismatch" : typeof outcome?.body?.code === "string" ? outcome.body.code : null
   });
   if (verdict === "delivered") return ok(Object.freeze({ ...entry, attempts, status: "delivered", lastError: null, nextAttemptAt: null, deliveredAt: now }));
+  if (verdict === "unverifiable") return dead("missing-principal", lastError, attempts);
   if (verdict === "permanent") return dead("permanent-refusal", lastError, attempts);
   if (verdict === "reauthenticate") {
     if (attempts >= p.value.maxAttempts) return dead("retry-exhausted", lastError, attempts);

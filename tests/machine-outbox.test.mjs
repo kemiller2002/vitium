@@ -3,13 +3,14 @@
 // result independent of Vitium availability and sees delivery errors.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULT_POLICY, enqueue, nextDelivery, classifyDelivery, isAckFor, reportWithDelivery, orderByCausation, checkPolicy } from "../service/machine/outbox.mjs";
+import { DEFAULT_POLICY, enqueue, createOutboxEntry, nextDelivery, classifyDelivery, isAckFor, reportWithDelivery, orderByCausation, checkPolicy } from "../service/machine/outbox.mjs";
 import { example } from "./machine-fixtures.mjs";
 
 const T0 = "2026-10-08T12:00:00.000Z";
 const at = ms => new Date(Date.parse(T0) + ms).toISOString();
 const policy = { ...DEFAULT_POLICY, baseDelayMs: 1000, maxDelayMs: 8000, maxAttempts: 5, expiresAfterMs: 3600000 };
-const fresh = () => enqueue(example("observation-detected.ci.v1.json"), T0);
+const PID = "wl:ci:summa";
+const fresh = () => enqueue(example("observation-detected.ci.v1.json"), T0, PID);
 const EID = example("observation-detected.ci.v1.json").eventId;
 // A genuine machine ack for the fixture event (shape produced by observation-core ackFor).
 const ack = (over = {}) => ({ schemaVersion: "1.0", eventId: EID, principalId: "wl:ci:summa", observationId: "OBS-" + "1".repeat(32), receivedAt: T0, status: "recorded", replayed: false, ...over });
@@ -17,7 +18,7 @@ const OK201 = Object.freeze({ kind: "response", status: 201, body: ack() });
 const step = (e, now, outcome, jitter) => { const r = nextDelivery(e, now, policy, outcome, jitter); assert.ok(r.ok, JSON.stringify(r)); return r.value; };
 
 test("classification of delivery outcomes", () => {
-  assert.equal(classifyDelivery(OK201, { eventId: EID }), "delivered");
+  assert.equal(classifyDelivery(OK201, { eventId: EID, principalId: PID }), "delivered");
   assert.equal(classifyDelivery({ kind: "response", status: 200, body: ack({ replayed: true }) }, { eventId: EID, principalId: "wl:ci:summa" }), "delivered");
   for (const s of [429, 500, 502, 503, 504, 408]) assert.equal(classifyDelivery({ kind: "response", status: s }), "retry", String(s));
   assert.equal(classifyDelivery({ kind: "timeout" }), "retry");
@@ -40,7 +41,7 @@ test("VF-033: a 2xx is delivered only with an ack for THIS eventId (and principa
     ack({ replayed: "yes" })
   ];
   for (const body of bad) {
-    assert.equal(isAckFor(body, { eventId: EID }), false, JSON.stringify(body));
+    assert.equal(isAckFor(body, { eventId: EID, principalId: PID }), false, JSON.stringify(body));
     const e = step(fresh(), T0, { kind: "response", status: 200, body });
     assert.equal(e.status, "pending", JSON.stringify(body));
     assert.deepEqual(e.lastError, { kind: "protocol-error", status: 200, code: "ack_mismatch" });
@@ -55,6 +56,40 @@ test("VF-033: a 2xx is delivered only with an ack for THIS eventId (and principa
   assert.equal(e.status, "dead-letter");
   assert.equal(e.deadLetterReason, "retry-exhausted");
   assert.equal(reportWithDelivery(Object.freeze({ status: "passed" }), [e]).delivery.delivered, 0);
+});
+
+test("VF-036: delivery proof always needs the producer principal; without it nothing can ever be marked delivered", () => {
+  const env = example("observation-detected.ci.v1.json");
+  // Typed refusal at creation.
+  for (const bad of [undefined, null, "", "has space", 42, "x".repeat(200)]) {
+    const r = createOutboxEntry(env, T0, bad);
+    assert.equal(r.ok, false, String(bad));
+    assert.equal(r.error.code, "missing_principal");
+  }
+  assert.equal(createOutboxEntry({}, T0, PID).error.code, "invalid_entry");
+  assert.equal(createOutboxEntry(env, "later", PID).error.code, "invalid_entry");
+  const created = createOutboxEntry(env, T0, PID);
+  assert.ok(created.ok);
+  assert.equal(created.value.principalId, PID);
+  assert.ok(Object.isFrozen(created.value));
+  // Ack validation always compares the principal; an unknown expected principal matches nothing.
+  assert.equal(isAckFor(ack(), { eventId: EID }), false);
+  assert.equal(isAckFor(ack(), { eventId: EID, principalId: undefined }), false);
+  assert.equal(isAckFor(ack(), { eventId: EID, principalId: PID }), true);
+  assert.equal(isAckFor(ack({ principalId: "wl:someone-else" }), { eventId: EID, principalId: PID }), false);
+  // A legacy principal-less entry: any 2xx, even a perfect ack for its eventId, dead-letters visibly.
+  const legacy = enqueue(env, T0);
+  assert.equal(legacy.principalId, null);
+  for (const body of [ack(), ack({ principalId: "wl:someone-else" })]) {
+    const e = step(legacy, T0, { kind: "response", status: 200, body });
+    assert.equal(e.status, "dead-letter");
+    assert.equal(e.deadLetterReason, "missing-principal");
+    assert.equal(e.lastError.code, "missing_principal");
+  }
+  // It still retries 5xx normally (no premature loss).
+  assert.equal(step(legacy, T0, { kind: "response", status: 503 }).status, "pending");
+  // An invalid principal passed to enqueue is not trusted either.
+  assert.equal(enqueue(env, T0, "bad principal").principalId, null);
 });
 
 test("bounded exponential backoff, capped at maxDelayMs", () => {
@@ -130,7 +165,7 @@ test("item 4: the producer's build result is returned untouched whatever happens
   const buildResult = Object.freeze({ status: "failed", tests: Object.freeze({ passed: 41, failed: 1 }) });
   let e = fresh();
   for (let i = 0; i < policy.maxAttempts; i++) e = step(e, at(i * 10000), { kind: "network-error" });
-  const pending = step(enqueue(example("verification-failed.dokimos.v1.json"), T0), T0, { kind: "response", status: 429 });
+  const pending = step(enqueue(example("verification-failed.dokimos.v1.json"), T0, PID), T0, { kind: "response", status: 429 });
   const report = reportWithDelivery(buildResult, [e, pending]);
   assert.equal(report.buildResult, buildResult, "same object identity");
   assert.deepEqual(report.buildResult, { status: "failed", tests: { passed: 41, failed: 1 } });
