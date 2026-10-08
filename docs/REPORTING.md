@@ -65,6 +65,6 @@ Open `http://localhost:8000`. The module system requires an HTTP server rather t
 
 ## Deployment
 
-GitHub Pages workflow publishes `site/` on updates to `main`. Enable **Settings → Pages → Source: GitHub Actions** in Vitium. The hosted address will typically be `https://kemiller2002.github.io/vitium/`, unless a custom domain or repository setting overrides it.
+GitHub Pages workflow publishes `site/` on updates to `main`. Enable **Settings → Pages → Source: GitHub Actions** in Vitium. The canonical public URL is **https://vitium.echelonfoundry.com/**. GitHub Pages must be enabled for Actions and configured with that custom domain; DNS and HTTPS need separate operator verification. See `DEPLOYMENT.md`. The GitHub Pages default origin must not be given to end users as the product address.
 
 Do not add production endpoint URLs, keys or tokens to the frontend until the intake API has a reviewed security contract.
