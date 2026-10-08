@@ -26,7 +26,7 @@ The canonical publishing address is **https://vitium.echelonfoundry.com/**. Host
 
 Two F# preview libraries now live in `src/`: `EchelonFoundry.Vitium.Contracts` and `EchelonFoundry.Vitium.Client`. They compile into versioned NuGet artifacts via [the package CI workflow](.github/workflows/nuget-ci.yml). [Package setup, local build, trusted publishing and Praxis integration instructions](docs/NUGET-PACKAGES.md) explain how to use them.
 
-**Not yet published or operational:** GitHub Actions builds and packs candidate artifacts but does not publish to NuGet.org. The machine reporting API does not exist as a deployed service. A guarded manual publication workflow requires an owner-approved distribution/license decision, an approved GitHub environment, a matching release tag and NuGet Trusted Publishing configuration.
+**Not yet published or operational:** GitHub Actions builds and packs candidate artifacts but does not publish to NuGet.org. The machine reporting API does not exist as a deployed service. MIT licensing is now approved and recorded in the repository and both NuGet package projects. The guarded manual publication workflow uses the configured `Kevin.m.miller` Trusted Publishing identity; publication still requires a protected GitHub `nuget-release` environment, a verified immutable release tag, and an actual successful OIDC publish run.
 
 ## Engineering governance
 
