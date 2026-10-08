@@ -26,3 +26,9 @@ The first committed slice is a **public reporting form that hands off to GitHub 
 - Never claim submission or persistence without an acknowledged server-side outcome.
 - Every fix must have independently checkable evidence, preferably a test that fails against the faulty behavior.
 - GitHub is an initial persistence/provider boundary, not the permanent public identity or storage model.
+
+## Product requirements and accepted authority
+
+The expanded product baseline is currently **proposed** at `docs/requirements/VITIUM-REQUIREMENTS.md`. Its matching executable acceptance design is `docs/requirements/VITIUM-ACCEPTANCE.md` and unsettled product/architecture choices are `docs/requirements/VITIUM-OPEN-DECISIONS.md`. Neither these documents nor the static reporter constitute an approved production launch.
+
+Vitium's current roadmap epics are GitHub issues #1–#13. Keep observation intake, confirmed defect state, engineering work authority and independently verified result as separate entities.
