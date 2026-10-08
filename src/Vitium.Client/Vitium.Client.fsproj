@@ -5,6 +5,7 @@
     <PackageId>EchelonFoundry.Vitium.Client</PackageId>
     <Version>0.1.0-preview.1</Version>
     <Authors>Echelon Foundry</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <Description>Authenticated, typed client for submitting Echelon Vitium observations and independent verification results.</Description>
     <PackageTags>echelon;vitium;client;defect;reporting</PackageTags>
     <PackageProjectUrl>https://github.com/kemiller2002/vitium</PackageProjectUrl>
