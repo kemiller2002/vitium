@@ -407,6 +407,17 @@ test("Tutela / security categories / vulnerability language route private-securi
   assert.equal(mayProjectPublicly({ ...tutela, visibility: "private" }, { approvedBy: "m" }).error.code, "projection_forbidden");
 });
 
+test("any Tutela finding is security-classified even when its category is not security-rule", async () => {
+  const { intake, store } = harness();
+  const v = example("security-rule.tutela.v1.json");
+  v.finding.category = "quality-rule";
+  v.finding.summary = "Rule evaluation reported a policy finding";
+  assert.ok((await intake.submit({ principal: await principal("label-tutela"), body: body(v) })).ok);
+  const [rec] = store.records();
+  assert.equal(rec.visibility, "private-security");
+  assert.equal(rec.publicProjection, "never");
+});
+
 test("makeMachineIntake refuses construction without its effects", () => {
   assert.throws(() => makeMachineIntake({}), TypeError);
   assert.throws(() => makeMachineIntake({ store: { putOnce() {} }, now: () => NOW, observationId: () => "x" }), TypeError);
