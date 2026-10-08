@@ -24,7 +24,35 @@ module internal Patterns =
     let productId = compile "^[a-z][a-z0-9-]{0,63}$"
     let actorId = compile "^[A-Za-z0-9._:/+=,@-]{1,256}$"
     let workItemSystem = compile "^[a-z][a-z0-9-]{0,31}$"
-    let timestamp = compile "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}"
+    // A real ISO-8601 instant (VF-017): same pattern and range rules as INSTANT/isInstant
+    // in service/lifecycle.mjs. [0-9] rather than \d: .NET \d also matches non-ASCII digits.
+    let instant =
+        compile "^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\\.[0-9]{1,9})?(?:Z|[+-]([0-9]{2}):([0-9]{2}))$"
+
+    let isInstant (text: string) =
+        if isNull text then
+            false
+        else
+            let m = instant.Match text
+
+            if not m.Success then
+                false
+            else
+                let n (i: int) = if m.Groups[i].Success then int m.Groups[i].Value else 0
+                let year, month, day = n 1, n 2, n 3
+
+                month >= 1
+                && month <= 12
+                && day >= 1
+                && day <= (match month with
+                           | 2 -> if (year % 4 = 0 && year % 100 <> 0) || year % 400 = 0 then 29 else 28
+                           | 4 | 6 | 9 | 11 -> 30
+                           | _ -> 31)
+                && n 4 <= 23
+                && n 5 <= 59
+                && n 6 <= 59
+                && n 7 <= 23
+                && n 8 <= 59
 
     let hasControl (text: string) =
         text |> Seq.exists (fun c -> (c >= '\u0000' && c <= '\u001f') || c = '\u007f')
@@ -142,3 +170,8 @@ type Actor =
     { Id: ActorId
       Provenance: Provenance
       Role: string }
+
+/// Public time validation (VF-017): a real ISO-8601 instant with an explicit offset.
+[<RequireQualifiedAccess>]
+module Instant =
+    let isValid (text: string) = Patterns.isInstant text

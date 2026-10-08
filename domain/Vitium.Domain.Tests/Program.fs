@@ -57,6 +57,11 @@ let tableJson = readText "schemas/lifecycle/transitions.v1.json"
 let registryJson = readText "schemas/products.v1.json"
 let table = Table.parse tableJson |> okValue "load transitions.v1.json"
 let registry = Registry.parse registryJson |> okValue "load products.v1.json"
+let rules = TextRules.parse (readText "schemas/report-text-rules.v1.json") |> okValue "load report-text-rules.v1.json"
+
+/// Credential-shaped canaries are assembled at runtime so no committed file contains a
+/// literal that a secret scanner (or push protection) would flag (FIX-ROUND-1 contract).
+let joined (parts: string list) = String.Concat parts
 
 let at = DateTimeOffset.Parse "2026-10-08T12:00:00Z"
 let unwrap r = okValue "identity" r
@@ -84,6 +89,12 @@ let record machine state =
     { Lifecycle.initial table machine None with State = state }
 
 let defect state = { record Machine.Defect state with Identity = Some(RecordIdentity.Defect(defectId "DEF-0002")) }
+
+/// A prior history consistent with a revision (VF-016): one recorded event per revision.
+let past n =
+    List.init n (fun i -> Event.Recorded { Sequence = i + 1; To = None; Evidence = []; Json = "{}" })
+
+let at' revision (r: LifecycleRecord) = { r with Revision = revision; History = past revision }
 
 let codeOf r = r |> errorValue "expected refusal" |> TransitionError.code
 
@@ -134,6 +145,10 @@ let guardForbiddenEdge (t: Table) =
     let r = Lifecycle.transition t triager (command "in-progress") (defect "duplicate")
     equal "duplicate -> in-progress" "forbidden_transition" (codeOf r)
 
+let guardCloseNeedsEvidence (t: Table) =
+    let r = Lifecycle.transition t triager { command "closed" with ExpectedRevision = 1 } (defect "resolved" |> at' 1)
+    equal "resolved -> closed without evidence" "missing_evidence" (codeOf r)
+
 let mutants: (string * (Table -> unit) * (Nodes.JsonNode -> unit)) list =
     [ "resolve role guard",
       guardResolveNeedsVerifier,
@@ -150,6 +165,9 @@ let mutants: (string * (Table -> unit) * (Nodes.JsonNode -> unit)) list =
       "reopen evidence guard",
       guardReopenNeedsEvidence,
       (fun root -> set (transitionNode root "defect" "closed" "reopened") "evidenceAnyOf" (strings []))
+      "resolved -> closed evidence guard (VF-015)",
+      guardCloseNeedsEvidence,
+      (fun root -> set (transitionNode root "defect" "resolved" "closed") "evidenceAnyOf" (strings []))
       "forbidden edge (fail closed)",
       guardForbiddenEdge,
       (fun root ->
@@ -187,7 +205,7 @@ let tests: (string * (unit -> unit)) list =
                   let next, _ = okValue name r
                   equal (name + " state") (expect.GetProperty("state").GetString()) next.State
                   equal (name + " revision") (expect.GetProperty("revision").GetInt32()) next.Revision
-                  equal (name + " history") 1 next.History.Length
+                  equal (name + " history") (c.GetProperty("record").GetProperty("history").GetArrayLength() + 1) next.History.Length
               else
                   match r with
                   | Ok _ -> fail (name + ": expected refusal")
@@ -249,7 +267,7 @@ let tests: (string * (unit -> unit)) list =
 
       "stale revision is refused",
       fun () ->
-          let r = Lifecycle.transition table triager { command "triaged" with ExpectedRevision = 1 } { defect "new" with Revision = 2 }
+          let r = Lifecycle.transition table triager { command "triaged" with ExpectedRevision = 1 } (defect "new" |> at' 2)
           equal "stale" "stale_revision" (codeOf r)
 
       "duplicate requires duplicateOf, which cannot be itself",
@@ -306,7 +324,7 @@ let tests: (string * (unit -> unit)) list =
       "promotion creates a new defect identity and never mutates the observation into one",
       fun () ->
           let obsId = ObservationId.create ("OBS-" + String('a', 32)) |> unwrap
-          let obs = { Lifecycle.initial table Machine.Observation (Some(RecordIdentity.Observation obsId)) with State = "classified"; Revision = 2 }
+          let obs = { Lifecycle.initial table Machine.Observation (Some(RecordIdentity.Observation obsId)) with State = "classified" } |> at' 2
           let cmd = { ExpectedRevision = 2; NewDefect = defectId "DEF-0042"; Reason = "Reproducible"; OccurredAt = at }
           let updated, created, _ = Lifecycle.promote table triager cmd obs |> okValue "promote"
           equal "observation stays observation" Machine.Observation updated.Machine
@@ -323,7 +341,7 @@ let tests: (string * (unit -> unit)) list =
 
       "fix facts are events and never change state",
       fun () ->
-          let d = { defect "in-progress" with Revision = 3 }
+          let d = defect "in-progress" |> at' 3
           let next, _ = Lifecycle.recordFact table triager { Fact = "code-merged"; ExpectedRevision = 3; Evidence = [ evidence "supporting" "commit" ]; OccurredAt = at } d |> okValue "fact"
           equal "state unchanged" "in-progress" next.State
           equal "revision" 4 next.Revision
@@ -372,29 +390,36 @@ let tests: (string * (unit -> unit)) list =
       fun () ->
           let raw =
               { SchemaVersion = "1.0"
-                Product = " Forma "
+                Product = "Forma"
                 Impact = "Not sure"
                 Title = " Cannot save "
                 Actual = "Save does nothing."
                 Expected = "Saved."
                 Steps = Some "Open.\nSave."
-                PageUrl = Some "https://user:pw@example.com/path?token=secret#frag"
+                PageUrl = Some(joined [ "https://"; "user"; ":"; "pw"; "@"; "example.com/path?token=secret#frag" ])
                 PrivacyAcknowledged = true }
 
-          let a = Report.normalise registry raw |> okValue "normalise"
-          let b = Report.normalise registry raw |> okValue "normalise again"
+          let a = Report.normalise rules registry raw |> okValue "normalise"
+          let b = Report.normalise rules registry raw |> okValue "normalise again"
           equal "deterministic" a b
           equal "url stripped" "https://example.com/path" a.PageUrl
           equal "trimmed" "Cannot save" a.Title
+          equal "padded product refused (no remapping)" (Error(ReportError.UnsupportedProduct " Forma ")) (Report.normalise rules registry { raw with Product = " Forma " })
           equal "impact" ReportedImpact.Unknown a.ReportedImpact
-          equal "version" (Error(ReportError.UnsupportedVersion "2.0")) (Report.normalise registry { raw with SchemaVersion = "2.0" })
-          equal "privacy" (Error ReportError.PrivacyNotAcknowledged) (Report.normalise registry { raw with PrivacyAcknowledged = false })
-          equal "too long" (Error(ReportError.TooLong("summary", 120))) (Report.normalise registry { raw with Title = String('x', 121) })
-          equal "non-http" (Error ReportError.NonHttpPageUrl) (Report.normalise registry { raw with PageUrl = Some "javascript:alert(1)" })
-          equal "credential" (Error ReportError.CredentialDetected) (Report.normalise registry { raw with Actual = "password: hunter22" })
+          equal "version" (Error(ReportError.UnsupportedVersion "2.0")) (Report.normalise rules registry { raw with SchemaVersion = "2.0" })
+          equal "privacy" (Error ReportError.PrivacyNotAcknowledged) (Report.normalise rules registry { raw with PrivacyAcknowledged = false })
+          equal "too long" (Error(ReportError.TooLong("summary", 120))) (Report.normalise rules registry { raw with Title = String('x', 121) })
+          equal "non-http" (Error ReportError.NonHttpPageUrl) (Report.normalise rules registry { raw with PageUrl = Some "javascript:alert(1)" })
+          equal "lone surrogate" (Error(ReportError.InvalidCharacters "summary")) (Report.normalise rules registry { raw with Title = "a" + string (char 0xD800) + "b" })
+          equal "zero-width only" (Error(ReportError.Required "summary")) (Report.normalise rules registry { raw with Title = "\u200b\u2060" })
+          equal "bidi override" (Error(ReportError.InvalidCharacters "summary")) (Report.normalise rules registry { raw with Title = "invoice\u202egnp.exe" })
+          equal "astral code points" (String.replicate 120 "\U0001F41E") ((Report.normalise rules registry { raw with Title = String.replicate 120 "\U0001F41E" } |> okValue "120 astral").Title)
+          equal "NFC" "Caf\u00e9" ((Report.normalise rules registry { raw with Title = "Cafe\u0301" } |> okValue "nfd").Title)
+          equal "D-06" true (Report.normalise rules registry { raw with Title = "The task-management-dashboard-widget is blank" } |> Result.isOk)
+          equal "credential" (Error ReportError.CredentialDetected) (Report.normalise rules registry { raw with Actual = joined [ "pass"; "word: "; "hunter22" ] })
 
-          match Report.normalise registry { raw with Product = "Formaa" } with
-          | Error(ReportError.Product(RegistryError.UnsupportedProduct _)) -> ()
+          match Report.normalise rules registry { raw with Product = "Formaa" } with
+          | Error(ReportError.UnsupportedProduct _) -> ()
           | other -> fail (sprintf "unknown product must be refused, got %A" other)
 
       "observation creation uses injected effects only",
@@ -405,7 +430,7 @@ let tests: (string * (unit -> unit)) list =
                 NewObservationId = fun () -> ObservationId.create ("OBS-" + String('b', 32)) |> unwrap }
 
           let report =
-              Report.normalise registry
+              Report.normalise rules registry
                   { SchemaVersion = "1.0"; Product = "Forma"; Impact = "Not sure"; Title = "t"; Actual = "a"; Expected = "e"; Steps = None; PageUrl = None; PrivacyAcknowledged = true }
               |> okValue "report"
 
@@ -413,6 +438,84 @@ let tests: (string * (unit -> unit)) list =
           equal "initial state" "received" o.Lifecycle.State
           equal "time from port" at o.ReceivedAt
           isTrue "reference differs from internal id" (ExternalReference.value o.Reference <> ObservationId.value o.Id)
+
+      "shared report-cases.v1.json: F# normalisation agrees with JS on every case",
+      fun () ->
+          use doc = JsonDocument.Parse(readText "schemas/report-cases.v1.json")
+          let cases = doc.RootElement.GetProperty("cases").EnumerateArray() |> List.ofSeq
+          isTrue "at least 30 shared report cases" (cases.Length >= 30)
+          let allowed = Set.ofList [ "schemaVersion"; "product"; "impact"; "title"; "actual"; "expected"; "steps"; "pageUrl"; "privacyAcknowledged" ]
+
+          for c in cases do
+              let name = c.GetProperty("name").GetString()
+              let input = c.GetProperty "input"
+              let expectOk = c.GetProperty("expect").GetProperty("ok").GetBoolean()
+              // Adapter step: unknown fields, null and non-string optional values are refused
+              // before RawReport exists (RawReport cannot represent them).
+              let names = input.EnumerateObject() |> Seq.map (fun p -> p.Name) |> List.ofSeq
+              // System.Text.Json cannot decode a lone surrogate into a .NET string; the adapter
+              // refuses such input (Report.normalise's own well-formedness check is tested below).
+              let decode (v: JsonElement) = try Ok(v.GetString()) with :? InvalidOperationException -> Error()
+              let str k =
+                  match input.TryGetProperty(k: string) with
+                  | true, v when v.ValueKind = JsonValueKind.String -> (match decode v with Ok t -> t | Error() -> "\u0000")
+                  | _ -> null
+
+              let opt k =
+                  match input.TryGetProperty(k: string) with
+                  | false, _ -> Ok None
+                  | true, v when v.ValueKind = JsonValueKind.String -> decode v |> Result.map Some
+                  | true, _ -> Error()
+
+              let result =
+                  match names |> List.forall allowed.Contains, opt "steps", opt "pageUrl" with
+                  | true, Ok steps, Ok page ->
+                      let privacy = match input.TryGetProperty "privacyAcknowledged" with | true, v -> v.ValueKind = JsonValueKind.True | _ -> false
+                      Report.normalise rules registry
+                          { SchemaVersion = str "schemaVersion"; Product = str "product"; Impact = str "impact"
+                            Title = str "title"; Actual = str "actual"; Expected = str "expected"
+                            Steps = steps; PageUrl = page; PrivacyAcknowledged = privacy }
+                      |> Result.mapError ignore
+                  | _ -> Error()
+
+              match expectOk, result with
+              | true, Ok r ->
+                  let v = c.GetProperty("expect").GetProperty("value")
+                  let get k = v.GetProperty(k: string).GetString()
+                  equal (name + " product") (get "product") r.Product.Product.DisplayName
+                  equal (name + " title") (get "title") r.Title
+                  equal (name + " actual") (get "actual") r.Actual
+                  equal (name + " expected") (get "expected") r.Expected
+                  equal (name + " steps") (get "steps") r.Steps
+                  equal (name + " pageUrl") (get "pageUrl") r.PageUrl
+              | false, Error() -> ()
+              | e, r -> fail (sprintf "%s: expected ok=%b, got %A" name e r)
+
+      "history must account for the revision; past events cannot be erased (VF-016)",
+      fun () ->
+          let truncated = { defect "closed" with Revision = 2 }
+          let reopen = { command "reopened" with ExpectedRevision = 2; Evidence = [ evidence "new-occurrence" "o" ] }
+          equal "truncated" "inconsistent_history" (codeOf (Lifecycle.transition table triager reopen truncated))
+          equal "padded" "inconsistent_history" (codeOf (Lifecycle.transition table triager (command "triaged") { defect "new" with History = past 1 }))
+          let next, _ = Lifecycle.transition table triager reopen (defect "closed" |> at' 2) |> okValue "consistent"
+          equal "appended" 3 next.History.Length
+
+      "occurredAt must be a real ISO-8601 instant (VF-017)",
+      fun () ->
+          for text in [ "2026-02-30T00:00:00Z"; "2026-99-99T99:99:99Z"; "2026-10-08T12:00:00 then anything"; "2026-10-08T12:00:00"; "2026-10-08T24:00:00Z"; "2026-10-08T12:00:00+25:00" ] do
+              isTrue ("refused " + text) (not (Instant.isValid text))
+
+          for text in [ "2028-02-29T23:59:59.123+05:30"; "2026-10-08T12:00:00Z"; "2000-02-29T00:00:00-01:00" ] do
+              isTrue ("accepted " + text) (Instant.isValid text)
+
+          isTrue "1900 is not a leap year" (not (Instant.isValid "1900-02-29T00:00:00Z"))
+
+      "resolved -> closed needs verification or decision evidence (VF-015)",
+      fun () ->
+          let resolved = defect "resolved" |> at' 1
+          equal "bare close" "missing_evidence" (codeOf (Lifecycle.transition table triager { command "closed" with ExpectedRevision = 1 } resolved))
+          let ok, _ = Lifecycle.transition table triager { command "closed" with ExpectedRevision = 1; Evidence = [ evidence "decision-record" "policy-1" ] } resolved |> okValue "close"
+          equal "closed" "closed" ok.State
 
       "mutation sensitivity: each guard test FAILS against its weakened table",
       fun () ->
