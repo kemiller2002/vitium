@@ -2,13 +2,21 @@
 
 Vitium is Echelon Foundry's cross-repository defect reporting and quality intelligence application.
 
+**Canonical site:** https://vitium.echelonfoundry.com/
+
 ## Report a defect
 
 The first delivery is a public, accessible report form in `site/`. It collects a structured report, lets the reporter review it, and opens a prefilled GitHub Issue for the reporter to submit.
 
 **Current limitation:** GitHub account sign-in is required to finish submission, and submitted reports in this public repository are public. The page does **not** directly store or transmit reports and does not support attachments.
 
-For the immediate reporter interface, enable GitHub Pages at **Settings → Pages → Build and deployment → GitHub Actions**. The workflow `.github/workflows/pages.yml` deploys `site/` after it is added.
+The canonical publishing address is **https://vitium.echelonfoundry.com/**. Hosting currently targets GitHub Pages via `.github/workflows/pages.yml`. Configuration of the GitHub Pages custom domain, DNS, and enforced HTTPS must be verified independently; see [DEPLOYMENT.md](DEPLOYMENT.md).
+
+## Engineering governance
+
+Vitium follows the Echelon engineering stack. Conditor is the authority for installing and upgrading repository lifecycle capabilities; its manifest is `conditor.json`. **The manifest declares the target state. No Conditor installation or successful verification has been demonstrated here.** Do not create `.conditor/lock.json` or tool-owned files by hand.
+
+See [governance and staged migration](docs/GOVERNANCE.md), [current state](context/CURRENT-STATE.md), and [domain and deployment setup](DEPLOYMENT.md).
 
 ## Development
 
