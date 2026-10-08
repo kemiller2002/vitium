@@ -53,7 +53,7 @@ test("verification failure loops back to rework and preserves each attempt",()=>
   assert.throws(()=>transition(defect,cmd("in-progress",{
     expectedRevision:defect.revision,role:"triager",attemptId:"fix-1",candidateRevision:"sha1",
     verificationOutcome:"failed",evidenceId:"failed-test-1"
-  })),/Independent verifier/);
+  })),/Independent verification/);
   apply("in-progress",{role:"verifier",attemptId:"fix-1",candidateRevision:"sha1",
     evidenceId:"failed-test-1",verificationOutcome:"failed",reason:"Route contract still fails"});
   assert.equal(defect.state,"in-progress");
