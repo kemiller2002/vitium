@@ -72,3 +72,11 @@ Execute and verify Conditor installation from the manifest, follow the scaffold 
 - Machine producer intake from Praxis/Ordo/Conditor/Dokimos/Tutela/Aegis/CI is now specifically documented in `docs/requirements/VITIUM-BUILD-SYSTEM-REPORTING.md` with P0 contract obligations and P1 producer rollout; tracked in #14. **No authenticated machine intake service or upstream emitter has been shipped.**
 - Repair → failed independent verification → in-progress → rework → verification → resolved and resolved/closed → reopened → active repair are explicitly specified. The local candidate `service/triage.mjs` and tests now require verifier, outcome, candidate revision, evidence, attempt ID and reopen release metadata. Tracked in #15.
 - The state-helper tests are not proof of integrated Ordo transition governance or end-to-end Praxis remediation.
+
+## Vitium NuGet packages (2026-10-08)
+
+- Added F#/.NET 10 package projects `src/Vitium.Contracts` (`EchelonFoundry.Vitium.Contracts`) and `src/Vitium.Client` (`EchelonFoundry.Vitium.Client`) at version `0.1.0-preview.1`.
+- `Vitium.slnx`, F# consumer smoke tests, `nuget-ci.yml` compile/pack workflow and a guarded manual OIDC NuGet publishing workflow are present.
+- Actual CI [run 37817505596](https://github.com/kemiller2002/vitium/actions/runs/37817505596) **succeeded**, including build, typed transport checks, both `.nupkg` artifacts, and restoration/compilation from packages in an unrelated F# consumer.
+- Packages are **not published** to NuGet.org or deployed to any application. Releasing them requires approval of distribution/license, GitHub `nuget-release` environment, NuGet owner/trusted publishing policy, and immutable versioned tag. See `docs/NUGET-PACKAGES.md`.
+- The client models machine observation and verification submission with short-lived bearer credentials, but a live machine intake server, durable producer outbox, approved service identity and actual Praxis integration remain open (#14, #15).
