@@ -29,18 +29,25 @@ Echelon build and engineering systems (Praxis, Ordo, Conditor, Dokimos, Tutela, 
    - Authorization is pure. It refuses forged principals, expiry, `source.system`/`source.repository` that disagree with the principal, and repositories, environments or event types outside scope.
    - Credentials in the body are refused.
 3. **Idempotency:**
-   - the producer-chosen v4 `eventId` and the SHA-256 of the canonical redacted envelope decide the outcome: same pair returns the same ack; same id with a different hash is a conflict;
-   - a verification attempt accepts one recorded result, and older events are refused as stale;
+   - the producer-chosen v4 `eventId`, the storing **principal** and the SHA-256 of the canonical redacted envelope decide the outcome: same principal, id and hash return the same ack (which names that principal); same id with a different hash is a conflict;
+   - a verification attempt accepts one **conclusive** (failed/passed) recorded result, and older events are refused as stale. Inconclusive results never claim the attempt, so a re-run stays possible (fix round 3, VF-032, consistent with DOM-001 §19);
    - the fingerprint is only a **duplicate candidate**, and each run stays its own occurrence.
+
+   **3a. eventIds are global, not namespaced per principal** (fix round 3, VF-031). The same `eventId` from a different principal is refused `event_conflict` (409, not retryable). The principal comparison happens before the content-hash comparison, so the refusal is identical whether or not the other principal's body matched, and the original observation id, timestamp and principal are never disclosed. Alternative rejected: namespacing (`principalId + eventId`). That would let two producers hold the "same" event, and it would make `causationEventId` ambiguous across producers (Vitium could not tell which producer's event is the cause). v4 UUIDs carry 122 random bits, so a legitimate collision is not a practical concern; a collision means a bug or a replay, which should be refused visibly.
 4. **No automatic lifecycle effect.**
    - Machine events are stored as untriaged private observations.
    - An independent verification result may carry a non-executable *proposal*. Self-certification, a missing attempt author, unknown attempts, `suspected` confidence and inconclusive, flaky or infrastructure results yield none.
    - The core never calls the lifecycle.
-5. **Echo suppression:** events carrying a `vitium/...` origin marker, or coming from a `vitium` principal or source, are dropped and never stored.
+5. **Echo suppression is bound to the verified principal** (amended in fix round 3, VF-030).
+   - Only events authenticated as the `vitium` principal are echoes. They are dropped and never stored.
+   - A non-Vitium principal presenting a `vitium/...` origin marker is refused `spoofed_echo_marker` (403, not retryable). The refusal is visible to the producer, and its outbox dead-letters the event with that code.
+   - A body field alone can never make Vitium silently discard an event. The earlier rule ("any event carrying a marker is dropped") let any producer hide its own real failures, so it was withdrawn.
+   - A `source.system: "vitium"` claim from another principal is already refused by authorization (`identity_mismatch`).
 6. **Security routing:** Tutela findings, `security-rule` findings and findings with vulnerability language are `private-security` and are never publicly projectable.
 7. **Producer outbox policy:**
    - pure, bounded backoff with injected jitter, `Retry-After` capped, a maximum number of attempts, and an expiry that leads to dead-letter;
    - the producer's build result is returned untouched;
+   - a 2xx counts as delivered only when the body is a machine ack for exactly that `eventId` (and that principal when the entry knows it). Any other 2xx is a retryable protocol error, `ack_mismatch` (fix round 3, VF-033);
    - mandatory reporting becomes a separate gate.
 
 ## Alternatives considered

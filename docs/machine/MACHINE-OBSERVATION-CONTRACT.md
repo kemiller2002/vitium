@@ -29,14 +29,14 @@ Nobody may describe the machine API, the producer adapters or Ordo authority as 
 | Proof | Turnstile challenge (proves "probably a human", nothing about identity) | Short-lived, attested workload identity, verified at a protected server boundary |
 | Authorization | None (anyone may report) | Scope-bound: system, repositories, environments, event types |
 | Idempotency | Caller-chosen random v4 key per submission | Producer-chosen random v4 `eventId` per logical event |
-| Receipt | Opaque reference for a human | Machine ack: `{eventId, observationId, receivedAt, replayed}` |
+| Receipt | Opaque reference for a human | Machine ack, scoped to the storing principal: `{schemaVersion, eventId, principalId, observationId, receivedAt, status, replayed}` |
 | Content | Free text (redacted, quarantined) | Structured, bounded envelope; evidence references with digests, no log bodies |
 
 A Turnstile token cannot authenticate a machine, and an anonymous route cannot bind a caller to a repository. If machines used the public route, any internet caller could claim to be "praxis". So the two boundaries share only the redaction rules (`service/redaction.mjs`) and the conditional-put storage pattern.
 
 ## 3. Wire envelope (v1)
 
-The schema is closed (`additionalProperties: false` everywhere). Every string has a pattern and `maxLength`, every array has `maxItems`, and enum sets are fixed. The constants live in `service/machine/contract.mjs`. `tests/machine-contract.test.mjs` fails if the schema and the runtime differ, and replays 75 shared cases through both ajv and the runtime.
+The schema is closed (`additionalProperties: false` everywhere). Every string has a pattern and `maxLength`, every array has `maxItems`, and enum sets are fixed. The constants live in `service/machine/contract.mjs`. `tests/machine-contract.test.mjs` fails if the schema and the runtime differ, and replays 135 shared cases through both ajv and the runtime, including the inherited-name keys `constructor`, `toString`, `__proto__` and others at every object level (VF-029: membership is checked with own-property tests only).
 
 | Field | Rule |
 |---|---|
@@ -93,7 +93,9 @@ Audit and rotation details (who issues credentials, lifetime, audience, revocati
 2. Bounded parse, else `payload_too_large` / `invalid_json`.
 3. Credential-field scan, then closed-schema validation: `credential_in_body`, `invalid_envelope` (with JSON `path`), `unsupported_version`, or `unsafe_evidence`.
 4. `authorize` (section 4).
-5. **Echo suppression:** if the principal system is `vitium`, the source system is `vitium`, or an `originMarker` is present, the result is `{disposition: "echo-suppressed"}`. Nothing is stored and no ack id is returned, so there is no recursive self-reporting (requirements item 8).
+5. **Echo suppression, bound to the verified principal** (VF-030):
+   - if the **verified** principal's system is `vitium`, the result is `{disposition: "echo-suppressed"}`. Nothing is stored and no ack id is returned, so there is no recursive self-reporting (requirements item 8);
+   - if any other principal presents an `originMarker`, the result is `spoofed_echo_marker` (403). The refusal is visible, never a silent drop, so a buggy or compromised adapter cannot hide real failures.
 6. **Screening:**
    - log or stack-trace content in finding text is refused (`log_dump_refused`);
    - evidence URIs that the shared redactor flags (for example a token-shaped path segment) are refused (`unsafe_evidence`);
@@ -103,9 +105,10 @@ Audit and rotation details (who issues credentials, lifetime, audience, revocati
 8. **Verification assessment** (section 7).
 9. **Conditional put** (port semantics match intake's `attribute_not_exists(pk)`):
    - created: ack with `replayed: false`;
-   - same `eventId` and same canonical hash: **the same ack** (`replayed: true`) and no second record (requirements item 1);
-   - same `eventId` and a different hash: `event_conflict` (409). The body is catalogue-only;
-   - a verification attempt (`defectId` + `verificationAttemptId`) that already has a recorded result: `stale_event` if the new event is older, otherwise `attempt_conflict`. The first recorded result is never overwritten;
+   - same `eventId`, same principal and same canonical hash: **the same ack** (`replayed: true`) and no second record (requirements item 1);
+   - same `eventId` from a **different principal**: `event_conflict` (409), whether or not the body matches. eventIds are global, not namespaced per principal (MACH-001 3a, VF-031). Nothing about the original is disclosed;
+   - same `eventId`, same principal, different hash: `event_conflict` (409). The body is catalogue-only;
+   - a verification attempt (`defectId` + `verificationAttemptId`) that already has a **conclusive** (failed/passed) result: `stale_event` if the new event is older, otherwise `attempt_conflict`. The first conclusive result is never overwritten. `verification.inconclusive` never claims the attempt, so any number of inconclusive runs and one later conclusive re-run are accepted (VF-032, DOM-001 §19);
    - store unavailable or throwing: `storage_unavailable` (503, retryable). Store throttled: `throttled` (429).
 
 The canonical hash is SHA-256 over the canonical (sorted-key) JSON of the **redacted** envelope. Key order and whitespace therefore never change idempotency.
@@ -146,7 +149,8 @@ A finding is routed `visibility: "private-security"`, `securityClassified: true`
 `service/machine/outbox.mjs` contains pure functions for the future shared producer binding:
 
 - `classifyDelivery`:
-  - 2xx: delivered;
+  - 2xx **with a machine ack for exactly this `eventId`** (`schemaVersion: "1.0"`, `status: "recorded"`, and the entry's `principalId` when known): delivered;
+  - any other 2xx (captive portal, proxy page, `{}`, another event's ack): retry, recorded as `lastError {kind: "protocol-error", code: "ack_mismatch"}` (VF-033);
   - 429, 408, 5xx, timeout, network error, `causation_unknown`: retry;
   - 401 `principal_expired`: re-authenticate;
   - other 4xx and 409 conflicts: permanent, so the entry goes to dead-letter for repair.
@@ -177,7 +181,8 @@ A finding is routed `visibility: "private-security"`, `securityClassified: true`
 | `principal_expired` | 401 | yes | Get a fresh workload credential |
 | `identity_mismatch` | 403 | no | `source.system` differs from the principal |
 | `repository_not_in_scope` / `environment_not_in_scope` / `event_type_not_in_scope` | 403 | no | Outside the principal's scope |
-| `event_conflict` | 409 | no | Same `eventId`, different content |
+| `spoofed_echo_marker` | 403 | no | A non-Vitium principal sent a Vitium origin marker |
+| `event_conflict` | 409 | no | Same `eventId` with different content, or from a different principal |
 | `stale_event` / `attempt_conflict` | 409 | no | Attempt result already recorded (older / newer event) |
 | `causation_unknown` | 409 | yes | Cause not recorded yet |
 | `throttled` | 429 | yes | Back off |
