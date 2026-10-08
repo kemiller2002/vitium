@@ -4,7 +4,20 @@
 
 **Host:** GitHub Pages via the Vitium GitHub Actions workflow (`.github/workflows/pages.yml`). Domain is declared in the page's canonical/OG metadata. Declaring the hostname **does not configure DNS, HTTPS or GitHub Pages settings**.
 
+## Current witnessed state (2026-10-08, read-only)
+
+- `gh api repos/kemiller2002/vitium` → `has_pages: false` (12:32:36Z). All five recorded `pages.yml` runs failed at `actions/configure-pages` with `Get Pages site failed … Not Found`; upload and deploy were skipped (latest: run 37771094723).
+- `vitium.echelonfoundry.com` and `intake.vitium.echelonfoundry.com` returned **NXDOMAIN** (12:33:28Z, 12:47:43Z). The domain is **not** verified for GitHub Pages: there is no `_github-pages-challenge-kemiller2002` TXT record (12:59:25Z).
+- HTTPS could not be observed from the agent sandbox because the egress proxy denied the connection. That result is not evidence about the site.
+- **The site is not live.** The full record, exact operator steps and the evidence checklist are in [docs/operations/PAGES-DNS-TLS.md](docs/operations/PAGES-DNS-TLS.md). Every outstanding operator action is listed in [docs/operations/OPERATOR-DECISIONS.md](docs/operations/OPERATOR-DECISIONS.md).
+
+## Pipeline semantics (fail closed)
+
+`.github/workflows/pages.yml` runs `test → build → deploy → verify-canonical` ([OPS-001](docs/decisions/OPS-001-pages-pipeline-fail-closed.md)). A run counts as a deployment **only if all four jobs are green**. `verify-canonical` runs `node scripts/verify-public-site.mjs` against the canonical URL, so an uploaded artifact that is not served over trusted HTTPS at the canonical origin is a failed run. Actions are pinned to commit SHAs, and only the `deploy` job holds `pages: write` / `id-token: write`.
+
 ## Required operator configuration
+
+Recommended first step: verify `echelonfoundry.com` under account Settings → Pages → Verified domains, so that `vitium` cannot be taken over by another Pages site. See PAGES-DNS-TLS.md step 1.
 
 1. In [Vitium GitHub Pages settings](https://github.com/kemiller2002/vitium/settings/pages), choose **Build and deployment → GitHub Actions**.
 2. Under **Custom domain**, enter `vitium.echelonfoundry.com` and save. Verify ownership of `echelonfoundry.com` in GitHub Pages settings if not yet done (recommended).
@@ -22,6 +35,7 @@ Check DNS with:
 ```sh
 dig +short CNAME vitium.echelonfoundry.com
 # Expect: kemiller2002.github.io.
+node scripts/verify-public-site.mjs   # read-only; exit 0 required, otherwise a typed reason
 ```
 
 The browser must show a trusted TLS certificate for `vitium.echelonfoundry.com`, and `https://vitium.echelonfoundry.com/` must load the reporter. GitHub's default repository URL is a transport detail, not the public product address.
