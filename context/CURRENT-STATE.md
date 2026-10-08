@@ -21,9 +21,10 @@ Date: 2026-10-08
 - GitHub Pages Settings must configure custom domain `vitium.echelonfoundry.com` and GitHub Actions as source. DNS CNAME and HTTPS still require setup/verification.
 - Conditor needs a real tool-run installation and verified lock; no lifecycle installation is evidenced.
 - Forma 0.3.0 CSS in the current frontend has not yet been proved a valid pinned deployed asset or upgraded to the Echelon 0.4.1 target. The JavaScript form must migrate to the Conditor-managed F#/Limen application baseline.
-- CI and deployment have not been verified as successful.
+- Node quality gates and the P0 AWS SAM validation/build workflow have been observed successful; this is **not** a live deployment.
+- The Conditor read-only plan was verified; isolated installation preview is under investigation and generated state has not been committed.
 - Browser automation, axe a11y verification and screenshots are not yet executed.
-- Direct submission without GitHub (issue #1).
+- Direct submission without GitHub has a **feature-gated implementation candidate**, not a deployed or enabled service (issue #1).
 - Full browser and assistive-tech verification (issue #2).
 - Maintainer triage application (issue #3).
 - Safe attachments (issue #4).
@@ -48,3 +49,14 @@ Execute and verify Conditor installation from the manifest, follow the scaffold 
 - `docs/requirements/VITIUM-OPEN-DECISIONS.md` records **18 open product/architecture/security decisions**. No authorizations or operator commitments have been assumed.
 - Issues #8–#13 now track domain modeling, embedded reporting, source synchronization, regression evidence, reporter follow-up and production operations in addition to the original #1–#7.
 - Static requirements integrity checks were added to `npm test`; those checks prove the written baseline is internally structured, **not** that behavior has been built or independently verified.
+
+## P0 implementation slice (2026-10-08)
+
+- New `service/report-domain.mjs`, `service/intake.mjs`, `service/http.mjs`, and `service/aws-handler.mjs`: versioned, strict private observation intake, anti-bot challenge boundary, conditional DynamoDB idempotency and safe receipt.
+- `service/triage.mjs` and `service/triage-cli.mjs`: pure authorization/transition guards and provisional internal AWS IAM operator CLI (no public triage endpoint).
+- New typed report-request/observation JSON schemas and adversarial unit tests for malformed input, origins, challenge failure, storage failure, replay and revision conflicts.
+- `infra/aws/template.yaml`: CI-validating/building infrastructure candidate with private DynamoDB table, staged throttling and Secrets Manager role. No deployment has been run.
+- Frontend includes private-mode challenge and receipt flow, **disabled** in `site/public-config.mjs` pending verified endpoint and operator policy.
+- Conditor's v0.5.0 read-only plan passed in [Actions](https://github.com/kemiller2002/vitium/actions/runs/37771531737). The first isolated installation previews revealed native-launcher packaging problems; resolving these does not itself install Echelon governance in the repository.
+- P0 acceptance is **blocked** on Cloudflare/AWS provisioning, data retention and moderation ownership, F#/Limen architecture migration, genuine Conditor installation, access review, live integration/browser evidence, and Pages/DNS/TLS.
+- Detailed P0 scope and blockers: `docs/P0-IMPLEMENTATION.md`.
