@@ -124,13 +124,13 @@ test("VIT-VER-009 / VIT-VER-010: an inconclusive run cannot be recorded against 
 
 // ---- findings ---------------------------------------------------------------------------
 
-test("VIT-AC-036 / VIT-VER-006: the submitter cannot name a different author and then pass its own attempt", { todo: "finding VF-025" }, () => {
+test("VIT-AC-036 / VIT-VER-006: the submitter cannot name a different author and then pass its own attempt", () => {
   const awaiting = drive(inProgress(), submit(DEV, "Q1", "c1", { author: "someone-else" })).record;
   const self = drive(awaiting, verdict("resolved", human("dev-1", "verifier"), "Q1", "c1")).results[0];
   assert.equal(self.ok, false, "dev-1 submitted and passed its own candidate");
 });
 
-test("VIT-AC-036: actor identity comparison is not defeated by case or Unicode variants of the same actor", { todo: "finding VF-026" }, () => {
+test("VIT-AC-036: actor identity comparison is not defeated by case or Unicode variants of the same actor", () => {
   const awaiting = drive(inProgress(), submit(DEV, "S1", "c1")).record;
   for (const alias of ["DEV-1", "Dev-1"]) {
     const r = drive(awaiting, verdict("resolved", human(alias, "verifier"), "S1", "c1")).results[0];
@@ -138,7 +138,7 @@ test("VIT-AC-036: actor identity comparison is not defeated by case or Unicode v
   }
 });
 
-test("mission §7 / VIT-VER-011: an agent cannot evade the repair budget by omitting provenance (legacy shape) or claiming human provenance", { todo: "finding VF-027" }, async () => {
+test("mission §7 / VIT-VER-011: an agent cannot evade the repair budget by omitting provenance (legacy shape) or claiming human provenance", async () => {
   const { tryTransition } = await import("../../service/triage.mjs");
   let r = inProgress();
   for (let i = 1; i <= 3; i += 1) r = drive(r, submit(agent("bot"), "P" + i, "c" + i), verdict("in-progress", VERIFIER, "P" + i, "c" + i)).record;
@@ -146,7 +146,7 @@ test("mission §7 / VIT-VER-011: an agent cannot evade the repair budget by omit
   assert.equal(legacy.ok, false, "legacy shape (provenance 'unrecorded') bypassed the exhausted agent budget");
 });
 
-test("VIT-AC-036 / VIT-VER-006: an agent-provenance verifier cannot record a passing result (independent human or qualified process required)", { todo: "finding VF-028" }, () => {
+test("VIT-AC-036 / VIT-VER-006: an agent-provenance verifier cannot record a passing result (independent human or qualified process required)", () => {
   const awaiting = drive(inProgress(), submit(DEV, "G1", "c1")).record;
   const r = drive(awaiting, verdict("resolved", { actor: "agent-verifier", role: "verifier", provenance: "agent" }, "G1", "c1")).results[0];
   assert.equal(r.ok, false, "an agent resolved the defect");

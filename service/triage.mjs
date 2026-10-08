@@ -70,11 +70,12 @@ function fromLegacy(record, command) {
 
 /** Total variant: returns {ok,value:{record,event}} | {ok:false,error:{code,message}}. */
 export function tryTransition(record, command) {
-  // Legacy callers never named an attempt's author, so the strict default (author = the
-  // submitting actor) is not applied to them; independence is then enforced only when an
-  // author is recorded (DOM-001 section 21; Kevin's tests submit and verify as one actor).
+  // The legacy shape carries no trusted context: its provenance is "unrecorded", which the
+  // engine treats as autonomous for the agent repair budget (VF-027) and exempts only from the
+  // author-independence check, relying on the verifier role (Kevin's tests submit and verify
+  // as one operator; DOM-001 sections 21 and 25-28).
   const legacyShape = command && command.fields === undefined;
-  const result = evaluateTransition(table, record, fromLegacy(record, command), { allowUnrecordedProvenance: true, defaultAuthor: !legacyShape });
+  const result = evaluateTransition(table, record, fromLegacy(record, command), { allowUnrecordedProvenance: true });
   if (!result.ok) return result;
   if (!legacyShape) return result;
   const evidenceId = command.evidence === undefined && typeof command.evidenceId === "string" ? { evidenceId: command.evidenceId.trim(), legacyEvidence: true } : {};

@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0",
   "table": "schemas/lifecycle/transitions.v1.json",
-  "description": "Shared transition cases. Consumed by tests/domain-lifecycle-contract.test.mjs (service/lifecycle.mjs) and domain/Vitium.Domain.Tests (F#). Both implementations must return the same ok/state/revision or the same error code. Commands use the strict (non-legacy) shape; provenance is required. `cycles` are multi-step sequences: each step's expectedRevision is the current record's revision unless the step sets `expectedRevision`; a step with from:\"initial\" applies to the cycle's starting record (atomicity checks). `final` lists the submitted attemptIds, candidate revisions and verification outcomes the final history must still contain, in order.",
+  "description": "Shared transition cases. Consumed by tests/domain-lifecycle-contract.test.mjs (service/lifecycle.mjs) and domain/Vitium.Domain.Tests (F#). Both implementations must return the same ok/state/revision or the same error code. Commands use the strict (non-legacy) shape; provenance is required. `cycles` are multi-step sequences: each step's expectedRevision is the current record's revision unless the step sets `expectedRevision`; a step with from:\"initial\" applies to the cycle's starting record (atomicity checks). A step's `context` is the TRUSTED caller context ({provenance}) passed as the lifecycle's context argument, never part of the command (VF-027); a step without context is evaluated without one. `final` lists the submitted attemptIds, candidate revisions and verification outcomes the final history must still contain, in order.",
   "cases": [
     {
       "name": "observation accepted for triage",
@@ -1543,10 +1543,12 @@
       "steps": [
         {
           "op": "transition",
+          "context": {
+            "provenance": "agent"
+          },
           "command": {
             "to": "awaiting-verification",
             "actor": "agent-repair-1",
-            "provenance": "agent",
             "role": "triager",
             "reason": "Submit fix-1",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -1569,10 +1571,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "to": "in-progress",
             "actor": "verifier-2",
-            "provenance": "authenticated-human",
             "role": "verifier",
             "reason": "failed for fix-1",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -1595,10 +1599,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "agent"
+          },
           "command": {
             "to": "awaiting-verification",
             "actor": "agent-repair-1",
-            "provenance": "agent",
             "role": "triager",
             "reason": "Submit fix-2",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -1621,10 +1627,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "to": "in-progress",
             "actor": "verifier-2",
-            "provenance": "authenticated-human",
             "role": "verifier",
             "reason": "failed for fix-2",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -1647,10 +1655,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "agent"
+          },
           "command": {
             "to": "awaiting-verification",
             "actor": "agent-repair-1",
-            "provenance": "agent",
             "role": "triager",
             "reason": "Submit fix-3",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -1673,10 +1683,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "to": "resolved",
             "actor": "verifier-2",
-            "provenance": "authenticated-human",
             "role": "verifier",
             "reason": "passed for fix-3",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -1747,10 +1759,12 @@
       "steps": [
         {
           "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "to": "reopened",
             "actor": "operator-1",
-            "provenance": "authenticated-human",
             "role": "triager",
             "reason": "Regression in v2.1",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -1771,10 +1785,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "to": "in-progress",
             "actor": "operator-1",
-            "provenance": "authenticated-human",
             "role": "triager",
             "reason": "Resume repair",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -1790,10 +1806,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "agent"
+          },
           "command": {
             "to": "awaiting-verification",
             "actor": "agent-repair-1",
-            "provenance": "agent",
             "role": "triager",
             "reason": "Submit fix-r1",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -1816,10 +1834,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "to": "resolved",
             "actor": "verifier-2",
-            "provenance": "authenticated-human",
             "role": "verifier",
             "reason": "passed for fix-r1",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -1885,10 +1905,12 @@
       "steps": [
         {
           "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "to": "reopened",
             "actor": "operator-1",
-            "provenance": "authenticated-human",
             "role": "triager",
             "reason": "Regression in v2.1",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -1909,10 +1931,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "to": "reproducing",
             "actor": "operator-1",
-            "provenance": "authenticated-human",
             "role": "triager",
             "reason": "Resume repair",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -1958,10 +1982,12 @@
       "steps": [
         {
           "op": "reopenAndResume",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "reopen": {
             "to": "reopened",
             "actor": "operator-1",
-            "provenance": "authenticated-human",
             "role": "triager",
             "reason": "Regression in v2.1",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -1978,7 +2004,6 @@
           "resume": {
             "to": "in-progress",
             "actor": "operator-1",
-            "provenance": "authenticated-human",
             "role": "triager",
             "reason": "Resume repair",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -1994,10 +2019,12 @@
         },
         {
           "op": "reopenAndResume",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "reopen": {
             "to": "reopened",
             "actor": "operator-1",
-            "provenance": "authenticated-human",
             "role": "triager",
             "reason": "Regression in v2.1",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -2014,7 +2041,6 @@
           "resume": {
             "to": "in-progress",
             "actor": "operator-1",
-            "provenance": "authenticated-human",
             "role": "triager",
             "reason": "Resume repair",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -2029,10 +2055,12 @@
         },
         {
           "op": "reopenAndResume",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "reopen": {
             "to": "reopened",
             "actor": "operator-1",
-            "provenance": "authenticated-human",
             "role": "triager",
             "reason": "Regression in v2.1",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -2044,7 +2072,6 @@
           "resume": {
             "to": "in-progress",
             "actor": "operator-1",
-            "provenance": "authenticated-human",
             "role": "triager",
             "reason": "Resume repair",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -2077,10 +2104,12 @@
       "steps": [
         {
           "op": "transition",
+          "context": {
+            "provenance": "agent"
+          },
           "command": {
             "to": "awaiting-verification",
             "actor": "agent-repair-1",
-            "provenance": "agent",
             "role": "triager",
             "reason": "Submit fix-1",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -2103,9 +2132,11 @@
         },
         {
           "op": "inconclusive",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "actor": "verifier-2",
-            "provenance": "authenticated-human",
             "role": "verifier",
             "reason": "inconclusive for fix-1",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -2128,10 +2159,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "to": "resolved",
             "actor": "verifier-2",
-            "provenance": "authenticated-human",
             "role": "verifier",
             "reason": "inconclusive for fix-1",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -2154,10 +2187,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "to": "in-progress",
             "actor": "verifier-2",
-            "provenance": "authenticated-human",
             "role": "verifier",
             "reason": "inconclusive for fix-1",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -2180,10 +2215,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "to": "resolved",
             "actor": "verifier-2",
-            "provenance": "authenticated-human",
             "role": "verifier",
             "reason": "passed for fix-1",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -2224,10 +2261,12 @@
       "steps": [
         {
           "op": "transition",
+          "context": {
+            "provenance": "agent"
+          },
           "command": {
             "to": "awaiting-verification",
             "actor": "agent-repair-1",
-            "provenance": "agent",
             "role": "triager",
             "reason": "Submit fix-1",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -2250,10 +2289,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "to": "in-progress",
             "actor": "verifier-2",
-            "provenance": "authenticated-human",
             "role": "verifier",
             "reason": "failed for fix-1",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -2276,10 +2317,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "agent"
+          },
           "command": {
             "to": "awaiting-verification",
             "actor": "agent-repair-1",
-            "provenance": "agent",
             "role": "triager",
             "reason": "Submit fix-2",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -2302,10 +2345,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "to": "resolved",
             "actor": "verifier-2",
-            "provenance": "authenticated-human",
             "role": "verifier",
             "reason": "passed for fix-1",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -2328,10 +2373,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "to": "resolved",
             "actor": "verifier-2",
-            "provenance": "authenticated-human",
             "role": "verifier",
             "reason": "passed for fix-2",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -2354,10 +2401,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "to": "resolved",
             "actor": "verifier-2",
-            "provenance": "authenticated-human",
             "role": "verifier",
             "reason": "passed for fix-2",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -2381,10 +2430,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "agent"
+          },
           "command": {
             "to": "awaiting-verification",
             "actor": "agent-repair-1",
-            "provenance": "agent",
             "role": "triager",
             "reason": "Submit fix-1",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -2407,10 +2458,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "to": "in-progress",
             "actor": "verifier-2",
-            "provenance": "authenticated-human",
             "role": "verifier",
             "reason": "failed for fix-2",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -2428,10 +2481,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "to": "in-progress",
             "actor": "verifier-2",
-            "provenance": "authenticated-human",
             "role": "verifier",
             "reason": "failed for fix-2",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -2454,10 +2509,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "agent"
+          },
           "command": {
             "to": "awaiting-verification",
             "actor": "agent-repair-1",
-            "provenance": "agent",
             "role": "triager",
             "reason": "Submit fix-1",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -2495,10 +2552,12 @@
       "steps": [
         {
           "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "to": "awaiting-verification",
             "actor": "verifier-2",
-            "provenance": "authenticated-human",
             "role": "administrator",
             "reason": "Submit fix-1",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -2521,10 +2580,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "to": "resolved",
             "actor": "verifier-2",
-            "provenance": "authenticated-human",
             "role": "verifier",
             "reason": "passed for fix-1",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -2547,10 +2608,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "to": "in-progress",
             "actor": "verifier-2",
-            "provenance": "authenticated-human",
             "role": "verifier",
             "reason": "failed for fix-1",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -2588,10 +2651,12 @@
       "steps": [
         {
           "op": "transition",
+          "context": {
+            "provenance": "agent"
+          },
           "command": {
             "to": "awaiting-verification",
             "actor": "agent-repair-1",
-            "provenance": "agent",
             "role": "triager",
             "reason": "Submit a-1",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -2614,10 +2679,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "to": "in-progress",
             "actor": "verifier-2",
-            "provenance": "authenticated-human",
             "role": "verifier",
             "reason": "failed for a-1",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -2640,10 +2707,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "agent"
+          },
           "command": {
             "to": "awaiting-verification",
             "actor": "agent-repair-1",
-            "provenance": "agent",
             "role": "triager",
             "reason": "Submit a-2",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -2666,10 +2735,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "to": "in-progress",
             "actor": "verifier-2",
-            "provenance": "authenticated-human",
             "role": "verifier",
             "reason": "failed for a-2",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -2692,10 +2763,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "agent"
+          },
           "command": {
             "to": "awaiting-verification",
             "actor": "agent-repair-1",
-            "provenance": "agent",
             "role": "triager",
             "reason": "Submit a-3",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -2718,10 +2791,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "to": "in-progress",
             "actor": "verifier-2",
-            "provenance": "authenticated-human",
             "role": "verifier",
             "reason": "failed for a-3",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -2744,10 +2819,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "agent"
+          },
           "command": {
             "to": "awaiting-verification",
             "actor": "agent-repair-1",
-            "provenance": "agent",
             "role": "triager",
             "reason": "Submit a-4",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -2770,9 +2847,11 @@
         },
         {
           "op": "escalate",
+          "context": {
+            "provenance": "agent"
+          },
           "command": {
             "actor": "operator-1",
-            "provenance": "agent",
             "role": "triager",
             "reason": "Agent wants to continue",
             "occurredAt": "2026-10-08T12:00:00.000Z"
@@ -2784,9 +2863,11 @@
         },
         {
           "op": "escalate",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "actor": "operator-1",
-            "provenance": "authenticated-human",
             "role": "triager",
             "reason": "Owner approved three more attempts",
             "occurredAt": "2026-10-08T12:00:00.000Z"
@@ -2798,10 +2879,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "agent"
+          },
           "command": {
             "to": "awaiting-verification",
             "actor": "agent-repair-1",
-            "provenance": "agent",
             "role": "triager",
             "reason": "Submit a-4",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -2839,10 +2922,12 @@
       "steps": [
         {
           "op": "transition",
+          "context": {
+            "provenance": "agent"
+          },
           "command": {
             "to": "awaiting-verification",
             "actor": "agent-repair-1",
-            "provenance": "agent",
             "role": "triager",
             "reason": "Submit a-1",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -2865,10 +2950,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "to": "in-progress",
             "actor": "verifier-2",
-            "provenance": "authenticated-human",
             "role": "verifier",
             "reason": "failed for a-1",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -2891,10 +2978,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "agent"
+          },
           "command": {
             "to": "awaiting-verification",
             "actor": "agent-repair-1",
-            "provenance": "agent",
             "role": "triager",
             "reason": "Submit a-2",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -2917,10 +3006,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "to": "in-progress",
             "actor": "verifier-2",
-            "provenance": "authenticated-human",
             "role": "verifier",
             "reason": "failed for a-2",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -2943,10 +3034,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "agent"
+          },
           "command": {
             "to": "awaiting-verification",
             "actor": "agent-repair-1",
-            "provenance": "agent",
             "role": "triager",
             "reason": "Submit a-3",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -2969,9 +3062,11 @@
         },
         {
           "op": "inconclusive",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "actor": "verifier-2",
-            "provenance": "authenticated-human",
             "role": "verifier",
             "reason": "inconclusive for a-3",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -2994,9 +3089,11 @@
         },
         {
           "op": "inconclusive",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "actor": "verifier-2",
-            "provenance": "authenticated-human",
             "role": "verifier",
             "reason": "inconclusive for a-3",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -3019,10 +3116,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "to": "in-progress",
             "actor": "verifier-2",
-            "provenance": "authenticated-human",
             "role": "verifier",
             "reason": "failed for a-3",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -3045,10 +3144,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "agent"
+          },
           "command": {
             "to": "awaiting-verification",
             "actor": "agent-repair-1",
-            "provenance": "agent",
             "role": "triager",
             "reason": "Submit a-4",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -3091,10 +3192,12 @@
       "steps": [
         {
           "op": "transition",
+          "context": {
+            "provenance": "agent"
+          },
           "command": {
             "to": "awaiting-verification",
             "actor": "agent-repair-1",
-            "provenance": "agent",
             "role": "triager",
             "reason": "Submit a-1",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -3117,9 +3220,11 @@
         },
         {
           "op": "inconclusive",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "actor": "verifier-2",
-            "provenance": "authenticated-human",
             "role": "verifier",
             "reason": "inconclusive for a-1",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -3142,9 +3247,11 @@
         },
         {
           "op": "inconclusive",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "actor": "verifier-2",
-            "provenance": "authenticated-human",
             "role": "verifier",
             "reason": "inconclusive for a-1",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -3167,9 +3274,11 @@
         },
         {
           "op": "inconclusive",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "actor": "verifier-2",
-            "provenance": "authenticated-human",
             "role": "verifier",
             "reason": "inconclusive for a-1",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -3192,10 +3301,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "to": "in-progress",
             "actor": "verifier-2",
-            "provenance": "authenticated-human",
             "role": "verifier",
             "reason": "failed for a-1",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -3218,10 +3329,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "agent"
+          },
           "command": {
             "to": "awaiting-verification",
             "actor": "agent-repair-1",
-            "provenance": "agent",
             "role": "triager",
             "reason": "Submit a-2",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -3262,10 +3375,12 @@
       "steps": [
         {
           "op": "transition",
+          "context": {
+            "provenance": "agent"
+          },
           "command": {
             "to": "awaiting-verification",
             "actor": "agent-repair-1",
-            "provenance": "agent",
             "role": "triager",
             "reason": "Submit a-1",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -3288,10 +3403,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "to": "in-progress",
             "actor": "verifier-2",
-            "provenance": "authenticated-human",
             "role": "verifier",
             "reason": "failed for a-1",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -3314,10 +3431,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "agent"
+          },
           "command": {
             "to": "awaiting-verification",
             "actor": "agent-repair-1",
-            "provenance": "agent",
             "role": "triager",
             "reason": "Submit a-2",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -3340,10 +3459,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "to": "in-progress",
             "actor": "verifier-2",
-            "provenance": "authenticated-human",
             "role": "verifier",
             "reason": "failed for a-2",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -3366,10 +3487,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "agent"
+          },
           "command": {
             "to": "awaiting-verification",
             "actor": "agent-repair-1",
-            "provenance": "agent",
             "role": "triager",
             "reason": "Submit a-3",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -3392,10 +3515,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "to": "in-progress",
             "actor": "verifier-2",
-            "provenance": "authenticated-human",
             "role": "verifier",
             "reason": "failed for a-3",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -3418,10 +3543,12 @@
         },
         {
           "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
           "command": {
             "to": "awaiting-verification",
             "actor": "operator-1",
-            "provenance": "authenticated-human",
             "role": "triager",
             "reason": "Submit h-4",
             "occurredAt": "2026-10-08T12:00:00.000Z",
@@ -3445,6 +3572,769 @@
       ],
       "final": {
         "revision": 7
+      }
+    },
+    {
+      "name": "VF-025: the submitter cannot name someone else as author, and its own pass is refused",
+      "record": {
+        "kind": "defect",
+        "id": "DEF-0100",
+        "state": "in-progress",
+        "revision": 0,
+        "history": []
+      },
+      "steps": [
+        {
+          "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
+          "command": {
+            "to": "awaiting-verification",
+            "actor": "dev-1",
+            "role": "triager",
+            "reason": "Submit q-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "q-1",
+              "candidateRevision": "s-1",
+              "workItemId": "WI-1",
+              "author": "someone-else"
+            },
+            "evidence": [
+              {
+                "kind": "verification-request",
+                "ref": "req-q-1"
+              }
+            ]
+          },
+          "expect": {
+            "ok": false,
+            "code": "author_mismatch"
+          }
+        },
+        {
+          "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
+          "command": {
+            "to": "awaiting-verification",
+            "actor": "dev-1",
+            "role": "triager",
+            "reason": "Submit q-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "q-1",
+              "candidateRevision": "s-1",
+              "workItemId": "WI-1",
+              "author": "DEV-1"
+            },
+            "evidence": [
+              {
+                "kind": "verification-request",
+                "ref": "req-q-1"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "awaiting-verification"
+          }
+        },
+        {
+          "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
+          "command": {
+            "to": "resolved",
+            "actor": "dev-1",
+            "role": "verifier",
+            "reason": "passed for q-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "q-1",
+              "candidateRevision": "s-1",
+              "verificationOutcome": "passed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-q-1-passed"
+              }
+            ]
+          },
+          "expect": {
+            "ok": false,
+            "code": "independence_required"
+          }
+        },
+        {
+          "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
+          "command": {
+            "to": "resolved",
+            "actor": "verifier-2",
+            "role": "verifier",
+            "reason": "passed for q-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "q-1",
+              "candidateRevision": "s-1",
+              "verificationOutcome": "passed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-q-1-passed"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "resolved"
+          }
+        }
+      ],
+      "final": {
+        "revision": 2,
+        "attempts": [
+          "q-1"
+        ]
+      }
+    },
+    {
+      "name": "VF-026: case and compatibility-form variants of the author are the same actor",
+      "record": {
+        "kind": "defect",
+        "id": "DEF-0100",
+        "state": "in-progress",
+        "revision": 0,
+        "history": []
+      },
+      "steps": [
+        {
+          "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
+          "command": {
+            "to": "awaiting-verification",
+            "actor": "dev-1",
+            "role": "triager",
+            "reason": "Submit s-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "s-1",
+              "candidateRevision": "c-1",
+              "workItemId": "WI-1"
+            },
+            "evidence": [
+              {
+                "kind": "verification-request",
+                "ref": "req-s-1"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "awaiting-verification"
+          }
+        },
+        {
+          "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
+          "command": {
+            "to": "resolved",
+            "actor": "DEV-1",
+            "role": "verifier",
+            "reason": "passed for s-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "s-1",
+              "candidateRevision": "c-1",
+              "verificationOutcome": "passed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-s-1-passed"
+              }
+            ]
+          },
+          "expect": {
+            "ok": false,
+            "code": "independence_required"
+          }
+        },
+        {
+          "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
+          "command": {
+            "to": "resolved",
+            "actor": "Dev-1",
+            "role": "verifier",
+            "reason": "passed for s-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "s-1",
+              "candidateRevision": "c-1",
+              "verificationOutcome": "passed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-s-1-passed"
+              }
+            ]
+          },
+          "expect": {
+            "ok": false,
+            "code": "independence_required"
+          }
+        },
+        {
+          "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
+          "command": {
+            "to": "resolved",
+            "actor": "ｄｅｖ-1",
+            "role": "verifier",
+            "reason": "passed for s-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "s-1",
+              "candidateRevision": "c-1",
+              "verificationOutcome": "passed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-s-1-passed"
+              }
+            ]
+          },
+          "expect": {
+            "ok": false,
+            "code": "missing_actor"
+          }
+        },
+        {
+          "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
+          "command": {
+            "to": "resolved",
+            "actor": "verifier-2",
+            "role": "verifier",
+            "reason": "passed for s-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "s-1",
+              "candidateRevision": "c-1",
+              "verificationOutcome": "passed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-s-1-passed"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "resolved"
+          }
+        }
+      ],
+      "final": {
+        "revision": 2
+      }
+    },
+    {
+      "name": "VF-027: without a trusted human context, a submission past the budget is refused (asserted provenance does not exempt)",
+      "record": {
+        "kind": "defect",
+        "id": "DEF-0100",
+        "state": "in-progress",
+        "revision": 0,
+        "history": []
+      },
+      "steps": [
+        {
+          "op": "transition",
+          "context": {
+            "provenance": "agent"
+          },
+          "command": {
+            "to": "awaiting-verification",
+            "actor": "agent-repair-1",
+            "role": "triager",
+            "reason": "Submit p-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "p-1",
+              "candidateRevision": "s-1",
+              "workItemId": "WI-1"
+            },
+            "evidence": [
+              {
+                "kind": "verification-request",
+                "ref": "req-p-1"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "awaiting-verification"
+          }
+        },
+        {
+          "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
+          "command": {
+            "to": "in-progress",
+            "actor": "verifier-2",
+            "role": "verifier",
+            "reason": "failed for p-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "p-1",
+              "candidateRevision": "s-1",
+              "verificationOutcome": "failed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-p-1-failed"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "in-progress"
+          }
+        },
+        {
+          "op": "transition",
+          "context": {
+            "provenance": "agent"
+          },
+          "command": {
+            "to": "awaiting-verification",
+            "actor": "agent-repair-1",
+            "role": "triager",
+            "reason": "Submit p-2",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "p-2",
+              "candidateRevision": "s-2",
+              "workItemId": "WI-1"
+            },
+            "evidence": [
+              {
+                "kind": "verification-request",
+                "ref": "req-p-2"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "awaiting-verification"
+          }
+        },
+        {
+          "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
+          "command": {
+            "to": "in-progress",
+            "actor": "verifier-2",
+            "role": "verifier",
+            "reason": "failed for p-2",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "p-2",
+              "candidateRevision": "s-2",
+              "verificationOutcome": "failed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-p-2-failed"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "in-progress"
+          }
+        },
+        {
+          "op": "transition",
+          "context": {
+            "provenance": "agent"
+          },
+          "command": {
+            "to": "awaiting-verification",
+            "actor": "agent-repair-1",
+            "role": "triager",
+            "reason": "Submit p-3",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "p-3",
+              "candidateRevision": "s-3",
+              "workItemId": "WI-1"
+            },
+            "evidence": [
+              {
+                "kind": "verification-request",
+                "ref": "req-p-3"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "awaiting-verification"
+          }
+        },
+        {
+          "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
+          "command": {
+            "to": "in-progress",
+            "actor": "verifier-2",
+            "role": "verifier",
+            "reason": "failed for p-3",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "p-3",
+              "candidateRevision": "s-3",
+              "verificationOutcome": "failed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-p-3-failed"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "in-progress"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "awaiting-verification",
+            "actor": "agent-repair-1",
+            "role": "triager",
+            "reason": "Submit p-4",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "p-4",
+              "candidateRevision": "s-4",
+              "workItemId": "WI-1"
+            },
+            "evidence": [
+              {
+                "kind": "verification-request",
+                "ref": "req-p-4"
+              }
+            ],
+            "provenance": "authenticated-human"
+          },
+          "expect": {
+            "ok": false,
+            "code": "escalation_required"
+          }
+        },
+        {
+          "op": "transition",
+          "command": {
+            "to": "awaiting-verification",
+            "actor": "agent-repair-1",
+            "role": "triager",
+            "reason": "Submit p-4",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "p-4",
+              "candidateRevision": "s-4",
+              "workItemId": "WI-1"
+            },
+            "evidence": [
+              {
+                "kind": "verification-request",
+                "ref": "req-p-4"
+              }
+            ]
+          },
+          "expect": {
+            "ok": false,
+            "code": "invalid_provenance"
+          }
+        },
+        {
+          "op": "transition",
+          "context": {
+            "provenance": "agent"
+          },
+          "command": {
+            "to": "awaiting-verification",
+            "actor": "agent-repair-1",
+            "role": "triager",
+            "reason": "Submit p-4",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "p-4",
+              "candidateRevision": "s-4",
+              "workItemId": "WI-1"
+            },
+            "evidence": [
+              {
+                "kind": "verification-request",
+                "ref": "req-p-4"
+              }
+            ],
+            "provenance": "authenticated-human"
+          },
+          "expect": {
+            "ok": false,
+            "code": "provenance_conflict"
+          }
+        },
+        {
+          "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
+          "command": {
+            "to": "awaiting-verification",
+            "actor": "operator-1",
+            "role": "triager",
+            "reason": "Submit p-4",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "p-4",
+              "candidateRevision": "s-4",
+              "workItemId": "WI-1"
+            },
+            "evidence": [
+              {
+                "kind": "verification-request",
+                "ref": "req-p-4"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "awaiting-verification"
+          }
+        }
+      ],
+      "final": {
+        "revision": 7
+      }
+    },
+    {
+      "name": "VF-028: agent, application and ci verifiers may fail or mark inconclusive but not pass",
+      "record": {
+        "kind": "defect",
+        "id": "DEF-0100",
+        "state": "in-progress",
+        "revision": 0,
+        "history": []
+      },
+      "steps": [
+        {
+          "op": "transition",
+          "context": {
+            "provenance": "authenticated-human"
+          },
+          "command": {
+            "to": "awaiting-verification",
+            "actor": "operator-1",
+            "role": "triager",
+            "reason": "Submit g-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "g-1",
+              "candidateRevision": "s-1",
+              "workItemId": "WI-1"
+            },
+            "evidence": [
+              {
+                "kind": "verification-request",
+                "ref": "req-g-1"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "awaiting-verification"
+          }
+        },
+        {
+          "op": "transition",
+          "context": {
+            "provenance": "agent"
+          },
+          "command": {
+            "to": "resolved",
+            "actor": "agent-verifier",
+            "role": "verifier",
+            "reason": "passed for g-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "g-1",
+              "candidateRevision": "s-1",
+              "verificationOutcome": "passed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-g-1-passed"
+              }
+            ]
+          },
+          "expect": {
+            "ok": false,
+            "code": "human_verifier_required"
+          }
+        },
+        {
+          "op": "transition",
+          "context": {
+            "provenance": "ci"
+          },
+          "command": {
+            "to": "resolved",
+            "actor": "ci-verifier",
+            "role": "verifier",
+            "reason": "passed for g-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "g-1",
+              "candidateRevision": "s-1",
+              "verificationOutcome": "passed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-g-1-passed"
+              }
+            ]
+          },
+          "expect": {
+            "ok": false,
+            "code": "human_verifier_required"
+          }
+        },
+        {
+          "op": "transition",
+          "context": {
+            "provenance": "application"
+          },
+          "command": {
+            "to": "resolved",
+            "actor": "app-verifier",
+            "role": "verifier",
+            "reason": "passed for g-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "g-1",
+              "candidateRevision": "s-1",
+              "verificationOutcome": "passed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-g-1-passed"
+              }
+            ]
+          },
+          "expect": {
+            "ok": false,
+            "code": "human_verifier_required"
+          }
+        },
+        {
+          "op": "inconclusive",
+          "context": {
+            "provenance": "ci"
+          },
+          "command": {
+            "actor": "ci-verifier",
+            "role": "verifier",
+            "reason": "inconclusive for g-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "g-1",
+              "candidateRevision": "s-1",
+              "verificationOutcome": "inconclusive"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-g-1-inconclusive"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "awaiting-verification"
+          }
+        },
+        {
+          "op": "transition",
+          "context": {
+            "provenance": "agent"
+          },
+          "command": {
+            "to": "in-progress",
+            "actor": "agent-verifier",
+            "role": "verifier",
+            "reason": "failed for g-1",
+            "occurredAt": "2026-10-08T12:00:00.000Z",
+            "fields": {
+              "attemptId": "g-1",
+              "candidateRevision": "s-1",
+              "verificationOutcome": "failed"
+            },
+            "evidence": [
+              {
+                "kind": "verification-run",
+                "ref": "run-g-1-failed"
+              }
+            ]
+          },
+          "expect": {
+            "ok": true,
+            "state": "in-progress"
+          }
+        }
+      ],
+      "final": {
+        "revision": 3,
+        "outcomes": [
+          "failed"
+        ]
       }
     }
   ]

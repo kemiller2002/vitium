@@ -223,18 +223,21 @@ export function planPromotion({table, key, record, result, createdAt}) {
 export function decide({args, record, actor, occurredAt}) {
   const current = {kind:record.kind, ...(record.id ? {id:record.id} : {}), state:record.state, revision:record.revision, history:record.history};
   const base = {actor, provenance:OPERATOR_PROVENANCE, role:args.role ?? "triager", occurredAt};
+  // VF-027: provenance comes from this authenticated boundary (IAM identity), passed as the
+  // lifecycle's trusted context rather than read from the command body.
+  const trusted = {context:{provenance:OPERATOR_PROVENANCE}};
   if (args.command === "verify") {
     const r = recordInconclusive(lifecycleTable, current, {...base, expectedRevision:record.revision,
-      reason:args.reason, fields:args.fields, evidence:args.evidence});
+      reason:args.reason, fields:args.fields, evidence:args.evidence}, trusted);
     return r.ok ? {ok:true, value:{record:r.value.record, events:[r.value.event]}} : r;
   }
   if (args.command === "reopen-and-resume") {
     const r = reopenAndResume(lifecycleTable, current,
       {...base, to:"reopened", expectedRevision:record.revision, reason:args.reason, fields:args.reopen.fields, evidence:args.reopen.evidence},
-      {...base, to:args.resumeTo, reason:args.resumeReason, fields:args.resume.fields, evidence:[]});
+      {...base, to:args.resumeTo, reason:args.resumeReason, fields:args.resume.fields, evidence:[]}, trusted);
     return r.ok ? {ok:true, value:{record:r.value.record, events:r.value.events}} : r;
   }
-  const r = evaluateTransition(lifecycleTable, current, buildCommand({args, record, actor, occurredAt}));
+  const r = evaluateTransition(lifecycleTable, current, buildCommand({args, record, actor, occurredAt}), trusted);
   return r.ok ? {ok:true, value:{record:r.value.record, events:[r.value.event]}} : r;
 }
 
