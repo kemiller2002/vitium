@@ -13,6 +13,8 @@ const shared = readJson("schemas/lifecycle/transition-cases.v1.json");
 const ts = "2026-10-08T12:00:00.000Z";
 const allStates = [...table.machines.observation.states, ...table.machines.defect.states];
 const strict = (o = {}) => ({ expectedRevision: 0, actor: "operator-1", provenance: "authenticated-human", role: "triager", reason: "Investigated", occurredAt: ts, ...o });
+// A prior history consistent with a revision (VF-016: history length must equal revision).
+const past = n => Array.from({ length: n }, (_, i) => ({ type: "transition", sequence: i + 1 }));
 const fieldValue = { classification: "suspected defect", duplicateOf: "DEF-0001", supersededBy: "DEF-0003", workItemRef: "work-1" };
 
 test("table declares candidate authority and never claims Ordo authorization", () => {
@@ -153,18 +155,18 @@ test("VIT-AC-012: close as duplicate, then reopen preserves closure evidence and
 });
 
 test("reopen after verified resolution links back to the verification evidence", () => {
-  let rec = { kind: "defect", id: "DEF-0009", state: "awaiting-verification", revision: 4, history: [] };
+  let rec = { kind: "defect", id: "DEF-0009", state: "awaiting-verification", revision: 4, history: past(4) };
   rec = tryTransition(rec, strict({ to: "resolved", role: "verifier", expectedRevision: 4, evidence: [{ kind: "verification-run", ref: "run-1" }] })).value.record;
-  rec = tryTransition(rec, strict({ to: "closed", expectedRevision: 5 })).value.record;
+  rec = tryTransition(rec, strict({ to: "closed", expectedRevision: 5, evidence: [{ kind: "verification-run", ref: "run-1" }] })).value.record;
   const r = tryTransition(rec, strict({ to: "reopened", expectedRevision: 6, evidence: [{ kind: "new-occurrence", ref: "occ-2" }] }));
   assert.equal(r.ok, true);
   // 'closed' carries no evidence of its own; reopens points at the latest disposition event.
   assert.equal(r.value.event.reopens.state, "closed");
-  assert.equal(r.value.record.history[0].evidence[0].ref, "run-1");
+  assert.equal(r.value.record.history[4].evidence[0].ref, "run-1");
 });
 
 test("fix facts are events, not states (VIT-VER-005 groundwork)", () => {
-  const rec = { kind: "defect", id: "DEF-0010", state: "in-progress", revision: 3, history: [] };
+  const rec = { kind: "defect", id: "DEF-0010", state: "in-progress", revision: 3, history: past(3) };
   const merged = fact(rec, strict({ fact: "code-merged", expectedRevision: 3, evidence: [{ kind: "supporting", ref: "commit-abc" }] }));
   assert.equal(merged.ok, true);
   assert.equal(merged.value.record.state, "in-progress", "a fact never changes state");

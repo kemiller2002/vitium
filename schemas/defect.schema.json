@@ -51,7 +51,8 @@
         "workaround",
         "minor",
         "unknown"
-      ]
+      ],
+      "description": "Reported-impact code. Intake labels map via service/report-domain.mjs impactCodes (same ids as schemas/products.v1.json impacts)."
     },
     "observed": {
       "type": "string",
@@ -83,8 +84,13 @@
         "resolved",
         "closed",
         "duplicate",
-        "not-reproducible"
-      ]
+        "not-reproducible",
+        "reopened",
+        "expected-behavior",
+        "declined",
+        "superseded"
+      ],
+      "description": "Additively widened (DOM-001 section 13, VF-012) so every state the candidate lifecycle table can produce is representable; every record valid before remains valid. Legal transitions: schemas/lifecycle/transitions.v1.json."
     },
     "severity": {
       "enum": [

@@ -48,27 +48,35 @@
     "title": {
       "type": "string",
       "minLength": 1,
-      "maxLength": 120
+      "maxLength": 120,
+      "pattern": "^(?![\\s\\S]*(?:-----[Bb][Ee][Gg][Ii][Nn] (?:[Rr][Ss][Aa] |[Ee][Cc] |[Oo][Pp][Ee][Nn][Ss][Ss][Hh] )?[Pp][Rr][Ii][Vv][Aa][Tt][Ee] [Kk][Ee][Yy]-----|[Gg][Hh][pousrPOUSR]_[A-Za-z0-9_]{15,}|(?<![A-Za-z0-9_])[Ss][Kk]-[A-Za-z0-9_-]{18,}|(?:[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd]|[Aa][Pp][Ii][_ -]?[Kk][Ee][Yy])[\\t\\n\\u000b\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]*[:=][\\t\\n\\u000b\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]*[^\\t\\n\\u000b\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]{4,}))(?=[\\s\\S]*[^\\t\\n\\u000b\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff\\p{Cf}])[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*$",
+      "description": "Required. Code points (not UTF-16 units). At least one visible character; no control, bidi-override or lone-surrogate characters; no obvious credential. Runtime trims and NFC-normalises."
     },
     "actual": {
       "type": "string",
       "minLength": 1,
-      "maxLength": 1200
+      "maxLength": 1200,
+      "pattern": "^(?![\\s\\S]*(?:-----[Bb][Ee][Gg][Ii][Nn] (?:[Rr][Ss][Aa] |[Ee][Cc] |[Oo][Pp][Ee][Nn][Ss][Ss][Hh] )?[Pp][Rr][Ii][Vv][Aa][Tt][Ee] [Kk][Ee][Yy]-----|[Gg][Hh][pousrPOUSR]_[A-Za-z0-9_]{15,}|(?<![A-Za-z0-9_])[Ss][Kk]-[A-Za-z0-9_-]{18,}|(?:[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd]|[Aa][Pp][Ii][_ -]?[Kk][Ee][Yy])[\\t\\n\\u000b\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]*[:=][\\t\\n\\u000b\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]*[^\\t\\n\\u000b\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]{4,}))(?=[\\s\\S]*[^\\t\\n\\u000b\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff\\p{Cf}])[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*$",
+      "description": "Required. Code points (not UTF-16 units). At least one visible character; no control, bidi-override or lone-surrogate characters; no obvious credential. Runtime trims and NFC-normalises."
     },
     "expected": {
       "type": "string",
       "minLength": 1,
-      "maxLength": 1200
+      "maxLength": 1200,
+      "pattern": "^(?![\\s\\S]*(?:-----[Bb][Ee][Gg][Ii][Nn] (?:[Rr][Ss][Aa] |[Ee][Cc] |[Oo][Pp][Ee][Nn][Ss][Ss][Hh] )?[Pp][Rr][Ii][Vv][Aa][Tt][Ee] [Kk][Ee][Yy]-----|[Gg][Hh][pousrPOUSR]_[A-Za-z0-9_]{15,}|(?<![A-Za-z0-9_])[Ss][Kk]-[A-Za-z0-9_-]{18,}|(?:[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd]|[Aa][Pp][Ii][_ -]?[Kk][Ee][Yy])[\\t\\n\\u000b\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]*[:=][\\t\\n\\u000b\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]*[^\\t\\n\\u000b\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]{4,}))(?=[\\s\\S]*[^\\t\\n\\u000b\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff\\p{Cf}])[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*$",
+      "description": "Required. Code points (not UTF-16 units). At least one visible character; no control, bidi-override or lone-surrogate characters; no obvious credential. Runtime trims and NFC-normalises."
     },
     "steps": {
       "type": "string",
-      "maxLength": 900
+      "maxLength": 900,
+      "pattern": "^(?![\\s\\S]*(?:-----[Bb][Ee][Gg][Ii][Nn] (?:[Rr][Ss][Aa] |[Ee][Cc] |[Oo][Pp][Ee][Nn][Ss][Ss][Hh] )?[Pp][Rr][Ii][Vv][Aa][Tt][Ee] [Kk][Ee][Yy]-----|[Gg][Hh][pousrPOUSR]_[A-Za-z0-9_]{15,}|(?<![A-Za-z0-9_])[Ss][Kk]-[A-Za-z0-9_-]{18,}|(?:[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd]|[Aa][Pp][Ii][_ -]?[Kk][Ee][Yy])[\\t\\n\\u000b\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]*[:=][\\t\\n\\u000b\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]*[^\\t\\n\\u000b\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]{4,}))[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*$",
+      "description": "Optional; omit when blank. Whitespace-only is treated as not provided. null is refused."
     },
     "pageUrl": {
       "type": "string",
-      "format": "uri",
       "maxLength": 2000,
-      "description": "Server removes credentials, query strings and fragments."
+      "pattern": "^(?:|[Hh][Tt][Tt][Pp][Ss]?://[^\\t\\n\\u000b\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff/?#\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]+(?:[/?#][^\\t\\n\\u000b\\f\\r \\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069\\ud800-\\udfff]*)?)$",
+      "description": "Optional; omit when blank (empty string is accepted as not provided). http(s) only. Server removes credentials, query strings and fragments. Host syntax beyond this pattern is checked by the runtime URL parser."
     },
     "privacyAcknowledged": {
       "const": true
@@ -80,5 +88,5 @@
       "writeOnly": true
     }
   },
-  "description": "Anonymous intake transport; challengeToken must never be persisted, logged or included in a receipt. Idempotency-Key UUID belongs in the HTTP header."
+  "description": "Anonymous intake transport; challengeToken must never be persisted, logged or included in a receipt. Idempotency-Key UUID belongs in the HTTP header. Text rules are shared literally with service/report-domain.mjs TEXT_PATTERNS (DOM-001 section 12)."
 }

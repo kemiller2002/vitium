@@ -347,7 +347,26 @@
         "kind": "defect",
         "state": "new",
         "revision": 3,
-        "history": []
+        "history": [
+          {
+            "type": "transition",
+            "sequence": 1,
+            "from": "x",
+            "to": "y"
+          },
+          {
+            "type": "transition",
+            "sequence": 2,
+            "from": "x",
+            "to": "y"
+          },
+          {
+            "type": "transition",
+            "sequence": 3,
+            "from": "x",
+            "to": "y"
+          }
+        ]
       },
       "command": {
         "expectedRevision": 2,
@@ -441,7 +460,38 @@
         "kind": "defect",
         "state": "awaiting-verification",
         "revision": 5,
-        "history": []
+        "history": [
+          {
+            "type": "transition",
+            "sequence": 1,
+            "from": "x",
+            "to": "y"
+          },
+          {
+            "type": "transition",
+            "sequence": 2,
+            "from": "x",
+            "to": "y"
+          },
+          {
+            "type": "transition",
+            "sequence": 3,
+            "from": "x",
+            "to": "y"
+          },
+          {
+            "type": "transition",
+            "sequence": 4,
+            "from": "x",
+            "to": "y"
+          },
+          {
+            "type": "transition",
+            "sequence": 5,
+            "from": "x",
+            "to": "y"
+          }
+        ]
       },
       "command": {
         "expectedRevision": 5,
@@ -941,7 +991,20 @@
         "kind": "defect",
         "state": "closed",
         "revision": 2,
-        "history": []
+        "history": [
+          {
+            "type": "transition",
+            "sequence": 1,
+            "from": "x",
+            "to": "y"
+          },
+          {
+            "type": "transition",
+            "sequence": 2,
+            "from": "x",
+            "to": "y"
+          }
+        ]
       },
       "command": {
         "expectedRevision": 2,
@@ -1028,6 +1091,261 @@
       "expect": {
         "ok": false,
         "code": "forbidden_transition"
+      }
+    },
+    {
+      "name": "truncated history is refused",
+      "record": {
+        "kind": "defect",
+        "state": "closed",
+        "revision": 2,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 2,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "reopened",
+        "evidence": [
+          {
+            "kind": "new-occurrence",
+            "ref": "evidence-1"
+          }
+        ]
+      },
+      "expect": {
+        "ok": false,
+        "code": "inconsistent_history"
+      }
+    },
+    {
+      "name": "history longer than revision is refused",
+      "record": {
+        "kind": "defect",
+        "state": "new",
+        "revision": 0,
+        "history": [
+          {
+            "type": "transition",
+            "sequence": 1,
+            "from": "x",
+            "to": "y"
+          }
+        ]
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "triaged"
+      },
+      "expect": {
+        "ok": false,
+        "code": "inconsistent_history"
+      }
+    },
+    {
+      "name": "malformed history is refused",
+      "record": {
+        "kind": "defect",
+        "state": "new",
+        "revision": 0,
+        "history": "none"
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "triaged"
+      },
+      "expect": {
+        "ok": false,
+        "code": "inconsistent_history"
+      }
+    },
+    {
+      "name": "resolved to closed needs verification or decision evidence",
+      "record": {
+        "kind": "defect",
+        "state": "resolved",
+        "revision": 1,
+        "history": [
+          {
+            "type": "transition",
+            "sequence": 1,
+            "from": "x",
+            "to": "resolved"
+          }
+        ]
+      },
+      "command": {
+        "expectedRevision": 1,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "closed"
+      },
+      "expect": {
+        "ok": false,
+        "code": "missing_evidence"
+      }
+    },
+    {
+      "name": "resolved to closed with verification evidence",
+      "record": {
+        "kind": "defect",
+        "state": "resolved",
+        "revision": 1,
+        "history": [
+          {
+            "type": "transition",
+            "sequence": 1,
+            "from": "x",
+            "to": "resolved"
+          }
+        ]
+      },
+      "command": {
+        "expectedRevision": 1,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00.000Z",
+        "to": "closed",
+        "evidence": [
+          {
+            "kind": "verification-run",
+            "ref": "run-1"
+          }
+        ]
+      },
+      "expect": {
+        "ok": true,
+        "state": "closed",
+        "revision": 2
+      }
+    },
+    {
+      "name": "impossible calendar date refused",
+      "record": {
+        "kind": "defect",
+        "state": "new",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-02-30T00:00:00Z",
+        "to": "triaged"
+      },
+      "expect": {
+        "ok": false,
+        "code": "invalid_timestamp"
+      }
+    },
+    {
+      "name": "out-of-range time refused",
+      "record": {
+        "kind": "defect",
+        "state": "new",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-99-99T99:99:99Z",
+        "to": "triaged"
+      },
+      "expect": {
+        "ok": false,
+        "code": "invalid_timestamp"
+      }
+    },
+    {
+      "name": "timestamp with trailing text refused",
+      "record": {
+        "kind": "defect",
+        "state": "new",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00 then anything",
+        "to": "triaged"
+      },
+      "expect": {
+        "ok": false,
+        "code": "invalid_timestamp"
+      }
+    },
+    {
+      "name": "timestamp without offset refused",
+      "record": {
+        "kind": "defect",
+        "state": "new",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2026-10-08T12:00:00",
+        "to": "triaged"
+      },
+      "expect": {
+        "ok": false,
+        "code": "invalid_timestamp"
+      }
+    },
+    {
+      "name": "leap day with offset accepted",
+      "record": {
+        "kind": "defect",
+        "state": "new",
+        "revision": 0,
+        "history": []
+      },
+      "command": {
+        "expectedRevision": 0,
+        "actor": "operator-1",
+        "provenance": "authenticated-human",
+        "role": "triager",
+        "reason": "Independent investigation",
+        "occurredAt": "2028-02-29T23:59:59.123+05:30",
+        "to": "triaged"
+      },
+      "expect": {
+        "ok": true,
+        "state": "triaged",
+        "revision": 1
       }
     },
     {

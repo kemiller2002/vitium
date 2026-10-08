@@ -3,6 +3,7 @@
 // Wire schemas: schemas/observation.v2.schema.json, schemas/defect.v2.schema.json.
 // The F# core (domain/Vitium.Domain/Identity.fs) uses the same identity patterns.
 import { resolveProduct } from "./product-registry.mjs";
+import { impactCodes } from "./report-domain.mjs";
 
 const ok = value => Object.freeze({ ok: true, value });
 const fail = (code, message) => Object.freeze({ ok: false, error: Object.freeze({ code, message }) });
@@ -45,12 +46,8 @@ export function Actor(id, provenance) {
 
 // --- v1 -> v2 migration ----------------------------------------------------------
 
-const v1ImpactToId = Object.freeze({
-  "Cannot use the feature": "cannot-use",
-  "Can use it with a workaround": "workaround",
-  "Minor inconvenience or display problem": "minor",
-  "Not sure": "unknown"
-});
+// Single source for label -> code (VF-012): service/report-domain.mjs impactCodes.
+const v1ImpactToId = impactCodes;
 
 const productOf = (registry, text) => {
   const resolved = resolveProduct(registry, text);

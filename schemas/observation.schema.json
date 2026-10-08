@@ -107,11 +107,81 @@
       "format": "date-time"
     },
     "reviewQueuePk": {
-      "const": "QUEUE#pending"
+      "enum": [
+        "QUEUE#pending",
+        "QUEUE#quarantined"
+      ]
     },
     "reviewQueueSk": {
       "type": "string"
+    },
+    "disposition": {
+      "enum": [
+        "received",
+        "quarantined"
+      ],
+      "description": "Initial intake disposition; quarantined when screening raised any flag."
+    },
+    "screening": {
+      "$ref": "#/$defs/screening"
     }
   },
-  "description": "Domain representation; DynamoDB adapter encodes report/history as JSON strings and stores index attributes only while pending review. Superseded for new domain work by observation.v2.schema.json; explicit migration: service/domain-records.mjs migrateObservationV1 (original retained)."
+  "description": "Domain representation; DynamoDB adapter encodes report/history as JSON strings and stores index attributes only while pending review. Superseded for new domain work by observation.v2.schema.json; explicit migration: service/domain-records.mjs migrateObservationV1 (original retained).",
+  "$defs": {
+    "screening": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "flags",
+        "redactions",
+        "escalation",
+        "disposition"
+      ],
+      "description": "Intake screening result (service/redaction.mjs + intake.mjs prepareReport). Records only the kinds found, never secret values.",
+      "properties": {
+        "flags": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "credential-redacted",
+              "possible-vulnerability",
+              "agent-instruction"
+            ]
+          }
+        },
+        "redactions": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "private-key",
+              "url-credentials",
+              "url-secret-parameter",
+              "authorization-header",
+              "jwt",
+              "github-token",
+              "aws-access-key-id",
+              "slack-token",
+              "api-secret-key",
+              "credential-assignment",
+              "payment-card"
+            ]
+          }
+        },
+        "escalation": {
+          "enum": [
+            "security",
+            null
+          ]
+        },
+        "disposition": {
+          "enum": [
+            "received",
+            "quarantined"
+          ]
+        }
+      }
+    }
+  }
 }

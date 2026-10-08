@@ -86,12 +86,12 @@ test("VIT-AC-008 / VIT-NFR-004: site and service agree on refusing credential-lo
   }
 });
 
-test("VIT-DOM-003 / VIT-LCY-004: every defect state used by triage.mjs is representable in defect.schema.json", { todo: "finding VF-012" }, () => {
+test("VIT-DOM-003 / VIT-LCY-004: every defect state used by triage.mjs is representable in defect.schema.json", () => {
   const schemaStates = defectSchema.properties.state.enum;
   assert.deepEqual(defectStates.filter(s => !schemaStates.includes(s)), []);
 });
 
-test("VIT-DOM-003 / VIT-DOM-006: intake impact labels have a declared mapping to defect.schema.json impact codes", { todo: "finding VF-012" }, () => {
+test("VIT-DOM-003 / VIT-DOM-006: intake impact labels have a declared mapping to defect.schema.json impact codes", () => {
   const codes = defectSchema.properties.impact.enum;
   const unmapped = domain.impacts.filter(label => !codes.includes(label));
   // A mapping module (or a shared enum) must exist; today the two vocabularies are disjoint.

@@ -85,7 +85,7 @@ const INVISIBLE = Object.freeze({
   "word joiner only": "⁠"
 });
 
-test("VIT-API-002 / VIT-AC-004: visually empty or bidi-spoofing summaries are refused or neutralised", { todo: "finding VF-008" }, () => {
+test("VIT-API-002 / VIT-AC-004: visually empty or bidi-spoofing summaries are refused or neutralised", () => {
   for (const [name, title] of Object.entries(INVISIBLE)) {
     const r = runtime(validRequest({ title }));
     const neutralised = r.ok && !/[​-‏‪-‮⁠-⁩\u0080-\u009f\ud800-\udfff]/.test(r.value.title);

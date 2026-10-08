@@ -31,8 +31,7 @@ without a required reason. Any pair the table does not list is forbidden (fail c
   authenticated-human, application, ci, agent) and `Actor`.
 - `Registry.fs`: registry parsing and validation, plus `resolveProduct`/`resolveImpact`.
   The alias key is NFKC + trim + collapse whitespace + lower-case, the same rule as in JS.
-- `Report.fs`: `RawReport` → `Report`. Deterministic normalisation with typed `ReportError`.
-  It refuses unsupported products and never remaps them.
+- `Report.fs`: `TextRules` (compiled from `schemas/report-text-rules.v1.json`, the same strings `service/report-domain.mjs` and `intake-request.schema.json` use) and `Report.normalise rules registry raw`. Normalisation is deterministic, with typed `ReportError`, code-point lengths, refusal of invisible/bidi/lone-surrogate text, and NFC. It refuses unsupported products and never remaps them. It is checked against `schemas/report-cases.v1.json`.
 - `Table.fs`: parses and checks `transitions.v1.json`.
 - `Lifecycle.fs`: `transition : Table -> Actor -> TransitionCommand -> LifecycleRecord -> Result<LifecycleRecord * Event, TransitionError>`,
   plus `authorize`, `promote` (creates a **new** defect identity linked to the
@@ -86,5 +85,5 @@ Neither is a dependency. They are not Conditor-qualified for Vitium, Arca target
 ## Not done here (explicitly)
 
 - No Ordo authority claim and no use of an installed Ordo contract (pending Conditor install, #5).
-- No persistence adapter. The F# core does not yet replay persisted history from JSON (`Wire.decodeRecord` refuses a non-empty history).
+- No persistence adapter. `Wire.decodeRecord` reads persisted history as `Event.Recorded` (sequence, target state and evidence are typed; the rest is kept verbatim), which is enough for the history/revision guard and the reopen closure link. It does not re-type full v1 events.
 - No HTTP or Limen boundary. The JS intake service is still the runtime path. The F# core is the typed target that the JS model is checked against.

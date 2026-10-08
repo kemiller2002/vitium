@@ -104,17 +104,17 @@ test("VIT-LCY-004 / VIT-AC-012: closure dispositions require an explicit reason"
   }
 });
 
-test("VIT-LCY-004 / VIT-AC-012: closing as duplicate requires a reference to the canonical record", { todo: "finding VF-015" }, () => {
+test("VIT-LCY-004 / VIT-AC-012: closing as duplicate requires a reference to the canonical record", () => {
   const r = tryTransition(rec("defect", "triaged"), cmd("duplicate", { reason: "dup" }));
   assert.equal(r.ok, false, "duplicate accepted with no duplicateOf/evidence reference");
 });
 
-test("VIT-LCY-004: resolved -> closed requires evidence of the verified resolution (policy guard)", { todo: "finding VF-015" }, () => {
+test("VIT-LCY-004: resolved -> closed requires evidence of the verified resolution (policy guard)", () => {
   const r = tryTransition(rec("defect", "resolved"), cmd("closed", { reason: "done" }));
   assert.equal(r.ok, false, "closed with no evidence or policy reference");
 });
 
-test("VIT-LCY-004: evidenceId must be a non-empty string, not any truthy value", { todo: "finding VF-015" }, () => {
+test("VIT-LCY-004: evidenceId must be a non-empty string, not any truthy value", () => {
   for (const evidenceId of [{}, [], 1, true, "   "]) {
     const r = tryTransition(rec("defect", "triaged"), cmd("confirmed", { evidenceId }));
     assert.equal(r.ok, false, JSON.stringify(evidenceId));
@@ -136,14 +136,14 @@ test("VIT-LCY-004 / VIT-AC-012: reopening preserves the closure event and the pr
   assert.equal(r.history.length, 2, "input record is not mutated");
 });
 
-test("VIT-LCY-004 / VIT-DOM-007: a caller cannot erase history by supplying a record with a truncated history", { todo: "finding VF-016" }, () => {
+test("VIT-LCY-004 / VIT-DOM-007: a caller cannot erase history by supplying a record with a truncated history", () => {
   // revision 2 says two events happened; history claims none. The guard must refuse.
   const forged = rec("defect", "closed", { revision: 2, history: [] });
   const r = tryTransition(forged, cmd("reopened", { expectedRevision: 2, reason: "reopen" }));
   assert.equal(r.ok, false, "accepted a record whose history length != revision");
 });
 
-test("VIT-LCY-004: a caller cannot rewrite past events by supplying a mutable history array", { todo: "finding VF-016" }, () => {
+test("VIT-LCY-004: a caller cannot rewrite past events by supplying a mutable history array", () => {
   const history = [{ from: "new", to: "triaged", sequence: 1 }];
   const out = transition(rec("defect", "triaged", { revision: 1, history }), cmd("reproducing", { expectedRevision: 1 }));
   history[0].to = "tampered";
@@ -156,7 +156,7 @@ test("VIT-LCY-005 precursor: stale revision is refused for every edge", () => {
   assert.equal(tryTransition(rec("defect", "new", { revision: 1.5 }), cmd("triaged", { expectedRevision: 1.5 })).ok, false);
 });
 
-test("VIT-DOM-007: occurredAt must be a real ISO-8601 instant, not just a prefix match", { todo: "finding VF-017" }, () => {
+test("VIT-DOM-007: occurredAt must be a real ISO-8601 instant, not just a prefix match", () => {
   for (const occurredAt of ["2026-99-99T99:99:99", "2026-10-08T12:00:00 then anything", "2026-02-30T00:00:00Z"]) {
     assert.equal(tryTransition(rec("defect", "new"), cmd("triaged", { occurredAt })).ok, false, occurredAt);
   }

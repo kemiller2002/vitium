@@ -6,8 +6,9 @@ open System.Text.Json
 /// Decoding of the strict wire command shape shared with service/lifecycle.mjs
 /// (see schemas/lifecycle/transition-cases.v1.json). Pure: JSON in, typed values or a
 /// typed TransitionError out, using the same error codes as the JS implementation.
-/// Decoding prior history events is NOT supported in P0: a wire record must arrive with
-/// an empty history (persisted histories are replayed by a later storage adapter).
+/// Prior history events are decoded as `Event.Recorded` (sequence, target state and
+/// evidence typed; the rest kept verbatim), so the history/revision guard and the reopen
+/// closure link work on persisted records.
 [<RequireQualifiedAccess>]
 module Wire =
 
@@ -20,7 +21,7 @@ module Wire =
 
     let private decodeTimestamp (e: JsonElement) =
         match optString "occurredAt" e with
-        | Some text when Patterns.timestamp.IsMatch text ->
+        | Some text when Patterns.isInstant text ->
             match DateTimeOffset.TryParse(text, Globalization.CultureInfo.InvariantCulture, Globalization.DateTimeStyles.RoundtripKind) with
             | true, value -> Ok value
             | _ -> Error TransitionError.InvalidTimestamp
@@ -74,6 +75,23 @@ module Wire =
             |> Result.map Map.ofList
         | Some _ -> Error(TransitionError.InvalidField "fields")
 
+    let private decodeRecorded revision (item: JsonElement) =
+        if item.ValueKind <> JsonValueKind.Object then
+            Error(TransitionError.InconsistentHistory(0, revision))
+        else
+            let sequence =
+                match JsonRead.tryProp "sequence" item |> Option.map JsonRead.int with
+                | Some(Ok n) -> n
+                | _ -> -1
+
+            decodeEvidence item
+            |> Result.map (fun evidence ->
+                Event.Recorded
+                    { Sequence = sequence
+                      To = optString "to" item
+                      Evidence = evidence
+                      Json = item.GetRawText() })
+
     /// Decode a wire record ({kind, state, revision, id?, observationId?, history: []}).
     let decodeRecord (e: JsonElement) : Result<LifecycleRecord, TransitionError> =
         result {
@@ -99,18 +117,18 @@ module Wire =
                     |> Result.mapError (fun _ -> payload "invalid observation id")
                 | _ -> Ok None
 
-            let! () =
+            let! history =
                 match JsonRead.tryProp "history" e with
-                | None -> Ok()
-                | Some h when h.ValueKind = JsonValueKind.Array && h.GetArrayLength() = 0 -> Ok()
-                | Some _ -> Error(payload "history replay is not supported by the wire decoder")
+                | None -> Ok []
+                | Some h when h.ValueKind = JsonValueKind.Array -> h.EnumerateArray() |> JsonRead.traverse (decodeRecorded revision)
+                | Some _ -> Error(TransitionError.InconsistentHistory(0, revision))
 
             return
                 { Machine = machine
                   Identity = identity
                   State = state
                   Revision = revision
-                  History = []
+                  History = history
                   Triage = Map.empty
                   LinkedDefects = [] }
         }

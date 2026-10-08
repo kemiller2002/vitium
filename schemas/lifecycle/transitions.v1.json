@@ -2,7 +2,7 @@
   "$schema": "./transitions.schema.v1.json",
   "schemaVersion": "1.0",
   "id": "vitium.lifecycle.transitions",
-  "tableVersion": "1.0.0",
+  "tableVersion": "1.1.0",
   "authority": "vitium-domain-candidate",
   "ordoAuthorized": false,
   "decisionRecord": "docs/decisions/DOM-001-lifecycle-and-identities.md",
@@ -589,7 +589,10 @@
           "reasonRequired": true,
           "requiredFields": [],
           "optionalFields": [],
-          "evidenceAnyOf": []
+          "evidenceAnyOf": [
+            "verification-run",
+            "decision-record"
+          ]
         },
         {
           "from": "resolved",

@@ -25,6 +25,10 @@ type Event =
     | Promoted of PromotionEvent
     | Created of CreationEvent
     | FactRecorded of FactEvent
+    /// An event read back from persisted history whose full shape this core does not
+    /// re-type (e.g. a v1 JS event). Kept verbatim as JSON text; only what the guards need
+    /// (sequence, target state, evidence) is typed.
+    | Recorded of RecordedEvent
 
 and TransitionEvent =
     { Sequence: int
@@ -52,6 +56,12 @@ and CreationEvent =
       Reason: string
       OccurredAt: DateTimeOffset }
 
+and RecordedEvent =
+    { Sequence: int
+      To: string option
+      Evidence: Evidence list
+      Json: string }
+
 and FactEvent =
     { Sequence: int
       Fact: string
@@ -68,6 +78,7 @@ module Event =
         | Event.Promoted p -> p.Sequence
         | Event.Created c -> c.Sequence
         | Event.FactRecorded f -> f.Sequence
+        | Event.Recorded r -> r.Sequence
 
 /// The lifecycle part of an observation or defect. `State` is a table state name: the
 /// table, not this type, is the authority on which states and transitions exist.
@@ -128,6 +139,8 @@ type TransitionError =
     | SelfReference of string
     | InvalidDefectId of string
     | UnknownFact of string
+    /// The record's history does not account for its revision (VF-016).
+    | InconsistentHistory of events: int * revision: int
 
 [<RequireQualifiedAccess>]
 module TransitionError =
@@ -152,6 +165,7 @@ module TransitionError =
         | TransitionError.SelfReference _ -> "self_reference"
         | TransitionError.InvalidDefectId _ -> "invalid_defect_id"
         | TransitionError.UnknownFact _ -> "unknown_fact"
+        | TransitionError.InconsistentHistory _ -> "inconsistent_history"
 
 /// Pure lifecycle evaluation driven by the transition table.
 [<RequireQualifiedAccess>]
@@ -171,6 +185,13 @@ module Lifecycle =
         check
             (record.Revision >= 0 && record.Revision = expected)
             (TransitionError.StaleRevision(expected, record.Revision))
+
+    /// History is append-only: one non-creation event per revision. A record whose history
+    /// was truncated (or padded) is refused rather than extended (VF-016). F# lists and
+    /// records are immutable, so no caller alias can rewrite a past event.
+    let private checkHistory (record: LifecycleRecord) =
+        let events = record.History |> List.filter (fun e -> Event.sequence e <> 0) |> List.length
+        check (events = record.Revision) (TransitionError.InconsistentHistory(events, record.Revision))
 
     let private checkReason (table: Table) (reason: string) =
         if String.IsNullOrWhiteSpace reason then Error TransitionError.MissingReason
@@ -228,6 +249,13 @@ module Lifecycle =
                     { Sequence = t.Sequence
                       State = t.To
                       Evidence = t.Evidence }
+            | Event.Recorded r when (match r.To with
+                                     | Some s -> List.contains s definition.Dispositions
+                                     | None -> false) ->
+                Some
+                    { Sequence = r.Sequence
+                      State = Option.defaultValue "" r.To
+                      Evidence = r.Evidence }
             | _ -> None)
 
     /// The authorization part of a transition: source state, actor provenance, revision,
@@ -247,6 +275,7 @@ module Lifecycle =
             do! check (List.contains record.State definition.States) (TransitionError.UnknownState record.State)
             do! checkActor table actor
             do! checkRevision record expectedRevision
+            do! checkHistory record
 
             let! rule =
                 definition.Transitions
@@ -318,6 +347,7 @@ module Lifecycle =
             do! check (observation.Machine = Machine.Observation) (TransitionError.UnknownMachine "promotion applies to observations only")
             do! checkActor table actor
             do! checkRevision observation command.ExpectedRevision
+            do! checkHistory observation
             do! check (observation.State = rule.FromState) (TransitionError.ForbiddenTransition(observation.State, "promoted"))
             do! check (List.contains actor.Role rule.Roles) (TransitionError.UnauthorizedRole(actor.Role, None))
             let! reason = checkReason table command.Reason
@@ -383,6 +413,7 @@ module Lifecycle =
 
             do! checkActor table actor
             do! checkRevision record command.ExpectedRevision
+            do! checkHistory record
             do! check (List.contains actor.Role rule.Roles) (TransitionError.UnauthorizedRole(actor.Role, None))
             do! checkEvidence table rule.EvidenceAnyOf command.Evidence
 
