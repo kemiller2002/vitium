@@ -5,6 +5,72 @@ Author role: independent verification agent (VIT-P0-2026-10-08). This document d
 
 Status vocabulary follows `docs/requirements/VITIUM-ACCEPTANCE.md`: `not-started`, `in-progress`, `blocked`, `executed-failed`, `verified-passed`. A check line can be `executed-pass`, `executed-fail (finding)` or `not-executed`.
 
+## Final status, fix round 3 (`p0/fix3-verify` from `p0/integration` @ `a574d44`)
+
+This section supersedes the round-2 table below it.
+
+**Local environment:** sandbox, Node v22.22.0. Browser: Chromium 153.0.8010.0 via `@sparticuz/chromium@153.0.0` and `@playwright/test@1.63.0`, at viewports 320 / 375 / 1280. Forma CDN blocked; the "file" mode serves the npm 0.3.0 tarball's `dist/all.css` at the pinned URL. `test:integration` runs on the dynalite emulator; TransactWriteItems uses the owner's labelled shim because dynalite lacks it.
+
+**CI evidence, re-verified independently via `gh api repos/kemiller2002/vitium/actions/runs/<id>`:**
+- run **37813042099** "Conditor governance verification": completed / success, head `a8532cb`, branch `p0/governance-conditor-install`.
+- run **37813042172** "Praxis validation": completed / success, head `a8532cb`.
+
+`a8532cb` is an ancestor of `a574d44`. **No CI run has been witnessed for `a574d44` itself** (`test.yml`, `p0-service.yml`, `browser.yml`); those legs are pending.
+
+### Commands and outputs (this branch = `a574d44` + test/doc changes only)
+
+| Command | Output |
+|---|---|
+| `npm test` | 287 tests, 287 pass, 0 fail, 0 todo |
+| `npm run test:adversarial` | 130 tests, 119 pass, 0 fail, 11 todo: VF-018, VF-025..VF-033 (VF-029 has 2 tests) |
+| `npm run test:integration` | 30 tests, 30 pass |
+| `node scripts/secret-scan.mjs` | `[git]` 322 text files, 0 blocked |
+| `VITIUM_LOCAL_CHROMIUM=sparticuz npm run test:browser` (CDN blocked) | 66 passed, 0 failed, 0 flaky; axe 0 violations; no overflow |
+| same + `VITIUM_FORMA_CSS_FILE=…/dist/all.css` | 66 passed, 0 failed; axe 0 violations |
+| mutation appraisal, 88 mutants, `--suites=unit,adversarial,integration` (+ follow-up on M46/M57/V10) | 82 killed; 6 survivors (5 equivalent + M57, see EVIDENCE-APPRAISAL) |
+
+### Per-scenario status (VIT-AC-001..015, 032..036)
+
+No scenario is `verified-passed`. Each needs at least one of: live infrastructure, an operator decision, qualified Ordo/Fides authority, a CI run of this HEAD, or the closure of an open finding.
+
+| Scenario | Status | Local evidence on `a574d44` | What blocks a higher status |
+|---|---|---|---|
+| VIT-AC-001 | **blocked** | Browser suite in both CSS modes passes: no overflow, keyboard completion, error-summary focus with links and `aria-describedby`, no silent truncation, axe 0 violations | Canonical site not live (AC-014); manual screen-reader session not run; CI `browser.yml` for this HEAD pending; axe colour-contrast needs manual review on decorative glyphs |
+| VIT-AC-002 | **in-progress** | Keyboard Review / Edit / Continue; GitHub URL safe, every github.com request aborted; credential text blocked before the link | CI browser leg pending; canonical site not live |
+| VIT-AC-003 | **blocked** | Browser wire body accepted by service and schema; receipt only after a durable write; gate off and no intake request | No AWS staging, Turnstile key, intake domain or operator approval |
+| VIT-AC-004 | **in-progress** | All boundary, unicode, hostile-input and schema/runtime adversarial tests pass; VF-011 closed by 041318d | CI leg for this HEAD pending (no open finding left in this scenario) |
+| VIT-AC-005 | **blocked** | Challenge before any write; malformed-token pre-filter (VF-024, 159cec5); replay never creates a record without a challenge | Per-source throttling not implemented; load test needs AWS staging (VF-024 residual recorded in SEC-001) |
+| VIT-AC-006 | **blocked** | Idempotent replay, conflict, NFC replay, lost-response retry all pass locally and on dynalite | Real DynamoDB untested |
+| VIT-AC-007 | **blocked** | Store failures never produce a receipt; lossy retry passes on dynalite | AWS staging; GitHub sync is P1 |
+| VIT-AC-008 | **blocked** | Redaction and quarantine, site parity, never stored or echoed | No designated operator or escalation owner (VIT-OQ-008) |
+| VIT-AC-009 | **in-progress** | Unchallenged conflict is byte-identical to an unused key (VF-023 closed by 159cec5); no read route; receipt is not a capability; replay projection limited by IAM | Mutant M57 survives (a verified conflict that falls through to `putOnce` is not distinguished by any test; behaviour is equivalent today); CI leg pending |
+| VIT-AC-010 | **in-progress** | Product/impact parity; registry and migration tests pass | Domain registry tests not independently adjudicated; CI leg pending |
+| VIT-AC-011 | **in-progress** | No observation → defect edge; transactional promote (CL02/CL03 killed by integration) | Ordo/Fides authority pending; dynalite shim for TransactWriteItems (real DynamoDB untested) |
+| VIT-AC-012 | **in-progress** | Table-driven lifecycle adversarial suite passes | Candidate (non-Ordo) authority; CI leg pending |
+| VIT-AC-013 | **in-progress** | Not re-run locally by verification | **CI leg witnessed**: runs 37813042099 and 37813042172, success on `a8532cb` (attestation-verified install per the integrator; the run conclusions themselves were re-checked via the REST API). Verification of the qualified Ordo transition authority itself is not claimed (BSR item 9). |
+| VIT-AC-014 | **blocked** | n/a | Operator Pages/DNS/TLS |
+| VIT-AC-015 | **blocked** | Git-aware secret scan 0 (VF-022 closed by e172749); no secrets in assets or responses; allow-listed logs | Deployed-Lambda log canary; VF-018 (SRI) open |
+| VIT-AC-032 | **executed-failed** | Machine core: authenticated, scoped, untriaged, private, never auto-promoted; forged principals refused (copy, clone, Proxy, `Object.create`) | **VF-029**: inherited-name keys (`constructor`, `toString`, `__proto__`, …) bypass the closed-envelope check and are stored unredacted (schema/runtime disagree). No machine endpoint or real producer (P1). |
+| VIT-AC-033 | **in-progress** | Two failed iterations, then an independent pass; every attempt, candidate and run kept; stale/old-candidate/missing-evidence/inconclusive results refused; dynalite I-20 | Open findings affect the "independent pass" guarantee (VF-025, VF-026, VF-028, listed under AC-036); Ordo authority pending |
+| VIT-AC-034 | **in-progress** | reopen-and-resume keeps earlier passing evidence byte-identical; all-or-nothing (V09 killed); one conditional write (CL01, I-21) | Ordo authority pending; real DynamoDB untested |
+| VIT-AC-035 | **executed-failed** | Idempotent delivery; conflict; occurrences kept per fingerprint; causation ordering; build result untouched; bounded outbox | **VF-030** (body-claimed Vitium origin silently drops a legitimate event), **VF-031** (another principal gets a replay ack for someone else's eventId), **VF-033** (outbox marks any 2xx as delivered). No real producer or endpoint (P1). |
+| VIT-AC-036 | **executed-failed** | Inconclusive is neither pass nor fail; budget per defect cycle (alternating agent names do not bypass it); only a human escalation resets the budget; machine self-certification withheld | **VF-025** (submitter names someone else as author, then passes own work), **VF-026** (case-variant actor defeats independence), **VF-027** (legacy shape and self-declared provenance bypass the agent budget), **VF-028** (agent-provenance verifier can resolve), **VF-032** (machine path refuses a re-run after inconclusive) |
+
+### Per-requirement table (new P0 requirements and mission §7 gates)
+
+| Requirement / gate | Status | Evidence | Open |
+|---|---|---|---|
+| VIT-LCY-010 (failed verification → in-progress with failed result, verifier, attempt, evidence, candidate, reason) | in-progress | `verification-cycle.test.mjs` (stale/old-candidate/missing-evidence refused; outcome recorded); V01, V03, V04, V11 killed | Ordo authority; CI leg |
+| VIT-LCY-011 (resolved/closed → reopened → resume, both events preserved) | in-progress | AC-034 test; V09, CL01 killed; dynalite I-21 single conditional write | Ordo authority; real DynamoDB |
+| VIT-VER-009 (failure never resolves; passing needs independent proof) | executed-failed | Failure path holds | VF-025, VF-026, VF-028 (independence can be bypassed) |
+| VIT-INT-013 (versioned authenticated machine contract, separate from public intake) | executed-failed | Separate contract, principal brand, scope checks; public route refuses machine envelopes | VF-029 (closed-envelope bypass); no endpoint (proposed only) |
+| §7 gate 1: producer contract and identity model reviewed; adapter denies untrusted provider claims | executed-failed | Independent review done (this pass); forged principals and source claims refused | VF-029, VF-030, VF-031 |
+| §7 gate 2: ≥ 2 failed iterations before a pass, then a later recurrence | in-progress | AC-033 + AC-034 tests pass locally and on dynalite | CI leg; Ordo authority |
+| §7 gate 3: evidence and candidate commits never disappear | in-progress | Byte-identical history checks across fail/pass/reopen | CI leg |
+| §7 gate 4: autonomous repair stops at a bounded threshold and escalates | executed-failed | Strict agent path stops at 3 (provisional) and needs a human escalation | VF-027 (legacy shape / self-declared provenance bypass) |
+| §7 gate 5: no claim that producers, machine API or Ordo authority are deployed | in-progress | Docs reviewed: machine contract marked "proposed, no route"; table `ordoAuthorized:false` | Re-check at release |
+
+
 ## Final status, fix round 2 (`p0/fix2-verify` from `p0/integration` @ `25ce853`)
 
 **Environment for every local result in this table:** local sandbox, Node v22.22.0. Browser: Chromium 153.0.8010.0 via `@sparticuz/chromium@153.0.0` and `@playwright/test@1.63.0`, at viewports 320 / 375 / 1280. Forma CDN blocked; the "file" mode serves the npm tarball's `dist/all.css` at the pinned URL. `test:integration` runs on the dynalite emulator.
@@ -315,3 +381,12 @@ Full reproductions are in the verification report; the summary is in `docs/verif
 | VF-022 | low | NFR-004 | ops | Secret scanner scans gitignored browser output; false positives after a browser run (fix round 1) |
 | VF-023 | medium | AC-009, API-010 | intake | Replay path: unchallenged key-existence oracle (403 vs 409) (fix round 2) |
 | VF-024 | low | AC-005, API-003 | intake/ops | One strongly consistent store read per unchallenged request (fix round 2) |
+| VF-025 | high | VER-006/009, AC-036 | domain | Caller-supplied author lets the submitter pass its own attempt (fix round 3) |
+| VF-026 | medium | VER-006, AC-036 | domain | Independence defeated by case-variant actor ids (fix round 3) |
+| VF-027 | high | VER-011, §7 gate 4 | domain | Agent repair budget bypassed by legacy shape or self-declared provenance (fix round 3) |
+| VF-028 | medium | VER-006, AC-036 | domain/governance | Agent-provenance verifier can record a pass (fix round 3) |
+| VF-029 | high | INT-013/016, AC-032 | machine | Inherited-name keys bypass closed envelope; stored unredacted; schema/runtime disagree (fix round 3) |
+| VF-030 | medium | INT-015, AC-035 | machine | Body-claimed Vitium origin marker silently drops legitimate events (fix round 3) |
+| VF-031 | medium | INT-016, AC-035 | machine | Cross-principal eventId replay gets a replay ack (fix round 3) |
+| VF-032 | medium | VER-010, AC-036 | machine | Re-run after inconclusive refused on the machine path (fix round 3) |
+| VF-033 | low | AC-035 | machine | Outbox treats any 2xx as delivered (fix round 3) |

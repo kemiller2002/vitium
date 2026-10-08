@@ -248,3 +248,115 @@ In both modes:
   - **VF-022**: scanner covers gitignored output. Owner ops.
   - **VF-023 (new)**: unchallenged key-existence oracle on the replay path. Owner intake.
   - **VF-024 (new, low)**: unchallenged store read per request. Owner intake/ops; record in SEC-001 or add a pre-filter.
+
+## Fix round 3: final independent pass on `p0/integration` @ `a574d44` (branch `p0/fix3-verify`)
+
+Environment: as in P0-THREAT-TEST-MATRIX § "Final status, fix round 3". The coordinator's counts were re-run before any change: `npm test` 287/287; `test:adversarial` 105 tests / 103 pass / 1 fail / 1 todo; `test:integration` 30/30. These match. Kevin's `tests/triage.test.mjs` and `tests/state-contract.test.mjs` were not edited.
+
+### 1. Adjudication: "VIT-AC-009: a replay or conflict never echoes stored report content"
+
+The intake owner is right. The VF-023 contract (FIX-ROUND-2) requires an **unchallenged** conflict to be indistinguishable from an unused key, so the test's old expectation of `409` without a token encoded the defect. The test now does all of the following:
+- asserts that the unchallenged conflict has the same status **and the byte-identical body** as an unused key (this is stricter: equal raw bodies, not just equal codes);
+- sends a **fresh valid** token to reach the `409`;
+- keeps every no-echo assertion, now across four responses (replay, unchallenged conflict, unused key, verified conflict).
+
+The separate "unchallenged caller cannot tell…" test (VF-023) passes unmarked. Closed by `159cec5`.
+
+### 2. Findings re-checked
+
+| Finding | Status on `a574d44` | Closing commit |
+|---|---|---|
+| VF-011 | closed: "accepted by the site" passes unmarked (marker was removed at integration) | 041318d |
+| VF-022 | closed: scanner is git-aware (`secret-scan [git]`); gitignored `tests/browser/.output` is not scanned | e172749 |
+| VF-023 | closed | 159cec5 |
+| VF-024 | partly closed: a present-but-malformed token is refused before the lookup. A well-formed fake token still costs one read; residual recorded in SEC-001 | 159cec5 |
+| VF-018 | open (blocked: needs the jsDelivr byte check from an unblocked network) | n/a |
+
+### 3. D2 adversarial review: new tests
+
+New files: `tests/adversarial/verification-cycle.test.mjs` (12 tests) and `tests/adversarial/machine-boundary.test.mjs` (13 tests).
+
+**Guards that hold** (regression tests added, all passing):
+- two failed iterations, then an independent pass, with all evidence kept;
+- recurrence via reopen-and-resume keeps earlier passing evidence byte-identical;
+- reopen-and-resume is all-or-nothing (no partial application);
+- stale attempt, old candidate on a new attempt, missing attempt fields, missing or non-run failure evidence, and inconclusive used to resolve or fail are all refused;
+- inconclusive is neither pass nor failure, and a re-run is allowed on the lifecycle path;
+- an inconclusive run against an older attempt is refused (kills V10);
+- the agent budget stops a single agent, and alternating agent names does not bypass it (the budget is per defect cycle);
+- only a human escalation resets the budget, and an agent cannot escalate;
+- no copy, clone, Proxy, `Object.create` or `Object.assign` yields a VerifiedPrincipal, and scopes are frozen;
+- repository scope is exact (case, trailing dot and look-alike names refused);
+- environment scope is enforced;
+- identical delivery is idempotent, and a changed body under the same eventId is a conflict;
+- the same fingerprint on different commits/runs keeps two occurrences with `mergeDecision: null`;
+- a passing machine verification is only a non-applied proposal, and self-certification and unknown attempts are withheld;
+- the outbox never changes the build result, and a mandatory-reporting failure is a separate gate;
+- retry exhaustion and expiry dead-letter.
+
+**Findings** (each is a `todo` test that fails today; owner in brackets):
+
+| ID | Sev | Req / AC | Owner | Defect and repro |
+|---|---|---|---|---|
+| VF-025 | high | VER-006, VER-009, AC-036 | domain (`lifecycle.mjs` `checkAttempt`) | The strict API accepts a caller-supplied `fields.author`. `dev-1` submits with `author: "someone-else"`, then records `passed` as `dev-1` → resolved. Independence compares only against the self-declared author. Repro: `node --test --test-name-pattern="name a different author" tests/adversarial/verification-cycle.test.mjs`. Fix: the author must be the authenticated submitter (or validated), never free text. |
+| VF-026 | medium | VER-006, AC-036 | domain | Independence uses exact string equality: `DEV-1` or `Dev-1` can pass `dev-1`'s attempt. Repro: `--test-name-pattern="case or Unicode variants"`. Fix: compare normalised principal ids (and ultimately the Fides identity, not free-text actor). |
+| VF-027 | high | VER-011, mission §7 gate 4 | domain (`triage.mjs` legacy adapter / `lifecycle.mjs`) | The budget applies only when `provenance === "agent"`. The legacy shape (provenance `unrecorded`) and a self-declared `authenticated-human` provenance both submit after the budget is exhausted (probe: four legacy submits, budget `{failed:4, exhausted:true}`, all accepted). Repro: `--test-name-pattern="evade the repair budget"`. Fix: provenance must come from the authenticated boundary; refuse `unrecorded` for submissions once any agent attempt exists, or apply the budget regardless of provenance. |
+| VF-028 | medium | VER-006, AC-036 | domain / governance | An actor with provenance `agent` and role `verifier` can record `passed` and resolve. The requirements require an "independent human or qualified verification agent/process under documented risk policy"; no qualification check exists. Repro: `--test-name-pattern="agent-provenance verifier"`. Fix: restrict `passed` to `authenticated-human` (or an explicitly qualified process list) pending an Ordo/VIT-OQ-012 decision. |
+| VF-029 | high | INT-013, INT-016, AC-032 | machine (`contract.mjs` `obj()`) | `key in shape` is true for inherited names, so `constructor`, `toString`, `valueOf`, `hasOwnProperty` and `__proto__` (own JSON key) pass the closed-envelope check at any level. Their contents bypass redaction and are **stored verbatim** (a runtime-assembled GitHub-token canary was persisted). ajv refuses the same payload, so schema and runtime disagree. Repro: `--test-name-pattern="inherited-name keys"` and `"schema/runtime parity"` in `machine-boundary.test.mjs`. Fix: `Object.hasOwn(shape, key)`; add the inherited-key case to `envelope-cases.v1.json`. |
+| VF-030 | medium | INT-015, AC-035 | machine (`observation-core.mjs` `isEcho`) | Any authenticated producer that sets `correlation.originMarker` to `vitium/…` is silently suppressed: 200-equivalent `echo-suppressed`, no record, no telemetry. A buggy or compromised adapter can hide real failures, and the producer's outbox marks it delivered. Repro: `--test-name-pattern="origin marker"`. Fix: honour the marker only from a Vitium principal (or verify a signed marker); otherwise refuse or record. |
+| VF-031 | medium | INT-016, AC-035 | machine (`decidePut` / store) | Idempotency is keyed by eventId only. A different principal (same `source.system`) re-sending another principal's eventId and body receives `replayed: true` with the original `observationId`, which is a cross-principal confirmation and a delivery ack for an event it did not send. Repro: `--test-name-pattern="DIFFERENT principal"`. Fix: include `principalId` in the stored replay projection; a mismatch is `event_conflict`. |
+| VF-032 | medium | VER-010, AC-036 | machine (`attemptKeyFor`) | The attempt-uniqueness key covers inconclusive results, so after `verification.inconclusive` the same attempt's re-run `verification.passed` is refused `attempt_conflict`. DOM-001 §19 and the BSR require that another run stays possible. The lifecycle allows it; the machine path does not. Repro: `--test-name-pattern="after an inconclusive machine result"`. Fix: exclude inconclusive from the attempt-uniqueness key. |
+| VF-033 | low | AC-035, INT-015 | machine (`outbox.mjs` `classifyDelivery`) | Any 2xx is "delivered" even when the body is not an ack for that eventId (captive portal HTML, an ack for another event, `{}`). The event is then never retried and the build report claims delivery. Repro: `--test-name-pattern="acknowledges THAT eventId"`. Fix: require `body.eventId === entry.eventId && body.status === "recorded"`. |
+
+Reviewed and not filed:
+- **Fingerprint and case folding.** `fingerprint` lowercases the repository while authorization is case-sensitive. Since authorization already refuses a case-variant repository, two distinct candidates cannot actually be produced; this is a design note, not a defect.
+- **Fingerprint collisions.** Numbers and hex are normalised by design (candidate-duplicate key, `mergeDecision: null`). Distinct runs keep separate occurrences, so no evidence collapses.
+- **eventId reuse with different content across principals** is refused `event_conflict` (correct).
+- **Outbox and the build result.** Same object identity is returned. The outbox does not freeze the caller's object; the docs say "frozen by the caller".
+
+### 4. Mutation appraisal on `a574d44`
+
+Command: `node tests/verification/mutation-appraisal.mjs --scratch=<dir> --suites=unit,adversarial,integration`, followed by `--only=M46,M57,V10` after the retarget and the new V10 test. The control is green for all three suites.
+
+The owner's V1–V11 and machine mutant lists are only referenced in the integrator's mission record, so this pass defines **independent** equivalents:
+- V01–V11: verification-cycle guards in `lifecycle.mjs`.
+- MC01–MC17: principal brand and expiry; system/repository/environment/eventType scope; eventId conflict; echo suppression; security routing; stale ordering; self-certification; flaky category; untriaged-only; credential fields; causation; outbox exhaustion.
+- CL01–CL04: triage-cli revision, state and promotion conditions.
+- M57: the verified conflict branch in intake.
+
+Total **88** mutants.
+
+| Suite | Kills (of 88) |
+|---|---|
+| `npm test` | 74 |
+| `test:adversarial` | 49 |
+| `test:integration` | 19 (alone kills CL01–CL03) |
+| union | **82** |
+
+**Survivors (6):**
+- **M23, M38, M43, M48**: equivalent (redundant layers; unchanged from round 2).
+- **M46** was a stale anchor in the first run; after retargeting to `sameReport` it is killed by unit, adversarial and integration.
+- **V10** (inconclusive against a stale attempt): it survived the first run, and the new test kills it.
+- **M57** (a verified conflict falls through to `putOnce`): equivalent today. The conditional put returns `existing`, and `decideReceipt` yields the same 409 with no write. Recorded, not a finding.
+
+So after the follow-up the remaining survivors are **M23, M38, M43, M48 and M57, all equivalent**.
+
+### 5. Browser suite on `a574d44`
+
+- **CDN blocked:** 66 passed, 0 failed, 0 flaky.
+- **Forma file mode:** 66 passed, 0 failed.
+
+In both modes axe reports 0 violations (colour-contrast incomplete on decorative glyphs only), and there is no overflow at any width.
+
+### Findings ledger after round 3
+
+- **Closed:**
+  - VF-001..017, VF-019..021 (rounds 1–2)
+  - VF-011: 041318d
+  - VF-022: e172749
+  - VF-023: 159cec5
+  - VF-024: 159cec5 (pre-filter; well-formed-token residual accepted in SEC-001)
+- **Open:**
+  - VF-018 (ux/ops, blocked)
+  - VF-025, VF-026, VF-027, VF-028 (domain; VF-028 needs a governance decision)
+  - VF-029, VF-030, VF-031, VF-032, VF-033 (machine)
