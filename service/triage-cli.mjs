@@ -11,20 +11,68 @@
  * output streams) explicitly. Only the bottom of this file touches process/AWS.
  */
 import {table as lifecycleTable} from "./triage.mjs";
-import {evaluateTransition} from "./lifecycle.mjs";
+import {evaluateTransition, recordInconclusive, reopenAndResume} from "./lifecycle.mjs";
 
 // Strict domain path (DOM-001 item 7): commands carry an explicit provenance class, typed
 // evidence [{kind, ref}] and declared fields. The legacy untyped evidenceId shape and the
 // "unrecorded" provenance are NOT used here; evaluateTransition is called without
 // allowUnrecordedProvenance, so a missing provenance is refused.
 export const OPERATOR_PROVENANCE = "authenticated-human";
-const FIELD_OPTIONS = Object.freeze(["classification","severity","priority","confidence","productId","owner","duplicateOf","supersededBy","workItemRef"]);
-const EVIDENCE_REQUIRED_TARGETS = new Set(["reopened"]);
+// CLI flag -> lifecycle table field. Verification-cycle flags use operator-friendly names.
+const FIELD_FLAGS = Object.freeze({
+  classification:"classification", severity:"severity", priority:"priority", confidence:"confidence",
+  productId:"productId", owner:"owner", duplicateOf:"duplicateOf", supersededBy:"supersededBy", workItemRef:"workItemRef",
+  attempt:"attemptId", candidate:"candidateRevision", outcome:"verificationOutcome", author:"author",
+  "work-item":"workItemId", "affected-release":"affectedRelease"
+});
+const ROLES = Object.freeze([...lifecycleTable.roles]);
+const OUTCOME_TARGET = Object.freeze({passed:"resolved", failed:"in-progress"});
 
 export const QUEUES = Object.freeze({pending:"QUEUE#pending", quarantined:"QUEUE#quarantined"});
 const TERMINAL = new Set(["classified","rejected"]);
-const KEY = /^REQUEST#[0-9a-f]{64}$/;
-const usage = "Usage: REPORTS_TABLE_NAME=<private table> node service/triage-cli.mjs queue [--queue=pending|quarantined] | show --key=REQUEST#<hash> | advance --key=REQUEST#<hash> --to=<state> --reason=<reason> [--classification=<text>] [--severity=..] [--priority=..] [--confidence=..] [--productId=..] [--owner=..] [--evidence=<kind>:<ref>[,<kind>:<ref>...]]  (--evidence is required for --to=reopened)";
+// Observations are keyed by the intake request hash; defects by their DEF- identity.
+const KEY = /^(?:REQUEST#[0-9a-f]{64}|DEFECT#DEF-[0-9]{4,})$/;
+const usage = [
+  "Usage: REPORTS_TABLE_NAME=<private table> node service/triage-cli.mjs <command>",
+  "  queue [--queue=pending|quarantined]",
+  "  show --key=<KEY>                       KEY = REQUEST#<hash> | DEFECT#DEF-<n>",
+  "  advance --key=<KEY> --to=<state> --reason=<text> [--role=triager|verifier|administrator]",
+  "          [--classification= --severity= --priority= --confidence= --productId= --owner= --duplicateOf= --supersededBy= --workItemRef=]",
+  "          [--attempt=<id> --candidate=<rev> --author=<actor> --work-item=<id> --affected-release=<rel>]",
+  "          [--evidence=<kind>:<ref>[,<kind>:<ref>...]]",
+  "  verify --key=DEFECT#.. --attempt=<id> --candidate=<rev> --outcome=passed|failed|inconclusive",
+  "          --evidence=verification-run:<ref> --reason=<text> [--role=verifier|administrator]",
+  "  reopen-and-resume --key=DEFECT#.. --evidence=new-occurrence:<ref> --reason=<text> [--affected-release=<rel>]",
+  "          [--resume-to=in-progress|reproducing] [--attempt=<id> --work-item=<id>] [--resume-reason=<text>]",
+  "Required fields, evidence and roles come from schemas/lifecycle/transitions.v1.json and are",
+  "checked locally before any AWS call."
+].join("\n");
+
+/**
+ * Pure: what the lifecycle table requires for EVERY edge into `to` (any source state), so a
+ * command can be refused locally before the record (and its source state) is fetched.
+ * The full per-edge check still runs in the domain decision after the record is read.
+ */
+export function localRequirements(to) {
+  const rules = Object.values(lifecycleTable.machines).flatMap(m => m.transitions.filter(t => t.to === to));
+  if (!rules.length) return null;
+  const fields = rules[0].requiredFields.filter(f => rules.every(r => r.requiredFields.includes(f)));
+  const evidence = rules.every(r => r.evidenceAnyOf.length) ? [...new Set(rules.flatMap(r => r.evidenceAnyOf))] : null;
+  const roles = [...new Set(rules.flatMap(r => r.roles))];
+  return Object.freeze({fields, evidence, roles});
+}
+const reverseFlag = Object.fromEntries(Object.entries(FIELD_FLAGS).map(([flag, field]) => [field, flag]));
+
+/** Pure: check a target's table requirements against parsed fields/evidence/role. */
+export function checkLocal({to, fields, evidence, role}) {
+  const req = localRequirements(to);
+  if (!req) return {ok:false, error:"unknown_target", detail:to};
+  if (!req.roles.includes(role)) return {ok:false, error:"unauthorized_role", detail:req.roles.join("|")};
+  const missing = req.fields.find(f => fields[f] === undefined);
+  if (missing) return {ok:false, error:"missing_field", detail:"--" + reverseFlag[missing]};
+  if (req.evidence && !evidence.some(e => req.evidence.includes(e.kind))) return {ok:false, error:"missing_evidence", detail:req.evidence.join("|")};
+  return {ok:true};
+}
 
 /** Pure: "kind:ref,kind:ref" -> Result<[{kind, ref}]>. Kinds are validated by the lifecycle table. */
 export function parseEvidence(text) {
@@ -43,32 +91,98 @@ export function parseArgs(argv) {
     const cut = x.indexOf("=");
     return [x.slice(2, cut), x.slice(cut + 1)];
   }));
-  if (!["queue","show","advance"].includes(command)) return {ok:false, error:"usage"};
+  if (!["queue","show","advance","verify","reopen-and-resume"].includes(command)) return {ok:false, error:"usage"};
   if (command === "queue") {
     const queue = options.queue ?? "pending";
     return QUEUES[queue] ? {ok:true, value:{command, queue:QUEUES[queue]}} : {ok:false, error:"usage"};
   }
   if (typeof options.key !== "string" || !KEY.test(options.key)) return {ok:false, error:"invalid_key"};
-  if (command !== "advance") return {ok:true, value:{command, key:options.key}};
-  if (!options.to || !options.reason) return {ok:false, error:"usage"};
+  if (command === "show") return {ok:true, value:{command, key:options.key}};
+  if (!options.reason) return {ok:false, error:"usage"};
   const evidence = parseEvidence(options.evidence);
   if (!evidence.ok) return {ok:false, error:"invalid_evidence"};
-  if (EVIDENCE_REQUIRED_TARGETS.has(options.to) && evidence.value.length === 0) return {ok:false, error:"evidence_required"};
-  const fields = Object.fromEntries(FIELD_OPTIONS.filter(f => options[f] !== undefined).map(f => [f, options[f]]));
-  return {ok:true, value:{command, key:options.key, to:options.to, reason:options.reason, fields, evidence:evidence.value}};
+  const fields = Object.fromEntries(Object.entries(FIELD_FLAGS).filter(([flag]) => options[flag] !== undefined).map(([flag, field]) => [field, options[flag]]));
+  const isDefect = options.key.startsWith("DEFECT#");
+
+  if (command === "verify") {
+    if (!isDefect) return {ok:false, error:"usage"};
+    const outcome = options.outcome;
+    const role = options.role ?? "verifier";
+    if (!["passed","failed","inconclusive"].includes(outcome)) return {ok:false, error:"invalid_outcome"};
+    if (fields.attemptId === undefined) return {ok:false, error:"missing_field", detail:"--attempt"};
+    if (fields.candidateRevision === undefined) return {ok:false, error:"missing_field", detail:"--candidate"};
+    const ids = {attemptId:fields.attemptId, candidateRevision:fields.candidateRevision};
+    if (outcome === "inconclusive") {
+      const def = lifecycleTable.events["verification-inconclusive"];
+      if (!def.roles.includes(role)) return {ok:false, error:"unauthorized_role", detail:def.roles.join("|")};
+      if (!evidence.value.some(e => def.evidenceAnyOf.includes(e.kind))) return {ok:false, error:"missing_evidence", detail:def.evidenceAnyOf.join("|")};
+      return {ok:true, value:{command, key:options.key, outcome, role, reason:options.reason, evidence:evidence.value, fields:ids}};
+    }
+    const to = OUTCOME_TARGET[outcome];
+    const local = checkLocal({to, fields:ids, evidence:evidence.value, role});
+    if (!local.ok) return local;
+    return {ok:true, value:{command:"advance", key:options.key, to, role, reason:options.reason, evidence:evidence.value,
+      fields:{...ids, verificationOutcome:outcome}}};
+  }
+
+  if (command === "reopen-and-resume") {
+    if (!isDefect) return {ok:false, error:"usage"};
+    const resumeTo = options["resume-to"] ?? "in-progress";
+    if (!["in-progress","reproducing"].includes(resumeTo)) return {ok:false, error:"usage"};
+    const role = options.role ?? "triager";
+    const reopenFields = fields.affectedRelease === undefined ? {} : {affectedRelease:fields.affectedRelease};
+    const first = checkLocal({to:"reopened", fields:reopenFields, evidence:evidence.value, role});
+    if (!first.ok) return first;
+    // The resume step is checked against the exact reopened -> <resumeTo> edge.
+    const rule = lifecycleTable.machines.defect.transitions.find(t => t.from === "reopened" && t.to === resumeTo);
+    if (!rule.roles.includes(role)) return {ok:false, error:"unauthorized_role", detail:rule.roles.join("|")};
+    const allowed = [...rule.requiredFields, ...rule.optionalFields];
+    const resumeFields = Object.fromEntries(allowed.filter(f => fields[f] !== undefined).map(f => [f, fields[f]]));
+    const missing = rule.requiredFields.find(f => resumeFields[f] === undefined);
+    if (missing) return {ok:false, error:"missing_field", detail:"--" + reverseFlag[missing]};
+    return {ok:true, value:{command, key:options.key, role, reason:options.reason,
+      resumeReason:options["resume-reason"] ?? options.reason, resumeTo,
+      reopen:{fields:reopenFields, evidence:evidence.value}, resume:{fields:resumeFields}}};
+  }
+
+  if (!options.to) return {ok:false, error:"usage"};
+  const role = options.role ?? "triager";
+  if (!ROLES.includes(role)) return {ok:false, error:"unauthorized_role", detail:ROLES.join("|")};
+  const local = checkLocal({to:options.to, fields, evidence:evidence.value, role});
+  if (!local.ok) return local;
+  return {ok:true, value:{command, key:options.key, to:options.to, role, reason:options.reason, fields, evidence:evidence.value}};
 }
 
 /** Pure: parsed advance arguments + current record + actor + clock -> strict lifecycle command. */
 export const buildCommand = ({args, record, actor, occurredAt}) => Object.freeze({
   to:args.to, expectedRevision:record.revision, actor, provenance:OPERATOR_PROVENANCE,
-  role:"triager", reason:args.reason, fields:args.fields, evidence:args.evidence, occurredAt
+  role:args.role ?? "triager", reason:args.reason, fields:args.fields, evidence:args.evidence, occurredAt
 });
+
+/** Pure: the domain decision for one CLI command against the current record (no I/O). */
+export function decide({args, record, actor, occurredAt}) {
+  const current = {kind:record.kind, ...(record.id ? {id:record.id} : {}), state:record.state, revision:record.revision, history:record.history};
+  const base = {actor, provenance:OPERATOR_PROVENANCE, role:args.role ?? "triager", occurredAt};
+  if (args.command === "verify") {
+    const r = recordInconclusive(lifecycleTable, current, {...base, expectedRevision:record.revision,
+      reason:args.reason, fields:args.fields, evidence:args.evidence});
+    return r.ok ? {ok:true, value:{record:r.value.record, events:[r.value.event]}} : r;
+  }
+  if (args.command === "reopen-and-resume") {
+    const r = reopenAndResume(lifecycleTable, current,
+      {...base, to:"reopened", expectedRevision:record.revision, reason:args.reason, fields:args.reopen.fields, evidence:args.reopen.evidence},
+      {...base, to:args.resumeTo, reason:args.resumeReason, fields:args.resume.fields, evidence:[]});
+    return r.ok ? {ok:true, value:{record:r.value.record, events:r.value.events}} : r;
+  }
+  const r = evaluateTransition(lifecycleTable, current, buildCommand({args, record, actor, occurredAt}));
+  return r.ok ? {ok:true, value:{record:r.value.record, events:[r.value.event]}} : r;
+}
 
 const json = (text, fallback) => { try { return JSON.parse(text); } catch { return fallback; } };
 
 /** Pure: DynamoDB item -> operator view (report body is shown ONLY by `show`). */
 export const decodeRecord = item => ({
-  reference:item.reference?.S, receivedAt:item.receivedAt?.S, kind:item.kind?.S,
+  id:item.id?.S, reference:item.reference?.S, receivedAt:item.receivedAt?.S, kind:item.kind?.S,
   state:item.state?.S, revision:Number(item.revision?.N),
   screening:json(item.screening?.S || "{}", {}),
   report:json(item.report?.S || "{}", {}), history:json(item.history?.S || "[]", [])
@@ -79,6 +193,20 @@ export const queueFor = state => TERMINAL.has(state) ? null : state === "quarant
 
 /** Pure: current record + transition result -> UpdateItem input (optimistic concurrency). */
 export function planUpdate({table, key, current, changed, reference, receivedAt}) {
+  // ONE conditional write per command, including the two-event reopen-and-resume composite:
+  // the condition pins the revision and state read before the decision, so a concurrent
+  // writer either wins outright or this write is refused, and no reader can ever observe the
+  // intermediate "reopened" state (the item goes from revision n to n+2 in one write).
+  if (current.kind === "defect") {
+    return {
+      TableName:table, Key:{pk:{S:key}},
+      ConditionExpression:"attribute_exists(pk) AND #kind = :kind AND revision = :expected AND #state = :before",
+      UpdateExpression:"SET #state = :next, revision = :version, history = :history",
+      ExpressionAttributeNames:{"#state":"state", "#kind":"kind"},
+      ExpressionAttributeValues:{":kind":{S:"defect"}, ":next":{S:changed.state}, ":before":{S:current.state},
+        ":version":{N:String(changed.revision)}, ":expected":{N:String(current.revision)}, ":history":{S:JSON.stringify(changed.history)}}
+    };
+  }
   const queue = queueFor(changed.state);
   const values = {
     ":next":{S:changed.state}, ":before":{S:current.state},
@@ -104,9 +232,13 @@ export async function runTriage({argv, table, db, commands, identity, now, out, 
   const args = parseArgs(argv);
   if (!table || !args.ok) {
     const messages = {
-      invalid_key:"A valid private record key is required.",
+      invalid_key:"A valid private record key is required (REQUEST#<hash> or DEFECT#DEF-<n>).",
       invalid_evidence:"Evidence must be <kind>:<ref>[,<kind>:<ref>...].",
-      evidence_required:"Reopening requires --evidence=<kind>:<ref> (new-occurrence or triage-correction)."
+      invalid_outcome:"--outcome must be passed, failed or inconclusive.",
+      unknown_target:"Unknown target state" + (args.detail ? ": " + args.detail : "") + ".",
+      unauthorized_role:"This step requires --role=" + (args.detail ?? "") + ".",
+      missing_field:"Missing required " + (args.detail ?? "field") + " for this step (lifecycle table).",
+      missing_evidence:"Missing required --evidence of kind " + (args.detail ?? "") + " for this step (lifecycle table)."
     };
     err((messages[args.error] ?? usage) + "\n");
     return 2;
@@ -129,7 +261,8 @@ export async function runTriage({argv, table, db, commands, identity, now, out, 
       return 0;
     }
     const item = (await db.send(new commands.GetItemCommand({TableName:table, Key:{pk:{S:args.value.key}}, ConsistentRead:true}))).Item;
-    if (!item || item.kind?.S !== "observation") { err("Observation not found or not reviewable.\n"); return 4; }
+    const expectedKind = args.value.key.startsWith("DEFECT#") ? "defect" : "observation";
+    if (!item || item.kind?.S !== expectedKind) { err("Record not found or not reviewable.\n"); return 4; }
     const record = decodeRecord(item);
     if (command === "show") {
       // Authenticated operator command. Never run in public CI output. JSON encoding
@@ -137,9 +270,7 @@ export async function runTriage({argv, table, db, commands, identity, now, out, 
       out(JSON.stringify(record, null, 2) + "\n");
       return 0;
     }
-    const evaluated = evaluateTransition(lifecycleTable,
-      {kind:"observation", state:record.state, revision:record.revision, history:record.history},
-      buildCommand({args:args.value, record, actor, occurredAt:now()}));
+    const evaluated = decide({args:args.value, record, actor, occurredAt:now()});
     if (!evaluated.ok) {
       err("Transition refused (" + evaluated.error.code + "): " + evaluated.error.message + "\n");
       return 5;
@@ -152,7 +283,8 @@ export async function runTriage({argv, table, db, commands, identity, now, out, 
       if (error?.name === "ConditionalCheckFailedException") { err("The record changed concurrently; reload and retry.\n"); return 6; }
       throw error;
     }
-    out(JSON.stringify({reference:record.reference, state:changed.state, revision:changed.revision, actor}) + "\n");
+    out(JSON.stringify({reference:record.reference ?? record.id, state:changed.state, revision:changed.revision,
+      events:evaluated.value.events.map(e => e.type + ":" + (e.to ?? e.fields?.verificationOutcome ?? "")), actor}) + "\n");
     return 0;
   } catch {
     err("Triage operation failed (AWS unavailable or access denied).\n");
