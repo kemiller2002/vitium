@@ -360,3 +360,58 @@ In both modes axe reports 0 violations (colour-contrast incomplete on decorative
   - VF-018 (ux/ops, blocked)
   - VF-025, VF-026, VF-027, VF-028 (domain; VF-028 needs a governance decision)
   - VF-029, VF-030, VF-031, VF-032, VF-033 (machine)
+
+## Fix round 4: confirmation pass on `p0/integration` @ `ef8f359` (branch `p0/fix4-verify`)
+
+### (a) Marker removals left the test bodies unchanged
+
+`git diff 5d7cefd ef8f359 -- tests/adversarial tests/verification tests/browser` touches only `machine-boundary.test.mjs` and `verification-cycle.test.mjs`. It contains exactly 10 changed lines, and each one only deletes `{ todo: "finding VF-0xx" }, ` from a test declaration (VF-025..028, VF-029 ×2, VF-030..033). `628ff3a` (my round-3 commit) and `5d7cefd` are identical for these paths. No assertion was edited.
+
+### (b) Each test passes
+
+On `ef8f359`, `npm run test:adversarial` gives 130 tests, 129 pass, 0 fail, 1 todo (VF-018) before my additions. All 10 formerly-todo tests pass.
+
+### (c) Bypass variants, one per finding
+
+These are in `tests/adversarial/round4-bypass.test.mjs`; probe output is in `scratchpad/verif/probe-r4.mjs`.
+
+| Finding | Variant tried | Result |
+|---|---|---|
+| VF-025 | Legacy shape naming a different author | refused `author_mismatch`: **holds** |
+| VF-026 | `dev‑1`, Cyrillic `д`, zero-width suffix, full-width, `DEV‐1` | refused `missing_actor` (ASCII ActorId); case variants → `independence_required`: **holds** |
+| VF-027 | No context and body asserting `authenticated-human`; body contradicting the context | `escalation_required` / `provenance_conflict`: **holds** for the lifecycle API. At the **triage-cli boundary**, an assumed-role agent session is mapped to `authenticated-human` and submits past the exhausted budget → **new VF-035** |
+| VF-028 | `ci` and `application` contexts; strict shape without provenance | `human_verifier_required` / `invalid_provenance`: **holds**. The legacy shape still lets an agent-named actor pass and lets the author self-pass → **new VF-034** (documented tolerance, but an exported entry point) |
+| VF-029 | Inherited keys inside `evidence[0]` (`constructor`, own `__proto__`), `subject.toString`, `correlation.hasOwnProperty`; evidence as an object | all `invalid_envelope`, canary never stored: **holds** |
+| VF-030 | Marker casing `Vitium/`, `VITIUM/` | `invalid_envelope` (pattern); `vitium/` → `spoofed_echo_marker`: **holds** |
+| VF-031 | Different principal with identical key and same vs different content; upper-cased eventId | identical `event_conflict` responses; upper case `invalid_envelope`: **holds** |
+| VF-032 | Pass, then fail (two conclusive results); inconclusive after a pass | second conclusive refused, inconclusive recorded: **holds** |
+| VF-033 | Ack for another principal, status `echo-suppressed`, case-variant eventId, array body (principal known) | not delivered: **holds**. Entry enqueued **without** a principal accepts an ack issued to any principal → **new VF-036** |
+
+### New findings
+
+| ID | Sev | Req / AC | Owner | Repro |
+|---|---|---|---|---|
+| VF-034 | medium | VER-006, VER-009, AC-036 | domain | `node --test --test-name-pattern="no exported lifecycle entry point" tests/adversarial/round4-bypass.test.mjs`. The legacy `tryTransition` (provenance `unrecorded`) skips both the author-independence and the human-verifier rule. DOM-001 §25/§28 tolerate it only for Kevin's authority tests and state it has no production caller (confirmed: only `service/triage.mjs` defines it, and no service module calls it). Fix options: restrict the legacy exemption to records whose submission was also legacy, or move Kevin's scenario behind an explicit test-only flag, without editing Kevin's tests. |
+| VF-035 | high | VER-011, mission §7 gate 4, VER-006 | domain / ops | `--test-name-pattern="triage-cli boundary"`. `decide()` always passes `context:{provenance:"authenticated-human"}` (`OPERATOR_PROVENANCE`) for **any** IAM caller, including an assumed-role workload such as an agent runner. INTAKE-THREAT-MODEL E3 already notes "any IAM principal with table access acts as triager" and calls it untestable without IAM. With the repair budget and the human-verifier rule now relying on this context, that gap reopens gate 4. Fix: an allow-list of human operator role ARNs (or a session tag) mapped to `authenticated-human`; everything else `agent` or refused. |
+| VF-036 | low | AC-035, INT-015 | machine | `--test-name-pattern="without a known principal"`. `enqueue(envelope, now)` without a principalId lets `isAckFor` accept an ack naming any principal, so an ack issued to someone else counts as delivery. Fix: require the principal (after the first credential exchange) or treat a principal-less entry's ack as unconfirmed. |
+
+### Mutation appraisal
+
+V05 was re-pointed to `&& author && sameActor(author, command.actor)) {` and MC09 to the new `echoStatus` branch. R301–R314 were added for the round-3 fixes; these are independent definitions, because the owners' R3 list is not in the repository. Total **102** mutants. Command: `node tests/verification/mutation-appraisal.mjs --scratch=<dir> --suites=unit,adversarial,integration`. The control is green in all three suites.
+
+| Suite | Kills (of 102) |
+|---|---|
+| `npm test` | 87 |
+| `test:adversarial` | 62 |
+| `test:integration` | 20 |
+
+- R304 was first defined against code that does not exist on the path (survived). Redefined as "budget trusts the declared provenance when no context is given", it is **killed** by unit and adversarial.
+- V05, MC09 and R301–R314 are killed, except R309.
+- **R309** (required-field check via `in`): **equivalent**. JSON cannot produce an inherited required key, and the own-key scan (R308, killed) already refuses inherited names.
+- **Final survivors: M23, M38, M43, M48, M57, R309. All equivalent.**
+
+### Browser
+
+- CDN blocked: 66 passed.
+- Forma file mode: 66 passed.
+- axe: 0 violations in both modes; no overflow at 320, 375 or 1280.

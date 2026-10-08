@@ -5,6 +5,87 @@ Author role: independent verification agent (VIT-P0-2026-10-08). This document d
 
 Status vocabulary follows `docs/requirements/VITIUM-ACCEPTANCE.md`: `not-started`, `in-progress`, `blocked`, `executed-failed`, `verified-passed`. A check line can be `executed-pass`, `executed-fail (finding)` or `not-executed`.
 
+## Final status, fix round 4 (confirmation pass, `p0/fix4-verify` from `p0/integration` @ `ef8f359`)
+
+This section supersedes the round-3 and earlier tables below.
+
+**Local environment:** as in round 3 (sandbox, Node v22.22.0; Chromium 153.0.8010.0 via `@sparticuz/chromium@153.0.0` and `@playwright/test@1.63.0`; Forma CDN blocked, plus file mode; dynalite for integration).
+
+**CI:** Conditor governance verification run 37813042099 and Praxis validation run 37813042172 succeeded on `a8532cb` (ancestor of `ef8f359`); both were re-checked via `gh api`. **No CI run of `ef8f359` itself has been witnessed.**
+
+### Commands and outputs (`ef8f359` + this branch's test/doc changes)
+
+| Command | Output |
+|---|---|
+| `npm test` | 298 tests, 298 pass, 0 fail, 0 todo |
+| `npm run test:adversarial` | 142 tests, 138 pass, 0 fail, 4 todo (VF-018, VF-034, VF-035, VF-036) |
+| `npm run test:integration` | 30 tests, 30 pass (dynalite) |
+| `node scripts/secret-scan.mjs` | `[git]` 323 text files, 0 blocked |
+| Browser, CDN blocked | 66 passed, 0 failed, 0 flaky; axe 0 violations; no overflow |
+| Browser, Forma file mode | 66 passed, 0 failed; axe 0 violations |
+| Mutation appraisal, 102 mutants, unit + adversarial + integration (+ R304 re-run) | 96 killed; 6 survivors, all equivalent (M23, M38, M43, M48, M57, R309) |
+
+### Final finding status
+
+| ID | Status | Closing commit / owner |
+|---|---|---|
+| VF-001..VF-017, VF-019..VF-024 | closed | see earlier rounds (VF-024 with the residual recorded in SEC-001) |
+| VF-018 | open, blocked | ux / ops; needs the jsDelivr byte check from an unblocked network |
+| VF-025 | closed (variant via legacy shape also refused, `author_mismatch`) | cc67767 / 41ad546 |
+| VF-026 | closed (homoglyph, zero-width, full-width and non-ASCII-hyphen aliases refused at `ActorId`; case variants canonicalised) | cc67767 |
+| VF-027 | closed for the lifecycle API (no context + asserted human is still budgeted; contradicting context → `provenance_conflict`) | cc67767; **boundary residual → VF-035** |
+| VF-028 | closed for strict paths (agent/ci/application contexts → `human_verifier_required`) | cc67767; **legacy-path residual → VF-034** |
+| VF-029 | closed (nested evidence items, subject and correlation inherited keys refused; nothing stored) | 418b86f |
+| VF-030 | closed (casing variants fail the pattern; `vitium/…` from a non-Vitium principal → `spoofed_echo_marker`) | 418b86f |
+| VF-031 | closed (other principal → `event_conflict` with an identical response for same or different content; upper-case eventId invalid) | 418b86f |
+| VF-032 | closed (inconclusive leaves the attempt open; a second conclusive result is still `attempt_conflict`) | 418b86f |
+| VF-033 | closed when the producer principal is known | 418b86f; **unknown-principal residual → VF-036** |
+| **VF-034** | **open (new)** | domain: legacy `tryTransition` lets one actor submit and pass (independence skipped for `unrecorded`), and lets any actor pass (human-verifier rule skipped for `unrecorded`). No service code calls it today (DOM-001 §25/§28 tolerate it for Kevin's authority tests), but it is an exported entry point. |
+| **VF-035** | **open (new)** | domain / ops: `triage-cli` maps every IAM principal to `authenticated-human`, so an agent workload's assumed-role session is exempt from the repair budget and the human-verifier rule. Fix: derive provenance from an IAM role allow-list or tag (human operator roles only), or refuse non-human sessions. |
+| **VF-036** | **open (new, low)** | machine: an outbox entry without a known `principalId` accepts an ack issued to any principal. Fix: require the producer principal at enqueue, or treat a principal-less ack as unconfirmed. |
+
+### Per-scenario status (VIT-AC-001..015, 032..036)
+
+No scenario is `verified-passed`.
+
+| Scenario | Status | Local evidence (`ef8f359`) | Blocking |
+|---|---|---|---|
+| VIT-AC-001 | blocked | Browser suite passes in both CSS modes (keyboard, focus, error summary, overflow, axe 0) | Canonical site (AC-014); manual screen-reader session; CI browser leg |
+| VIT-AC-002 | in-progress | Legacy flow and safe GitHub link; no requests escape | CI browser leg; canonical site |
+| VIT-AC-003 | blocked | Wire body accepted; gate off | AWS staging, Turnstile, intake domain, operator approval |
+| VIT-AC-004 | in-progress | All validation and hostile-input tests pass; VF-011 closed | CI leg |
+| VIT-AC-005 | blocked | Challenge before write; pre-filter | Per-source throttling; load test on AWS |
+| VIT-AC-006 | blocked | Idempotency, conflict and lost-response retry pass locally and on dynalite | Real DynamoDB |
+| VIT-AC-007 | blocked | No receipt on store failure | AWS staging; GitHub sync (P1) |
+| VIT-AC-008 | blocked | Redaction, quarantine, site parity | Designated operator (VIT-OQ-008) |
+| VIT-AC-009 | in-progress | Unchallenged conflict byte-identical to an unused key; no read route | CI leg (M57 equivalent) |
+| VIT-AC-010 | in-progress | Product/impact parity; registry tests | Registry tests not independently adjudicated; CI leg |
+| VIT-AC-011 | in-progress | No observation → defect edge; transactional promote | Ordo/Fides; real DynamoDB TransactWriteItems |
+| VIT-AC-012 | in-progress | Table-driven lifecycle suite passes | Candidate authority; CI leg |
+| VIT-AC-013 | in-progress | n/a locally | **CI witnessed**: runs 37813042099 and 37813042172 on `a8532cb`; qualified Ordo transition authority not claimed |
+| VIT-AC-014 | blocked | n/a | Operator Pages/DNS/TLS |
+| VIT-AC-015 | blocked | Git-aware scan 0; no secrets in assets or responses | Lambda log canary; VF-018 |
+| VIT-AC-032 | in-progress | VF-029 closed; untriaged, private, scoped, never auto-promoted; forged principals refused | No machine endpoint or real producer (P1); CI leg |
+| VIT-AC-033 | in-progress | Two failed iterations then an independent pass; stale/old/missing refused | Ordo authority; CI leg (VF-034 affects only the legacy path) |
+| VIT-AC-034 | in-progress | Reopen-and-resume all-or-nothing, history byte-identical, one conditional write | Ordo authority; real DynamoDB |
+| VIT-AC-035 | executed-failed | VF-030/031/033 closed | **VF-036** (principal-less outbox entry accepts a foreign ack); no producer or endpoint (P1) |
+| VIT-AC-036 | executed-failed | VF-025..028, VF-032 closed on strict paths | **VF-034** (legacy entry point allows self-pass and non-human pass), **VF-035** (triage-cli treats any IAM workload as human) |
+
+### Per-requirement status (new P0 requirements and mission §7 gates)
+
+| Requirement / gate | Status | Evidence | Open |
+|---|---|---|---|
+| VIT-LCY-010 | in-progress | Failed result returns to work with verifier, attempt, candidate and evidence; V01/V03/V04/V11 killed | Ordo authority; CI leg |
+| VIT-LCY-011 | in-progress | Reopen-and-resume both events, all-or-nothing; V09/CL01 killed | Ordo authority; real DynamoDB |
+| VIT-VER-009 | executed-failed | Strict path: independence canonical (R303), author bound (R301/R302), human verifier (R306) | VF-034 (legacy entry point), VF-035 (CLI boundary) |
+| VIT-INT-013 | in-progress | VF-029..031 closed; closed envelope own-key checks (R308); public route refuses machine envelopes | No endpoint (proposed); CI leg |
+| §7 gate 1 (producer contract and identity model; untrusted claims denied) | in-progress | Independent review done twice; forged principals and source claims refused; echo marker bound to principal | No real producer; CI leg |
+| §7 gate 2 (≥ 2 failed iterations, then a later recurrence) | in-progress | Passing locally and on dynalite | CI leg; Ordo |
+| §7 gate 3 (evidence and candidate history never disappear) | in-progress | Byte-identical history checks | CI leg |
+| §7 gate 4 (bounded autonomous repair with escalation) | executed-failed | Lifecycle API fail-closed budget (R304/R305/R307 killed) | **VF-035**: the triage-cli boundary grants human provenance to any IAM workload |
+| §7 gate 5 (no deployment claims without evidence) | in-progress | Machine contract "proposed, no route"; `ordoAuthorized:false` | Re-check at release |
+
+
 ## Final status, fix round 3 (`p0/fix3-verify` from `p0/integration` @ `a574d44`)
 
 This section supersedes the round-2 table below it.
@@ -390,3 +471,6 @@ Full reproductions are in the verification report; the summary is in `docs/verif
 | VF-031 | medium | INT-016, AC-035 | machine | Cross-principal eventId replay gets a replay ack (fix round 3) |
 | VF-032 | medium | VER-010, AC-036 | machine | Re-run after inconclusive refused on the machine path (fix round 3) |
 | VF-033 | low | AC-035 | machine | Outbox treats any 2xx as delivered (fix round 3) |
+| VF-034 | medium | VER-006/009, AC-036 | domain | Legacy entry point allows self-pass and non-human pass (fix round 4) |
+| VF-035 | high | VER-011, §7 gate 4 | domain/ops | triage-cli maps every IAM principal (incl. agent workloads) to authenticated-human (fix round 4) |
+| VF-036 | low | AC-035 | machine | Principal-less outbox entry accepts a foreign ack (fix round 4) |
