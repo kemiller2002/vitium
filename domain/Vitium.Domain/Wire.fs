@@ -33,17 +33,26 @@ module Wire =
         | _ -> Error(payload (name + " must be an integer"))
 
     /// Actor = id + provenance (+ table role). Same checks/codes as the JS checkActor.
-    let decodeActor (e: JsonElement) : Result<Actor, TransitionError> =
+    /// Decode the actor. `context` is the TRUSTED caller provenance (VF-027); when given,
+    /// a body provenance must equal it, and the actor is marked Trusted. Without a context
+    /// the body provenance is an assertion (Trusted = false). Same rules as checkActor in
+    /// service/lifecycle.mjs.
+    let decodeActorWith (context: Provenance option) (e: JsonElement) : Result<Actor, TransitionError> =
         match optString "actor" e |> Option.map ActorId.create with
         | Some(Ok id) ->
-            match optString "provenance" e |> Option.bind Provenance.ofWire with
-            | None -> Error(TransitionError.InvalidProvenance(defaultArg (optString "provenance" e) ""))
-            | Some provenance ->
-                Ok
-                    { Id = id
-                      Provenance = provenance
-                      Role = defaultArg (optString "role" e) "" }
+            let role = defaultArg (optString "role" e) ""
+            let asserted = optString "provenance" e
+
+            match context, asserted with
+            | Some trusted, Some body when Provenance.ofWire body <> Some trusted -> Error TransitionError.ProvenanceConflict
+            | Some trusted, _ -> Ok { Id = id; Provenance = trusted; Role = role; Trusted = true }
+            | None, _ ->
+                match asserted |> Option.bind Provenance.ofWire with
+                | None -> Error(TransitionError.InvalidProvenance(defaultArg asserted ""))
+                | Some provenance -> Ok { Id = id; Provenance = provenance; Role = role; Trusted = false }
         | _ -> Error TransitionError.MissingActor
+
+    let decodeActor (e: JsonElement) = decodeActorWith None e
 
     let private decodeEvidence (e: JsonElement) =
         match JsonRead.tryProp "evidence" e with
@@ -149,9 +158,9 @@ module Wire =
         }
 
     /// Decode a strict wire transition command into (actor, command).
-    let decodeTransition (e: JsonElement) : Result<Actor * TransitionCommand, TransitionError> =
+    let decodeTransitionWith (context: Provenance option) (e: JsonElement) : Result<Actor * TransitionCommand, TransitionError> =
         result {
-            let! actor = decodeActor e
+            let! actor = decodeActorWith context e
             let! expected = decodeRevision "expectedRevision" e
             let! occurredAt = decodeTimestamp e
             let! fields = decodeFields e
@@ -166,6 +175,8 @@ module Wire =
                   Evidence = evidence
                   OccurredAt = occurredAt }
         }
+
+    let decodeTransition (e: JsonElement) = decodeTransitionWith None e
 
     /// Decode and evaluate with the same error precedence as service/lifecycle.mjs
     /// evaluateTransition. Guards live only in Lifecycle; this function only decodes.

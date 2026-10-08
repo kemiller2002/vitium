@@ -117,6 +117,17 @@ module ActorId =
         else Error(IdentityError.InvalidActorId text)
     let value (ActorId text) = text
 
+    /// Canonical identity for comparisons (VF-026): NFKC, trimmed, lower-cased (invariant).
+    /// Same rule as canonicalActor in service/lifecycle.mjs. Recorded values are unchanged.
+    let canonical (ActorId text) =
+        text.Normalize(System.Text.NormalizationForm.FormKC).Trim().ToLowerInvariant()
+
+    /// Canonical equality of an actor id and free text (e.g. a recorded author).
+    let sameAs (id: ActorId) (text: string) =
+        not (isNull text)
+        && canonical id <> ""
+        && canonical id = text.Normalize(System.Text.NormalizationForm.FormKC).Trim().ToLowerInvariant()
+
 [<RequireQualifiedAccess>]
 module EvidenceRef =
     let create (text: string) =
@@ -169,7 +180,11 @@ module Provenance =
 type Actor =
     { Id: ActorId
       Provenance: Provenance
-      Role: string }
+      Role: string
+      /// True only when Provenance came from the trusted caller boundary (the CLI's
+      /// authenticated identity, the machine core's verified principal), never from a
+      /// command body (VF-027). Asserted provenance never exempts from the repair budget.
+      Trusted: bool }
 
 /// Public time validation (VF-017): a real ISO-8601 instant with an explicit offset.
 [<RequireQualifiedAccess>]

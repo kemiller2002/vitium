@@ -78,7 +78,9 @@ type EventRule =
 type Policy =
     { MaxAutonomousFailedAttempts: int
       IndependenceRequired: bool
-      IndependenceAppliesTo: string list }
+      IndependenceAppliesTo: string list
+      /// VF-028 (provisional): a passing result needs an authenticated-human verifier.
+      PassRequiresHumanVerifier: bool }
 
 /// The parsed, validated transition table (schemas/lifecycle/transitions.v1.json).
 /// Only constructible through `Table.parse`, which fails closed.
@@ -305,6 +307,7 @@ module Table =
             let! independence = JsonRead.prop "independentVerification" policy
             let! independenceRequired = JsonRead.propWith "required" JsonRead.bool independence
             let! appliesTo = JsonRead.propWith "appliesTo" JsonRead.strings independence
+            let! passRequiresHuman = JsonRead.propWith "passRequiresHumanVerifier" JsonRead.bool policy
             let! events = JsonRead.prop "events" root
 
             let eventRule name =
@@ -346,7 +349,8 @@ module Table =
                   PolicyValues =
                     { MaxAutonomousFailedAttempts = budget
                       IndependenceRequired = independenceRequired
-                      IndependenceAppliesTo = appliesTo }
+                      IndependenceAppliesTo = appliesTo
+                      PassRequiresHumanVerifier = passRequiresHuman }
                   EventRules = Map.ofList [ inconclusive; escalation ] }
         }
 

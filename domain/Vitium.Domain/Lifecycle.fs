@@ -186,6 +186,9 @@ type TransitionError =
     | DuplicateAttempt of string
     | IndependenceRequired
     | EscalationRequired of failed: int * max: int
+    | AuthorMismatch
+    | ProvenanceConflict
+    | HumanVerifierRequired
     | UnknownFact of string
     /// The record's history does not account for its revision (VF-016).
     | InconsistentHistory of events: int * revision: int
@@ -217,6 +220,9 @@ module TransitionError =
         | TransitionError.DuplicateAttempt _ -> "duplicate_attempt"
         | TransitionError.IndependenceRequired -> "independence_required"
         | TransitionError.EscalationRequired _ -> "escalation_required"
+        | TransitionError.AuthorMismatch -> "author_mismatch"
+        | TransitionError.ProvenanceConflict -> "provenance_conflict"
+        | TransitionError.HumanVerifierRequired -> "human_verifier_required"
         | TransitionError.UnknownFact _ -> "unknown_fact"
         | TransitionError.InconsistentHistory _ -> "inconsistent_history"
 
@@ -317,6 +323,8 @@ module Lifecycle =
     /// Same rules as verificationCycle in service/lifecycle.mjs.
     type Cycle =
         { Latest: (string option * string option * string option) option
+          /// Submitting actor of the latest submission (author fallback for typed events).
+          LatestActor: string option
           Submitted: string list
           FailedInOpenCycle: int }
 
@@ -335,6 +343,13 @@ module Lifecycle =
             submissions
             |> List.tryLast
             |> Option.map (fun e -> Event.field "attemptId" e, Event.field "candidateRevision" e, Event.field "author" e)
+          LatestActor =
+            submissions
+            |> List.tryLast
+            |> Option.bind (fun e ->
+                match e with
+                | Event.Transitioned t -> Some(ActorId.value t.Actor.Id)
+                | e -> Event.field "actor" e)
           Submitted = submissions |> List.choose (Event.field "attemptId")
           FailedInOpenCycle = failed }
 
@@ -346,7 +361,7 @@ module Lifecycle =
 
     /// Attempt guards (same order and codes as checkAttempt in service/lifecycle.mjs).
     /// Returns extra fields to record.
-    let private checkAttempt (table: Table) (rule: TransitionRule) (record: LifecycleRecord) (fields: Map<string, string>) (actor: Actor) maxFailed defaultAuthor =
+    let private checkAttempt (table: Table) (rule: TransitionRule) (record: LifecycleRecord) (fields: Map<string, string>) (actor: Actor) maxFailed =
         let c = cycle record.History
 
         match rule.Attempt with
@@ -358,12 +373,16 @@ module Lifecycle =
             Error(TransitionError.DuplicateAttempt(Map.find "attemptId" fields))
         | Some AttemptRule.Rework -> Ok Map.empty
         | Some AttemptRule.Submission ->
-            if actor.Provenance = Provenance.Agent && c.FailedInOpenCycle >= maxFailed then
+            // VF-027 fail closed: only a TRUSTED authenticated-human is exempt from the budget.
+            let exempt = actor.Trusted && actor.Provenance = Provenance.AuthenticatedHuman
+
+            if not exempt && c.FailedInOpenCycle >= maxFailed then
                 Error(TransitionError.EscalationRequired(c.FailedInOpenCycle, maxFailed))
-            elif defaultAuthor && not (fields.ContainsKey "author") then
-                Ok(Map.ofList [ "author", ActorId.value actor.Id ])
             else
-                Ok Map.empty
+                // VF-025: the author IS the submitter; a named author must canonically match it.
+                match Map.tryFind "author" fields with
+                | Some named when not (ActorId.sameAs actor.Id named) -> Error TransitionError.AuthorMismatch
+                | _ -> Ok(Map.ofList [ "author", ActorId.value actor.Id ])
         | Some(AttemptRule.Result(outcome, independent)) ->
             match Map.tryFind "verificationOutcome" fields with
             | Some o when o <> outcome -> Error(TransitionError.OutcomeMismatch(o, rule.To))
@@ -373,11 +392,16 @@ module Lifecycle =
                     Error(TransitionError.MissingField(message rule "missing_field" "attemptId"))
                 | Some(attempt, candidate, _) when attempt <> Map.tryFind "attemptId" fields || candidate <> Map.tryFind "candidateRevision" fields ->
                     Error TransitionError.AttemptMismatch
-                | Some(_, _, Some author) when
+                | _ when outcome = "passed" && table.Policy.PassRequiresHumanVerifier && actor.Provenance <> Provenance.AuthenticatedHuman ->
+                    // VF-028 (provisional): agent/application/ci may fail or mark inconclusive only.
+                    Error TransitionError.HumanVerifierRequired
+                | Some(_, _, author) when
                     independent
                     && table.Policy.IndependenceRequired
                     && List.contains outcome table.Policy.IndependenceAppliesTo
-                    && author = ActorId.value actor.Id
+                    && (match Option.orElse c.LatestActor author with
+                        | Some a -> ActorId.sameAs actor.Id a
+                        | None -> false)
                     ->
                     Error TransitionError.IndependenceRequired
                 | _ -> Ok(Map.ofList [ "verificationOutcome", outcome ])
@@ -413,11 +437,9 @@ module Lifecycle =
             return rule, trimmed
         }
 
-    /// Evaluate a transition with explicit policy parameters: the repair budget for agent
-    /// submissions, and whether a submission's author defaults to the submitting actor.
+    /// Evaluate a transition with an explicit repair budget for untrusted/agent submissions.
     let transitionWith
         (maxFailedAttempts: int)
-        (defaultAuthor: bool)
         (table: Table)
         (actor: Actor)
         (command: TransitionCommand)
@@ -430,7 +452,7 @@ module Lifecycle =
             let! fields = checkFields table rule command.Fields
             do! checkEvidence table rule.EvidenceAnyOf command.Evidence
             do! checkSelfReference record fields
-            let! extra = checkAttempt table rule record fields actor maxFailedAttempts defaultAuthor
+            let! extra = checkAttempt table rule record fields actor maxFailedAttempts
             let fields = Map.fold (fun acc k v -> Map.add k v acc) fields extra
             let reopens = if command.To = "reopened" then lastDisposition definition record.History else None
 
@@ -464,7 +486,7 @@ module Lifecycle =
     /// Evaluate a transition. Pure and total: same inputs, same Result. Uses the table's
     /// provisional repair budget and records the submitting actor as an attempt's author.
     let transition (table: Table) (actor: Actor) (command: TransitionCommand) (record: LifecycleRecord) =
-        transitionWith table.Policy.MaxAutonomousFailedAttempts true table actor command record
+        transitionWith table.Policy.MaxAutonomousFailedAttempts table actor command record
 
     let private notePrelude (table: Table) (rule: EventRule) (actor: Actor) expectedRevision (reason: string) (record: LifecycleRecord) =
         result {
