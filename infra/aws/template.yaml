@@ -23,6 +23,7 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
       AttributeDefinitions:
         - AttributeName: pk
           AttributeType: S
@@ -62,6 +63,8 @@ Resources:
           title: Vitium private intake
           version: '1.0'
         paths: {}
+      # Browser CORS only; Origin is not authentication (any non-browser client can set it).
+      # The Lambda re-checks Origin and requires a verified Turnstile token.
       CorsConfiguration:
         AllowOrigins:
           - !Ref IntakeOrigin
@@ -71,7 +74,12 @@ Resources:
         AllowHeaders:
           - content-type
           - idempotency-key
+        AllowCredentials: false
         MaxAge: 300
+      # Stage-wide token bucket shared by ALL clients. This is NOT per-source-IP limiting:
+      # one abusive client can exhaust it for everyone (availability, not integrity, risk).
+      # Per-IP limits require AWS WAF rate-based rules (not available for HTTP APIs directly;
+      # needs CloudFront or a REST API) - recorded as an operator decision in SEC-001.
       DefaultRouteSettings:
         ThrottlingRateLimit: 2
         ThrottlingBurstLimit: 4
@@ -80,27 +88,56 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Description: Accepts private observations only after Cloudflare Turnstile verification.
+      FunctionName: !Sub 'vitium-intake-${EnvironmentName}'
       CodeUri: ../../service/
       Handler: aws-handler.handler
       Runtime: nodejs22.x
       Architectures: [arm64]
       MemorySize: 256
       Timeout: 15
+      # Bounds concurrent work (and therefore DynamoDB write rate and cost) independent of
+      # the API throttle. Request bodies are capped at 16 KiB in service/http.mjs before
+      # parsing; API Gateway HTTP APIs have a fixed 10 MB payload limit that cannot be lowered.
       ReservedConcurrentExecutions: 4
+      LoggingConfig:
+        LogGroup: !Ref IntakeFunctionLogGroup
+        LogFormat: Text
       Environment:
         Variables:
           REPORTS_TABLE_NAME: !Ref ReportsTable
           TURNSTILE_SECRET_ARN: !Ref TurnstileSecretArn
           ALLOWED_ORIGIN: !Ref IntakeOrigin
           CHALLENGE_HOSTNAME: vitium.echelonfoundry.com
+      # Least privilege: conditional create + projected single-key replay read only.
+      # No Query/Scan/Update/Delete, no index access, no ReturnValues. The fine-grained
+      # condition keys below are written per AWS IAM docs but have NOT been exercised
+      # against real IAM (blocker: staging account, see docs/security/INTAKE-THREAT-MODEL.md).
       Policies:
         - Version: '2012-10-17'
           Statement:
-            - Effect: Allow
+            - Sid: CreateObservationOnce
+              Effect: Allow
               Action:
                 - dynamodb:PutItem
+              Resource: !GetAtt ReportsTable.Arn
+              Condition:
+                StringEqualsIfExists:
+                  dynamodb:ReturnValues: NONE
+            - Sid: ReplayReceiptAttributesOnly
+              Effect: Allow
+              Action:
                 - dynamodb:GetItem
               Resource: !GetAtt ReportsTable.Arn
+              Condition:
+                ForAllValues:StringEquals:
+                  dynamodb:Attributes:
+                    - pk
+                    - reference
+                    - payloadHash
+                    - receivedAt
+                    - disposition
+                StringEqualsIfExists:
+                  dynamodb:Select: SPECIFIC_ATTRIBUTES
             - Effect: Allow
               Action:
                 - secretsmanager:GetSecretValue
@@ -116,8 +153,13 @@ Resources:
 
   IntakeFunctionLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
-      LogGroupName: !Sub '/aws/lambda/${IntakeFunction}'
+      # Fixed name so the group exists (with retention) before the first invocation.
+      # 7 days is PROVISIONAL pending VIT-OQ-009. Log lines are allow-listed metadata only
+      # (service/adapters/safe-log.mjs): no report text, tokens, keys or IP addresses.
+      LogGroupName: !Sub '/aws/lambda/vitium-intake-${EnvironmentName}'
       RetentionInDays: 7
 
 Outputs:
