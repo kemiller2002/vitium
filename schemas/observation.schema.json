@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://echelonfoundry.com/schemas/vitium/observation/1.0",
+  "title": "Vitium private intake observation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "pk",
+    "reference",
+    "payloadHash",
+    "report",
+    "source",
+    "visibility",
+    "kind",
+    "status",
+    "state",
+    "revision",
+    "history",
+    "receivedAt"
+  ],
+  "properties": {
+    "pk": {
+      "type": "string",
+      "pattern": "^REQUEST#[a-f0-9]{64}$"
+    },
+    "reference": {
+      "type": "string",
+      "pattern": "^VIT-[A-F0-9]{32}$"
+    },
+    "payloadHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "product",
+        "impact",
+        "title",
+        "actual",
+        "expected",
+        "steps",
+        "pageUrl"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "1.0"
+        },
+        "product": {
+          "type": "string"
+        },
+        "impact": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "actual": {
+          "type": "string"
+        },
+        "expected": {
+          "type": "string"
+        },
+        "steps": {
+          "type": "string"
+        },
+        "pageUrl": {
+          "type": "string"
+        }
+      }
+    },
+    "source": {
+      "const": "public-api"
+    },
+    "visibility": {
+      "const": "private"
+    },
+    "kind": {
+      "const": "observation"
+    },
+    "status": {
+      "const": "received"
+    },
+    "state": {
+      "enum": [
+        "received",
+        "quarantined",
+        "accepted-for-triage",
+        "classified",
+        "rejected"
+      ]
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "history": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "receivedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "reviewQueuePk": {
+      "const": "QUEUE#pending"
+    },
+    "reviewQueueSk": {
+      "type": "string"
+    }
+  },
+  "description": "Domain representation; DynamoDB adapter encodes report/history as JSON strings and stores index attributes only while pending review."
+}
