@@ -44,10 +44,10 @@ Execute and verify Conditor installation from the manifest, follow the scaffold 
 
 ## Requirements audit (2026-10-08)
 
-- Proposed complete product-scope requirements drafted in `docs/requirements/VITIUM-REQUIREMENTS.md` (**79 requirements**, 8 groups, P0/P1/P2); not approved or verified as implemented.
-- `docs/requirements/VITIUM-ACCEPTANCE.md` proposes **31 scenarios** with positive, negative, privacy, concurrency, integration and release-readiness checks. No end-to-end scenarios are claimed to have passed.
+- Proposed complete product-scope requirements drafted in `docs/requirements/VITIUM-REQUIREMENTS.md` (**92 requirements**, 8 groups, P0/P1/P2); not approved or verified as implemented.
+- `docs/requirements/VITIUM-ACCEPTANCE.md` proposes **36 scenarios** with positive, negative, privacy, concurrency, integration and release-readiness checks. No end-to-end scenarios are claimed to have passed.
 - `docs/requirements/VITIUM-OPEN-DECISIONS.md` records **18 open product/architecture/security decisions**. No authorizations or operator commitments have been assumed.
-- Issues #8–#13 now track domain modeling, embedded reporting, source synchronization, regression evidence, reporter follow-up and production operations in addition to the original #1–#7.
+- Issues #8–#15 now track domain modeling, embedded reporting, source synchronization, regression evidence, reporter follow-up and production operations in addition to the original #1–#7.
 - Static requirements integrity checks were added to `npm test`; those checks prove the written baseline is internally structured, **not** that behavior has been built or independently verified.
 
 ## P0 implementation slice (2026-10-08)
@@ -66,3 +66,9 @@ Execute and verify Conditor installation from the manifest, follow the scaffold 
 - Reusable multi-agent Claude Code execution mission: `docs/agent-scripts/CLAUDE-VITIUM-P0.md`.
 - Observed latest Conditor isolated installation preview: [run 37772428835](https://github.com/kemiller2002/vitium/actions/runs/37772428835), successful including lifecycle verification and reviewable diff. Preview success is **not** a committed Conditor installation.
 - Work starts with integrating the genuine generated Conditor state without overwriting Vitium's existing form, then a safe typed F#/Limen migration, private intake verification, independent browser/security evidence and an accurate external-operator blocker report.
+
+## Build-system reporting and verification-loop scope (2026-10-08)
+
+- Machine producer intake from Praxis/Ordo/Conditor/Dokimos/Tutela/Aegis/CI is now specifically documented in `docs/requirements/VITIUM-BUILD-SYSTEM-REPORTING.md` with P0 contract obligations and P1 producer rollout; tracked in #14. **No authenticated machine intake service or upstream emitter has been shipped.**
+- Repair → failed independent verification → in-progress → rework → verification → resolved and resolved/closed → reopened → active repair are explicitly specified. The local candidate `service/triage.mjs` and tests now require verifier, outcome, candidate revision, evidence, attempt ID and reopen release metadata. Tracked in #15.
+- The state-helper tests are not proof of integrated Ordo transition governance or end-to-end Praxis remediation.

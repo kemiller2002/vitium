@@ -58,6 +58,18 @@ These are **testable specifications**, not evidence that the tests exist or have
 | VIT-AC-030 | INT-011/012, UX-010 | Optional integrations/localization fail or newer provider contract unavailable | Existing reporter remains functional; graceful supported-state fallback; no unsupported migration |
 | VIT-AC-031 | NFR-012, OPS-006/007 | Compare release cohorts or estimate rate/engineering cost | Missing data and coverage explicit; baselines and sample windows reported; no fabricated savings or universal success rates |
 
+## Build-system reporting and iterative repair scenarios
+
+These acceptance scenarios enforce the build producer and repeated rework/verification behavior. They are **not evidence** that the machine intake endpoint or automated workflow has shipped.
+
+| Scenario | Requirements | Given / when | Required result |
+|---|---|---|---|
+| VIT-AC-032 | INT-013/014/017 | Praxis, Conditor or Dokimos submits authenticated failure observation with genuine run/work/evidence references | Versioned validated observation stored privately with original source/repo and immutable evidence; not auto-promoted to confirmed defect |
+| VIT-AC-033 | LCY-010/012/013, VER-009 | A repair reaches awaiting-verification; verifier's regression test fails; author reworks and verifier reruns until passing | Returns to in-progress with failed run, verifier, candidate revision and attempt IDs; no premature resolution; previous test/work history preserved and independent pass required |
+| VIT-AC-034 | LCY-011/012, VER-009 | A defect was resolved or closed; regression reappears in a new release; team resumes repair | Resolved/closed → reopened → in-progress (or reproducing) with new evidence and work attempt, retaining previous verified resolution and release history; no silent direct state overwrite |
+| VIT-AC-035 | INT-015/016/018 | Two producers deliver duplicates/out-of-order records, forged identity, stale event, or Vitium is offline | Idempotent storage, scoped authorization and bounded retry/outbox; original source build result unchanged, reporting failures observable, no recursive Vitium feedback |
+| VIT-AC-036 | VER-005/006/011, LCY-010 | Build passes but targeted fix test is absent, flaky/inconclusive, agent self-certifies, or retry budget is exceeded | No automated resolved state; explicit inconclusive/escalation path; independent evidence and qualified verifier required |
+
 ## Release readiness checklist
 
 P0 should not be marked "ready" because a number of documents exist or the static report form has tests. Record the evidence of the following gates with exact source commits, tool runs, environment, timestamp and reviewer where policy requires it:

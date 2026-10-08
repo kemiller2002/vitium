@@ -39,6 +39,7 @@ Read completely:
 - \`docs/requirements/VITIUM-REQUIREMENTS.md\`
 - \`docs/requirements/VITIUM-ACCEPTANCE.md\`
 - \`docs/requirements/VITIUM-OPEN-DECISIONS.md\`
+- \`docs/requirements/VITIUM-BUILD-SYSTEM-REPORTING.md\` (machine producer intake and failed-verification/rework lifecycle)
 - \`docs/P0-IMPLEMENTATION.md\`, \`docs/REPORTING.md\`, \`docs/GOVERNANCE.md\`
 - \`DEPLOYMENT.md\`, \`conditor.json\`
 - \`infra/aws/README.md\`, \`infra/aws/template.yaml\`
@@ -79,6 +80,7 @@ Start these specialists:
 4. **Forma/Limen UX agent**. Own report form, focus/keyboard/mobility, responsive UI, review/edit/submit/failure/receipt states and non-destructive F#/Limen scaffold migration. Own site/frontend files; preserve GitHub legacy fallback.
 5. **Independent verification agent**. Own adversarial and Playwright/a11y checks, threat/model-test matrix, mutation-sensitive regression tests and evidence appraisal. **Must not self-certify code written by its counterpart agents.** Can propose fixes but their owners implement them.
 6. **Release/operations agent**. Own safe runbooks, staging readiness, redacted CI outputs, Pages/DNS/TLS gaps, least-privilege IAM, disaster-recovery and operator-required decisions. No implicit cloud deployments.
+7. **Build-system integrations agent**. Own versioned authenticated machine-observation contract, producer adapter strategy for Praxis/Ordo/Conditor/Dokimos/Tutela/Aegis/CI, provenance, dedup/retry/echo suppression and independent integration tests. Start with safe Vitium-only contract work; upstream modifications need separate work items/PRs and compatibility verification. This agent must not mistake a public Turnstile route for machine authentication.
 
 Have each agent return: scoped changes/commit, real commands executed, passed/failed tests, relevant requirement and acceptance IDs, unresolved blockers and next dependencies. Integrate in dependency order rather than blindly merging parallel edits.
 
@@ -116,6 +118,20 @@ Have each agent return: scoped changes/commit, real commands executed, passed/fa
 - Keep data private, triage roles least privileged and the public service unable to enumerate/read stored reports. Separate reporter intake and internal operator authorization (Fides only when qualified).
 - Protect against credential leakage, forged user reports, replay, unbounded queue growth, injected agent instructions and duplicate downstream issues. Never run reporter-provided repro scripts.
 
+### Phase D2: Automated Echelon reporting and repeatable defect rework
+
+**Mandatory architecture/behavioral contract for P0; producer rollout can remain separately gated as P1.** Read `docs/requirements/VITIUM-BUILD-SYSTEM-REPORTING.md` in full. Implement feasible contract/schema/transition/test work while respecting dependencies.
+
+- Define a separate, authenticated machine-to-machine observation protocol. Praxis, Ordo, Conditor, Dokimos, Tutela, Aegis and CI must have a common versioned submission envelope (system identity, repo, commit, work item, run/test/check, occurrence, result, redacted evidence, stable eventId/correlation). Do NOT send machines through the anonymous public Turnstile endpoint.
+- Design secure scope-bound, short-lived workload authentication and avoid hardcoded repository credentials. Machine events start as observations; no self-reported failure or green build may automatically confirm or close a defect.
+- Design idempotent submission, bounded outbox/retry and failure visibility while preserving the original build result. Retries cannot spawn multiple authoritative defects, and Vitium's own CI must not recursively create reporting loops.
+- Explicitly implement and test the repeating **repair → verification fails → rework → verification → passes → resolved** loop. An independent failed verification must return `awaiting-verification → in-progress` with run, attempt ID, candidate commit, verifier and failure evidence. Do not mark the defect resolved.
+- Permit `resolved/closed → reopened → in-progress` or `reproducing` when a new occurrence is proven. Preserve prior passing evidence and each historical repair attempt. A UI "resume work" shortcut may apply two guarded events atomically, never erase or bypass the reopen step.
+- On `in-progress → awaiting-verification` capture the candidate revision, attempt ID and verification request. On `awaiting-verification → resolved` require genuine independent pass, not only a passing unrelated build. Inconclusive/flaky/infrastructure failures must remain distinguishable.
+- Preserve stable defect identity across arbitrarily many review/rework iterations, with optimistic concurrency, immutable evidence, auditable transitions, bounded agent retry/budget and explicit human escalation.
+- Add adversarial tests for stale verification, old tests on new candidate revisions, missing failure evidence, forged identity, replay, conflicting authors, recurrence, producer outages, and greenwashed agent self-approval.
+- Do not create upstream production integrations until a scoped service identity, safe environment, and architectural decisions are approved. Document source-specific adapter rollout as first P1 integration increment if not authorized in this P0 mission.
+
 ### Phase E: Real UX, security and quality proof
 
 - Use Forma as the UI component authority and the qualified Limen boundary for events/fetch. Ensure all interactive elements are machine-operable with Playwright.
@@ -152,7 +168,15 @@ Have each agent return: scoped changes/commit, real commands executed, passed/fa
 - Do not ask the user to resolve reversible engineering choices. Use an explicitly recorded, lowest-risk provisional approach and continue. Ask only when an action needs external credentials, spending authorization, irreversible data effects, or a consequential product/privacy decision.
 - Do not pause merely to provide status. Continue executing safe work, recording progress and handoffs, until all feasible P0 work is complete or genuinely blocked.
 
-## 7. End condition
+## 7. Explicit additional acceptance gates
+
+- Machine producer contract and identity model reviewed; versioned Vitium source adapter has testable examples and denies untrusted provider claims.
+- Verified state transition loop including **two or more failed iterations** before a passing verification and a separate later recurrence from resolved/closed.
+- Evidence history and candidate commits do not disappear when verification fails or the issue is reopened.
+- Autonomous Praxis repair attempts stop at a bounded policy threshold and escalate instead of silently declaring success.
+- No agent states that the source producer adapters, machine API or Ordo transition authority are **deployed** without genuine integration evidence.
+
+## 8. End condition
 
 The mission ends with either:
 
