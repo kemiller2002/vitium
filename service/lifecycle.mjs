@@ -16,8 +16,16 @@ export const errorCodes = Object.freeze([
   "invalid_field", "invalid_evidence", "missing_evidence", "self_reference", "invalid_defect_id",
   "unknown_fact", "inconsistent_history", "outcome_mismatch", "attempt_mismatch",
   "duplicate_attempt", "independence_required", "escalation_required", "unknown_event",
-  "author_mismatch", "provenance_conflict", "human_verifier_required"
+  "author_mismatch", "provenance_conflict", "human_verifier_required", "unverified_resolution"
 ]);
+
+// VF-034 containment: the latest event that entered `resolved`, if it was produced by the
+// deprecated legacy entry point (legacyUnguarded), was never checked for author
+// independence or a human verifier. The strict path refuses to build on it.
+function unguardedResolution(history) {
+  const resolution = [...history].reverse().find(e => e?.to === "resolved");
+  return resolution?.legacyUnguarded === true ? resolution : null;
+}
 
 /**
  * Canonical actor identity for comparisons (VF-026): Unicode NFKC, trimmed, lower-cased.
@@ -333,6 +341,11 @@ export function evaluateTransition(table, record, command, options = {}) {
   if (selfRef) return fail("self_reference", "A defect cannot be a " + selfRef + " of itself.");
 
   const history = owned.value;
+  // VF-034: the strict path (no legacy allowance) refuses to CLOSE a resolution recorded by the
+  // legacy entry point; reopening it remains possible, since that withdraws the resolution.
+  if (!options.allowUnrecordedProvenance && rule.from === "resolved" && rule.to === "closed" && unguardedResolution(history)) {
+    return fail("unverified_resolution", "This resolution was recorded without independent-verification guards; reopen and verify it through the strict path before closing.");
+  }
   const attempt = rule.attempt ? checkAttempt(table, rule, record, history, fields, command, actor.value, options) : ok({});
   if (!attempt.ok) return attempt;
   const cleanFields = { ...Object.fromEntries(supplied.map(([k, v]) => [k, v.trim()])), ...attempt.value };

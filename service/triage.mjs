@@ -68,7 +68,16 @@ function fromLegacy(record, command) {
   return { ...command, fields: legacyFields(record, command), evidence };
 }
 
-/** Total variant: returns {ok,value:{record,event}} | {ok:false,error:{code,message}}. */
+/**
+ * @deprecated candidate-model-only. Legacy call shape kept solely for the user-authored
+ * authority tests (tests/triage.test.mjs, tests/state-contract.test.mjs). It records
+ * provenance "unrecorded" and does NOT enforce author independence or the human-verifier
+ * rule (VF-034, DOM-001 s.29). Every event it emits carries `legacyUnguarded: true`, and the
+ * strict path refuses to close a resolution produced here. Production modules must not
+ * import it: tests/domain-legacy-containment.test.mjs fails if any module under service/
+ * (other than this file) or site/ does.
+ * Total variant: returns {ok,value:{record,event}} | {ok:false,error:{code,message}}.
+ */
 export function tryTransition(record, command) {
   // The legacy shape carries no trusted context: its provenance is "unrecorded", which the
   // engine treats as autonomous for the agent repair budget (VF-027) and exempts only from the
@@ -77,15 +86,20 @@ export function tryTransition(record, command) {
   const legacyShape = command && command.fields === undefined;
   const result = evaluateTransition(table, record, fromLegacy(record, command), { allowUnrecordedProvenance: true });
   if (!result.ok) return result;
-  if (!legacyShape) return result;
-  const evidenceId = command.evidence === undefined && typeof command.evidenceId === "string" ? { evidenceId: command.evidenceId.trim(), legacyEvidence: true } : {};
-  // Keep legacy top-level fields (evidenceId, attemptId, ...) so existing history readers still work.
-  const event = Object.freeze({ ...result.value.event.fields, ...result.value.event, ...evidenceId });
+  const evidenceId = legacyShape && command.evidence === undefined && typeof command.evidenceId === "string" ? { evidenceId: command.evidenceId.trim(), legacyEvidence: true } : {};
+  // Keep legacy top-level fields (evidenceId, attemptId, ...) so existing history readers still
+  // work, and mark EVERY event emitted here as produced without the independence and
+  // human-verifier guards (VF-034), so it can never pass for an independently verified result.
+  const event = Object.freeze({ ...(legacyShape ? result.value.event.fields : {}), ...result.value.event, ...evidenceId, legacyUnguarded: true });
   const history = Object.freeze([...result.value.record.history.slice(0, -1), event]);
   return { ok: true, value: Object.freeze({ record: Object.freeze({ ...result.value.record, history }), event }) };
 }
 
-/** Legacy throwing API used by service/triage-cli.mjs. Returns the next record. */
+/**
+ * @deprecated candidate-model-only. Throwing wrapper over tryTransition (same VF-034 caveats:
+ * no author-independence or human-verifier enforcement; events marked legacyUnguarded).
+ * service/triage-cli.mjs uses the strict lifecycle API, not this. Returns the next record.
+ */
 export function transition(record, command) {
   const result = tryTransition(record, command);
   if (!result.ok) throw new TransitionError(result.error.message, result.error.code);
