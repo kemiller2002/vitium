@@ -73,3 +73,22 @@ test("machine-reporting decisions exist, are undecided/unassigned and map to INT
     assert.ok(rows.some(r => r.includes(id)), id);
   }
 });
+
+test("D-25 human operator roles: no default, owner unassigned, referenced from staging E2E", () => {
+  const register = read("docs/operations/OPERATOR-DECISIONS.md");
+  const row = register.split("\n").find(l => l.startsWith("| D-25 |"));
+  assert.ok(row, "D-25 row missing");
+  const cells = row.split("|").map(s => s.trim());
+  assert.equal(cells[3], "UNASSIGNED");
+  assert.match(cells[4], /VITIUM_HUMAN_OPERATOR_ROLE_ARNS/);
+  assert.match(cells[4], /No default/);
+  assert.match(cells[5], /human_verifier_required/);
+  assert.match(cells[6], /VIT-AC-011/);
+  assert.match(cells[6], /VIT-AC-036/);
+  assert.match(cells[7], /VIT-OQ-008/);
+  assert.match(cells[7], /VIT-OQ-012/);
+  assert.doesNotMatch(row, /arn:aws:iam::\d{12}:role\//, "no invented concrete role ARNs");
+  const staging = read("docs/operations/STAGING-READINESS.md");
+  assert.match(staging, /D-25/);
+  assert.match(staging, /^\| E15 \|.*VITIUM_HUMAN_OPERATOR_ROLE_ARNS/m);
+});

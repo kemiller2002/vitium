@@ -29,11 +29,12 @@ Every row is **OPEN** unless its evidence column contains a recorded, witnessed 
 | D-22 | `github-pages` environment protection | UNASSIGNED | Repo Settings → Environments → `github-pages` → deployment branches: `main` only; optional required reviewer | Screenshot or `gh api repos/kemiller2002/vitium/environments/github-pages` | VIT-AC-014 | — |
 | D-23 | Continuous site monitoring and alert route | UNASSIGNED | Scheduled `verify-public-site.mjs` workflow once an alert destination exists | Workflow and alert route recorded | VIT-AC-014 | VIT-OQ-016 |
 | D-24 | Staging hostname for browser E2E (H-01) | UNASSIGNED | Choose `<label>.vitium.echelonfoundry.com`; serve a staging copy of `site/` there; Turnstile widget for that hostname; deploy with `IntakeOrigin`/`ChallengeHostname` overrides (STAGING-READINESS.md S6) | Hostname recorded; `dig` shows its record; staging E1–E4 pass with a token issued for it | VIT-AC-003, VIT-AC-006 | VIT-OQ-003 |
+| D-25 | Human triage/verifier operator roles (VF-035) | UNASSIGNED | Create the human operator IAM role(s), assumable only via SSO with MFA and never by CI or agent workloads. Optionally, as defence in depth, also require the session tag `vitium:actor-kind=human` in the trust policy; the CLI cannot read session tags, so the role ARN list is the control. Set `VITIUM_HUMAN_OPERATOR_ROLE_ARNS` to a comma-separated list of those IAM role ARNs (`arn:aws:iam::<account>:role/[path/]<name>`) wherever `service/triage-cli.mjs` runs. **No default:** unset or empty means every caller is classified `agent` and cannot record a passing verification. A malformed entry fails the whole configuration. | Role ARNs and trust policies recorded. In staging (STAGING-READINESS.md E13/E15), a session of a listed role records `authenticated-human`, and a CI/agent role session records `agent` and is refused a passing verification (`human_verifier_required`). | VIT-AC-011, VIT-AC-036 | VIT-OQ-008, VIT-OQ-012 |
 
 Intake transport contract referenced by these decisions: body cap 24 KiB (24,576 bytes, `service/limits.mjs`), and staging origin parameters `IntakeOrigin`/`ChallengeHostname` constrained to `vitium.echelonfoundry.com` or one subdomain label (forced to canonical values in production by template `Rules`).
 
 Order of operations for the public site: D-01 → D-02 → D-03 → D-04 → D-05 → D-22 → D-06.
-Order for private intake: D-07/D-08/D-09 → D-24 → D-10/D-11 → D-13/D-14/D-15/D-16/D-17 → D-18 → D-19 → D-21 → D-20.
+Order for private intake: D-07/D-08/D-09 → D-24 → D-10/D-11 → D-13/D-14/D-15/D-16/D-17 → D-25 → D-18 → D-19 → D-21 → D-20.
 
 ## Machine reporting (build-system observations): decisions required before any producer rollout
 

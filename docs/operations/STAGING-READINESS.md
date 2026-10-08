@@ -87,8 +87,9 @@ Every test uses synthetic data. Record request IDs, HTTP status and the DynamoDB
 | E10 | Report text containing synthetic token-like canaries | Refused or redacted per domain rules. CloudWatch Logs Insights query for the canary returns 0 rows. | VIT-AC-008, VIT-AC-015 |
 | E11 | Scan the Lambda log group for the canary, the Turnstile token and the report summary | 0 matches | VIT-AC-015 |
 | E12 | Attempt to read or list via the API (any GET, `/api/v1/reports/<ref>`) | 404, no enumeration | VIT-AC-009 |
-| E13 | Triage CLI `queue` / `show` / `advance` with an operator IAM principal, then with a principal lacking permission | Authorized path works with revision guard; unauthorized gets AccessDenied | VIT-AC-011/012 |
+| E13 | Triage CLI `queue` / `show` / `advance` with an operator IAM principal, then with a principal lacking permission. Run with `VITIUM_HUMAN_OPERATOR_ROLE_ARNS` set per [OPERATOR-DECISIONS](OPERATOR-DECISIONS.md) D-25. | Authorized path works with revision guard; unauthorized gets AccessDenied | VIT-AC-011/012 |
 | E14 | PITR restore drill to a new table name (see ROLLBACK-AND-DR.md) | Item count and checksum match; time measured | VIT-AC-027 (P1, informs P0 readiness) |
+| E15 | Operator actor kind (VF-035, D-25): (a) a session of a role listed in `VITIUM_HUMAN_OPERATOR_ROLE_ARNS`; (b) a CI/agent role session; (c) the variable unset; (d) the variable containing a malformed entry | (a) records `authenticated-human` and may record a passing verification. (b) and (c) record `agent`, and a passing verification is refused with `human_verifier_required`. (d) the CLI exits 2 before any AWS call, with a message naming the malformed entry. | VIT-AC-011, VIT-AC-036 |
 
 Example log check (E11):
 
