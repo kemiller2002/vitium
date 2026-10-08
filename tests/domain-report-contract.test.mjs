@@ -39,7 +39,9 @@ test("shared report cases: runtime result and schema verdict match the recorded 
     assert.equal(r.ok, c.expect.ok, c.name);
     if (c.expect.ok) assert.deepEqual({ ...r.value }, c.expect.value, c.name);
     const wire = { ...c.input, challengeToken: "challenge-token-123" };
-    assert.equal(schemaAccepts(wire), c.expect.ok, c.name + " (schema): " + JSON.stringify(schemaAccepts.errors));
+    // schemaExpect: a documented gap the schema language cannot express (only VF-011, DOM-001 s.23).
+    assert.equal(schemaAccepts(wire), c.schemaExpect ?? c.expect.ok, c.name + " (schema): " + JSON.stringify(schemaAccepts.errors));
+    if (c.schemaExpect !== undefined) assert.ok(c.schemaGap && c.name.startsWith("VF-011"), "every schema gap is documented and limited to VF-011");
   }
 });
 
