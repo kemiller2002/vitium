@@ -7,7 +7,6 @@
     <Authors>Echelon Foundry</Authors>
     <Description>Authenticated, typed client for submitting Echelon Vitium observations and independent verification results.</Description>
     <PackageTags>echelon;vitium;client;defect;reporting</PackageTags>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/kemiller2002/vitium</PackageProjectUrl>
     <RepositoryUrl>https://github.com/kemiller2002/vitium</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
