@@ -1,175 +1,162 @@
-import { normalizeReport, buildIssueUrl } from "./submission.mjs";
+// Browser host for the Vitium reporter. It is the only module that touches the
+// DOM, network, timers, randomness or the challenge widget. It turns DOM events
+// into semantic events, runs the pure transition (state.mjs), applies the pure
+// projection (view.mjs) and performs the requested effects. In the Limen
+// migration this file becomes the Limen BrowserKernel configuration plus
+// bindings (docs/ux/LIMEN-MIGRATION-PLAN.md).
+import { initialState, transition, TEXT_FIELDS } from "./state.mjs";
+import { project, applyView } from "./view.mjs";
+import { resolveChannel, makeHttpPerformer } from "./private-intake.mjs";
 import { publicIntake } from "./public-config.mjs";
 
-const form = document.getElementById("defect-form");
-const feedback = document.getElementById("feedback");
-const review = document.getElementById("review");
-const progress = document.getElementById("progress");
-const submitLink = document.getElementById("submit-link");
-const submitPrivate = document.getElementById("submit-private");
-const success = document.getElementById("private-success");
+export function startReporter({ doc, win, config, effects }) {
+  const channel = resolveChannel(config);
+  if (channel === "private") mountPrivateUi(doc);
 
-const privateConfigured = publicIntake.enabled === true &&
-  publicIntake.endpoint === "https://intake.vitium.echelonfoundry.com/api/v1/reports" &&
-  typeof publicIntake.turnstileSiteKey === "string" &&
-  /^[A-Za-z0-9_-]{10,120}$/.test(publicIntake.turnstileSiteKey);
+  let state = initialState(channel);
+  let view = null;
 
-let draft = null;
-let requestId = null;
-let challengeToken = "";
-let widgetId = null;
-let sending = false;
+  const render = () => {
+    const next = project(state);
+    applyView(doc, next, view);
+    view = next;
+  };
 
-function showError(message) {
-  feedback.textContent = message;
-  feedback.hidden = false;
-  feedback.focus();
-}
-function clearError() { feedback.textContent = ""; feedback.hidden = true; }
-function setPreview(id, value) { document.getElementById("preview-" + id).textContent = value; }
+  const dispatch = event => {
+    const { state: nextState, effects: requested } = transition(state, event);
+    state = nextState;
+    render();
+    for (const effect of requested) runEffect(effect);
+  };
 
-if (privateConfigured) {
-  document.getElementById("github-foot").hidden = true;
-  document.getElementById("private-foot").hidden = false;
-  document.getElementById("privacy-heading").textContent = "Private reporting";
-  document.getElementById("privacy-description").textContent =
-    "Reports are received privately for triage. Please do not include passwords, payment data, access tokens, or sensitive personal information.";
-  document.getElementById("review-overline").textContent = "Review before sending";
-  document.getElementById("github-destination").hidden = true;
-  document.getElementById("private-destination").hidden = false;
-  submitLink.hidden = true;
-  submitPrivate.hidden = false;
-  document.querySelector(".nav-link").hidden = true;
-}
-
-async function setupChallenge() {
-  if (!privateConfigured) return;
-  if (window.turnstile && widgetId !== null) return;
-  if (!window.turnstile) {
-    const script = document.createElement("script");
-    script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
-    script.async = true;
-    document.head.appendChild(script);
-    await new Promise((resolve,reject)=>{
-      script.addEventListener("load",resolve,{once:true});
-      script.addEventListener("error",()=>reject(new Error("Verification failed to load. Please try again.")),{once:true});
-    });
+  function runEffect(effect) {
+    switch (effect.kind) {
+      case "PerformHttp":
+        effects.performHttp(effect.request).then(
+          outcome => dispatch({ type: "SubmitCompleted", correlationId: effect.request.correlationId, outcome }),
+          () => dispatch({ type: "SubmitCompleted", correlationId: effect.request.correlationId, outcome: { kind: "OutcomeUnknown", reason: "connection-lost" } })
+        );
+        break;
+      case "RenderChallenge":
+        effects.challenge.render({
+          onToken: token => dispatch({ type: "ChallengeSolved", token }),
+          onExpired: () => dispatch({ type: "ChallengeExpired" }),
+          onUnavailable: () => dispatch({ type: "ChallengeUnavailable" })
+        });
+        break;
+      case "ResetChallenge":
+        effects.challenge.reset();
+        break;
+      default:
+        break;
+    }
   }
-  if (!window.turnstile) throw new Error("Verification is currently unavailable.");
-  if (widgetId !== null) return;
-  widgetId=window.turnstile.render("#turnstile-challenge",{
-    sitekey:publicIntake.turnstileSiteKey,
-    action:"vitium-intake",
-    callback:token=>{challengeToken=token;},
-    "expired-callback":()=>{challengeToken="";},
-    "error-callback":()=>{challengeToken="";}
+
+  const form = doc.getElementById("defect-form");
+  const readValues = () => {
+    const data = new FormData(form);
+    const values = Object.fromEntries(TEXT_FIELDS.map(field => [field, String(data.get(field) ?? "")]));
+    return { ...values, privacyAcknowledged: doc.getElementById("privacyAcknowledged").checked };
+  };
+
+  form.addEventListener("input", event => {
+    const target = event.target;
+    if (!target?.name) return;
+    dispatch({ type: "FieldChanged", field: target.name, value: target.type === "checkbox" ? target.checked : target.value });
+  });
+  form.addEventListener("submit", event => {
+    event.preventDefault();
+    dispatch({ type: "ReviewRequested", values: readValues(), requestId: effects.newRequestId() });
+  });
+  doc.getElementById("edit").addEventListener("click", () => dispatch({ type: "EditRequested" }));
+  doc.getElementById("cancel-review").addEventListener("click", () => dispatch({ type: "CancelRequested" }));
+  doc.getElementById("submit-link").addEventListener("click", () => dispatch({ type: "HandoffOpened" }));
+  doc.getElementById("feedback").addEventListener("click", event => {
+    const link = event.target.closest?.("a[data-error-for]");
+    if (!link) return;
+    event.preventDefault();
+    const control = doc.getElementById(link.dataset.errorFor);
+    if (!control) return;
+    const details = control.closest("details");
+    if (details) details.open = true;
+    control.focus();
+  });
+  if (channel === "private") {
+    doc.getElementById("submit-private").addEventListener("click", () => dispatch({ type: "SubmitRequested" }));
+    doc.getElementById("report-another").addEventListener("click", () => dispatch({ type: "ResetRequested" }));
+  }
+
+  render();
+  doc.documentElement.dataset.vitiumReady = "true";
+  return { getState: () => state, dispatch };
+}
+
+function mountPrivateUi(doc) {
+  const insert = (templateId, slotId) => {
+    const template = doc.getElementById(templateId);
+    const slot = doc.getElementById(slotId);
+    if (template && slot) slot.replaceWith(template.content.cloneNode(true));
+  };
+  insert("private-review-template", "private-slot");
+  insert("private-submit-template", "private-submit-slot");
+  insert("private-result-template", "private-result-slot");
+  doc.getElementById("github-foot").hidden = true;
+  doc.getElementById("existing-reports-link").hidden = true;
+}
+
+// Cloudflare Turnstile adapter (effect). Only constructed when the private
+// channel is enabled; never loaded otherwise.
+export function makeTurnstileChallenge({ doc, win, siteKey }) {
+  let widgetId = null;
+  let loading = null;
+  const load = () => {
+    if (win.turnstile) return Promise.resolve();
+    loading ??= new Promise((resolve, reject) => {
+      const script = doc.createElement("script");
+      script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+      script.async = true;
+      script.addEventListener("load", resolve, { once: true });
+      script.addEventListener("error", reject, { once: true });
+      doc.head.appendChild(script);
+    }).finally(() => { loading = null; });
+    return loading;
+  };
+  return {
+    render({ onToken, onExpired, onUnavailable }) {
+      load().then(() => {
+        if (!win.turnstile) return onUnavailable();
+        if (widgetId !== null) { win.turnstile.reset(widgetId); return; }
+        widgetId = win.turnstile.render("#turnstile-challenge", {
+          sitekey: siteKey, action: "vitium-intake",
+          callback: onToken, "expired-callback": onExpired, "error-callback": onUnavailable
+        });
+      }, onUnavailable);
+    },
+    reset() {
+      if (win.turnstile && widgetId !== null) win.turnstile.reset(widgetId);
+    }
+  };
+}
+
+const disabledChallenge = Object.freeze({ render: ({ onUnavailable }) => onUnavailable(), reset: () => {} });
+
+if (typeof document !== "undefined" && typeof window !== "undefined") {
+  const channel = resolveChannel(publicIntake);
+  startReporter({
+    doc: document,
+    win: window,
+    config: publicIntake,
+    effects: {
+      newRequestId: () => crypto.randomUUID(),
+      performHttp: makeHttpPerformer({
+        fetchFn: (url, init) => window.fetch(url, init),
+        setTimer: (fn, ms) => window.setTimeout(fn, ms),
+        clearTimer: id => window.clearTimeout(id),
+        isOnline: () => navigator.onLine !== false
+      }),
+      challenge: channel === "private"
+        ? makeTurnstileChallenge({ doc: document, win: window, siteKey: publicIntake.turnstileSiteKey })
+        : disabledChallenge
+    }
   });
 }
-function resetChallenge() {
-  challengeToken="";
-  if (window.turnstile && widgetId!==null) window.turnstile.reset(widgetId);
-}
-form.addEventListener("submit", async event => {
-  event.preventDefault();
-  clearError();
-  if (!form.reportValidity()) return;
-  const data = new FormData(form);
-  try {
-    draft=normalizeReport({
-      product:data.get("product"),
-      impact:data.get("impact"),
-      title:data.get("title"),
-      actual:data.get("actual"),
-      expected:data.get("expected"),
-      steps:data.get("steps"),
-      pageUrl:data.get("pageUrl"),
-      privacyAcknowledged:document.getElementById("privacyAcknowledged").checked
-    });
-    if (!privateConfigured) submitLink.href = buildIssueUrl(draft);
-    for (const key of ["product","impact","title","actual","expected"]) setPreview(key,draft[key]);
-    for (const key of ["steps","pageUrl"]) {
-      setPreview(key,draft[key]);
-      document.getElementById("preview-" + (key==="pageUrl"?"url":"steps") + "-row").hidden = !draft[key];
-    }
-    requestId=crypto.randomUUID();
-    form.hidden = true;
-    review.hidden = false;
-    progress.textContent = "Step 2 of 2 · Review your report";
-    review.focus();
-    if (privateConfigured) {
-      try { await setupChallenge(); }
-      catch(error){ showError(error instanceof Error?error.message:"Verification is unavailable."); }
-    }
-  } catch(error) {
-    showError(error instanceof Error?error.message:"We couldn't prepare your report. Please try again.");
-  }
-});
-document.getElementById("edit").addEventListener("click",()=>{
-  if (sending) return;
-  clearError();
-  review.hidden=true;
-  form.hidden=false;
-  draft=null;
-  requestId=null;
-  resetChallenge();
-  progress.textContent="Step 1 of 2 · Describe the problem";
-  document.getElementById("title").focus();
-});
-submitPrivate.addEventListener("click",async()=>{
-  if (!privateConfigured || !draft || sending) return;
-  clearError();
-  if (!challengeToken) {
-    showError("Complete the verification challenge before sending.");
-    return;
-  }
-  sending=true;
-  submitPrivate.disabled=true;
-  submitPrivate.textContent="Sending…";
-  const controller=new AbortController();
-  const timeout=setTimeout(()=>controller.abort(),15000);
-  try {
-    const resp=await fetch(publicIntake.endpoint,{
-      method:"POST",
-      mode:"cors",
-      headers:{"Content-Type":"application/json","Idempotency-Key":requestId},
-      body:JSON.stringify({...draft,privacyAcknowledged:true,challengeToken}),
-      signal:controller.signal,
-      cache:"no-store"
-    });
-    let body;
-    try { body=await resp.json(); } catch { body=null; }
-    if (!resp.ok) {
-      throw new Error(body?.message && typeof body.message==="string" ? body.message : "The report could not be accepted. Please retry.");
-    }
-    if (!body || body.status!=="received" || typeof body.reference!=="string" || !/^VIT-[A-Za-z0-9-]{8,}$/.test(body.reference)) {
-      throw new Error("The service did not confirm receipt. Please retry.");
-    }
-    review.hidden=true;
-    success.hidden=false;
-    document.getElementById("report-reference").textContent=body.reference;
-    progress.textContent="Report received";
-    // In-memory draft must not persist after acceptance.
-    draft=null;
-    requestId=null;
-    success.focus();
-  } catch(error) {
-    showError(error instanceof Error?error.message:"The report could not be sent. Please retry.");
-  } finally {
-    clearTimeout(timeout);
-    sending=false;
-    submitPrivate.disabled=false;
-    submitPrivate.textContent="Send private report →";
-    resetChallenge(); // A one-time challenge token cannot be reused after failure.
-  }
-});
-document.getElementById("report-another").addEventListener("click",()=>{
-  clearError();
-  form.reset();
-  success.hidden=true;
-  form.hidden=false;
-  review.hidden=true;
-  draft=null;
-  requestId=null;
-  progress.textContent="Step 1 of 2 · Describe the problem";
-  document.getElementById("product").focus();
-});
