@@ -4,6 +4,12 @@ Vitium is Echelon Foundry's cross-repository defect reporting and quality intell
 
 **Canonical site:** https://vitium.echelonfoundry.com/
 
+## Product requirements
+
+Vitium's **proposed end-to-end product baseline** is [docs/requirements/VITIUM-REQUIREMENTS.md](docs/requirements/VITIUM-REQUIREMENTS.md), with [31 acceptance scenarios](docs/requirements/VITIUM-ACCEPTANCE.md) and [open product/architecture decisions](docs/requirements/VITIUM-OPEN-DECISIONS.md). The baseline currently contains 79 scoped requirements across reporting, domain records, secure intake, lifecycle, Echelon integration, independent verification, operations and governance.
+
+**Status:** Proposed, not approved or fully implemented. Decisions and production acceptance evidence remain outstanding. See [current state](context/CURRENT-STATE.md). Related tracked implementation issues are #1–#13.
+
 ## Report a defect
 
 The first delivery is a public, accessible report form in `site/`. It collects a structured report, lets the reporter review it, and opens a prefilled GitHub Issue for the reporter to submit.
