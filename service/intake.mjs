@@ -15,8 +15,9 @@
 //   reference()               -> opaque high-entropy receipt reference
 //
 // Ordering guarantees (each guarded by a mutation-tested test):
-//   validate -> [lookup: known key? same canonical hash -> original receipt | different -> 409]
-//            -> verify challenge -> persist -> receipt.
+//   validate -> token pre-filter (present-but-malformed refused, no I/O)
+//            -> [lookup: known key + same canonical hash -> original receipt, no challenge]
+//            -> verify challenge -> [known key + different hash -> 409] -> persist -> receipt.
 //   Nothing is ever WRITTEN without a verified challenge; no receipt without a confirmed durable
 //   write (or a durable record found by lookup). A replay discloses only what the caller already
 //   proved it has: the full canonical body under the same random key.
@@ -183,19 +184,30 @@ export function makeIntake({store, verifyChallenge, now = () => new Date().toISO
       const pk = "REQUEST#" + storageKey.value;
       const hash = payloadHash(prepared.value.report);
 
-      // Idempotent replay (VF-010): a known key is answered from durable state, before and
-      // without the challenge. Different canonical content under the key is a 409 that
-      // reveals nothing stored. Nothing is written on this path.
+      // VF-024 pre-filter: a token that is PRESENT but malformed is refused before any I/O.
+      // An ABSENT token is allowed through to the lookup only so an identical replay can be
+      // answered (VF-010); a fresh key then fails the shape check below with the same
+      // response. (A syntactic check cannot bound cost against a caller who sends any
+      // well-formed fake token; see SEC-001 "Unchallenged storage reads".)
+      const token = checkChallengeShape(challengeToken);
+      if (challengeToken !== undefined && !token.ok) return token;
+
+      // Idempotent replay (VF-010): a known key with the SAME canonical hash is answered from
+      // durable state without a challenge (the caller already holds key + full body).
       const known = await settleLookup(store, pk);
       if (!known.ok) return fail(intakeFailure(known.error === "throttled" ? "throttled" : "storage_unavailable"));
-      if (known.value.found) return decideReceipt({payloadHash: hash}, ok({created:false, existing:known.value.existing}));
+      const sameReport = known.value.found && known.value.existing?.payloadHash === hash;
+      if (sameReport) return decideReceipt({payloadHash: hash}, ok({created:false, existing:known.value.existing}));
 
-      const token = checkChallengeShape(challengeToken);
+      // Everything else -- a fresh key, OR a known key with different content -- must pass the
+      // same challenge first. Until then both cases return identical responses, so an
+      // unchallenged caller cannot learn whether a key was used (VF-023).
       if (!token.ok) return token;
-
       const challenge = await settleChallenge(verifyChallenge, token.value);
       if (!challenge.ok) return fail(intakeFailure(challenge.error === "misconfigured" ? "service_unavailable" : "challenge_unavailable"));
       if (challenge.value !== true) return fail(intakeFailure("challenge_failed"));
+      // Verified caller, used key, different content: typed conflict, catalogue-only body.
+      if (known.value.found) return decideReceipt({payloadHash: hash}, ok({created:false, existing:known.value.existing}));
 
       const item = buildObservation({
         storageKey: storageKey.value, ...prepared.value,

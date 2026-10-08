@@ -213,7 +213,7 @@ test("I-08 quarantined observations land in the quarantine queue partition with 
   assert.equal(item.visibility.S, "private");
 });
 
-test("I-09 VF-010 sequential replay via lookup: same body -> original receipt without a challenge; different body -> 409, nothing disclosed", async () => {
+test("I-09 VF-010/VF-023 sequential replay via lookup: same body -> receipt without a challenge; different body -> challenged, then 409 disclosing nothing", async () => {
   const table = await freshTable();
   const key = crypto.randomUUID();
   const first = await liveLikeHandler(table)(event(key, report({actual:"Original private EMULATORTEXT"})));
@@ -225,9 +225,15 @@ test("I-09 VF-010 sequential replay via lookup: same body -> original receipt wi
   const same = await noChallenge(event(key, report({actual:"Original private EMULATORTEXT"})));
   assert.equal(same.statusCode, 200);
   assert.equal(JSON.parse(same.body).reference, JSON.parse(first.body).reference);
+  assert.equal(sent.length, 0, "identical replay must not call the challenge provider");
+  // VF-023: a different body under a used key is challenged first; a failing challenge looks
+  // exactly like an unused key, a passing one yields a catalogue-only 409.
+  const unknown = await noChallenge(event(crypto.randomUUID(), report({actual:"Guess"})));
   const other = await noChallenge(event(key, report({actual:"Guess"})));
-  assert.equal(other.statusCode, 409);
-  for (const leak of [JSON.parse(first.body).reference, JSON.parse(first.body).receivedAt, "EMULATORTEXT"]) assert.ok(!other.body.includes(leak));
-  assert.equal(sent.length, 0, "replay path must not call the challenge provider");
+  assert.equal(other.statusCode, 403);
+  assert.equal(other.body, unknown.body);
+  const verified = await liveLikeHandler(table)(event(key, report({actual:"Guess"})));
+  assert.equal(verified.statusCode, 409);
+  for (const leak of [JSON.parse(first.body).reference, JSON.parse(first.body).receivedAt, "EMULATORTEXT"]) assert.ok(!verified.body.includes(leak));
   assert.equal((await allItems(table)).length, 1);
 });

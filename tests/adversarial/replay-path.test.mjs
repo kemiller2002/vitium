@@ -63,7 +63,7 @@ test("VIT-API-004: replay is read-only and does not spend a challenge", async ()
 // e.g. from a shared device or logs) learns whether that key was used. Required: an
 // unknown key and a known key with a different body must be indistinguishable to a
 // caller that has not passed a challenge.
-test("VIT-AC-009 / VIT-API-010: an unchallenged caller cannot tell an unused key from a used key with a different body", { todo: "finding VF-023" }, async () => {
+test("VIT-AC-009 / VIT-API-010: an unchallenged caller cannot tell an unused key from a used key with a different body", async () => {
   const h = harness();
   await send(h, validRequest(), IDEMPOTENCY_KEY, CHALLENGE);
   const unknown = parse(await send(h, validRequest({ title: "probe" }), OTHER));

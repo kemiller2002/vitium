@@ -66,10 +66,13 @@ test("R-01 VF-010: lost-response retry (same key, same body, SAME spent token) r
   assert.equal(store.journal.filter(x => x === "challenge").length, 1, "replay must not consume a challenge");
 });
 
-test("R-02 VF-010: same key + different body is a 409 that discloses nothing, with or without a valid token", async () => {
+test("R-02 VF-010/VF-023: same key + different body: spent token -> same 403 as an unused key; verified token -> 409 disclosing nothing", async () => {
   const {store, handle} = fixture();
   const first = parse(await handle(event(valid({actual:"Original private text QWERTY."}))));
-  for (const token of ["challenge-token-0001", "challenge-token-fresh-0002"]) {
+  const spent = parse(await handle(event(valid({actual:"Guess"}), {token:"challenge-token-0001"})));
+  assert.equal(spent.status, 403);
+  assert.equal(spent.body.code, "challenge_failed");
+  for (const token of ["challenge-token-fresh-0002"]) {
     const reply = await handle(event(valid({actual:"Guess"}), {token}));
     const r = parse(reply);
     assert.equal(r.status, 409);
