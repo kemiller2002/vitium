@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { PRODUCTS, IMPACTS, normalizeReport, formatIssueBody, buildIssueUrl } from "../site/submission.mjs";
+import {
+  PRODUCTS, IMPACTS, FIELD_ORDER, normalizeReport, validateReport, formatIssueBody, buildIssueUrl, tryBuildIssueUrl
+} from "../site/submission.mjs";
 
 const valid = (changes = {}) => ({
   product: "Forma",
@@ -73,4 +75,42 @@ test("too-large encoded links are rejected, not silently shortened", () => {
 test("empty optional steps and URL are allowed", () => {
   const r = normalizeReport(valid({ steps: "", pageUrl: "" }));
   assert.match(formatIssueBody(r), /_Not provided_/);
+});
+
+test("validateReport is total and reports every invalid field in form order", () => {
+  for (const raw of [null, undefined, 3, "x"]) assert.equal(validateReport(raw).ok, false);
+  const result = validateReport({ steps: "s".repeat(901), pageUrl: "ftp://x" });
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.errors.map(e => e.field),
+    ["product", "impact", "title", "actual", "expected", "steps", "pageUrl", "privacyAcknowledged"]);
+  assert.deepEqual(FIELD_ORDER, result.errors.map(e => e.field));
+  for (const e of result.errors) assert.ok(typeof e.code === "string" && typeof e.message === "string");
+  const ok = validateReport(valid());
+  assert.equal(ok.ok, true);
+  assert.deepEqual(ok.value, normalizeReport(valid()));
+});
+
+test("URL sanitisation removes credentials, query and fragment for every accepted URL shape", () => {
+  const cases = [
+    ["https://user:pa55@example.com/a/b?token=t#frag", "https://example.com/a/b"],
+    ["http://example.com:8080/x;jsessionid=abc?x=1", "http://example.com:8080/x;jsessionid=abc"],
+    ["HTTPS://EXAMPLE.com/Path#access_token=zzz", "https://example.com/Path"],
+    ["https://example.com", "https://example.com/"],
+    ["https://example.com/?", "https://example.com/"]
+  ];
+  for (const [input, expected] of cases) {
+    const r = validateReport(valid({ pageUrl: input }));
+    assert.equal(r.ok, true, input);
+    assert.equal(r.value.pageUrl, expected, input);
+    assert.doesNotMatch(buildIssueUrl(r.value), /pa55|token=t|frag|access_token|x%3D1/);
+  }
+});
+
+test("tryBuildIssueUrl is total and agrees with buildIssueUrl", () => {
+  const r = normalizeReport(valid());
+  assert.deepEqual(tryBuildIssueUrl(r), { ok: true, value: buildIssueUrl(r) });
+  const big = normalizeReport(valid({ actual: "🪲".repeat(550), expected: "✔".repeat(1000), steps: "🐛".repeat(430) }));
+  const failed = tryBuildIssueUrl(big);
+  assert.equal(failed.ok, false);
+  assert.equal(failed.error.code, "handoff_too_long");
 });
