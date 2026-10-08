@@ -1,5 +1,7 @@
 # Public defect reporting
 
+**Scope:** This is the public-intake subsystem specification. The cross-product product requirements authority is [VITIUM-REQUIREMENTS.md](requirements/VITIUM-REQUIREMENTS.md), with [acceptance](requirements/VITIUM-ACCEPTANCE.md) and [open decisions](requirements/VITIUM-OPEN-DECISIONS.md). This document's initial GitHub handoff is not a confidential intake channel or a claim that the future API works.
+
 ## Current release: browser form + explicit GitHub handoff
 
 The `site/` reporting interface is public and needs no GitHub credentials while the visitor fills in and reviews the draft. **It does not submit anything itself.** On **Continue to GitHub**, it opens a prefilled GitHub issue in `kemiller2002/vitium`. The visitor signs in, reviews the public issue, and completes submission there. The browser does not store the draft.
