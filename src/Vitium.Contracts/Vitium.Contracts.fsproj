@@ -5,6 +5,7 @@
     <PackageId>EchelonFoundry.Vitium.Contracts</PackageId>
     <Version>0.1.0-preview.1</Version>
     <Authors>Echelon Foundry</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <Description>Versioned, typed observations and verification contracts for Echelon Foundry Vitium.</Description>
     <PackageTags>echelon;vitium;defect;reporting;contracts</PackageTags>
     <PackageProjectUrl>https://github.com/kemiller2002/vitium</PackageProjectUrl>
