@@ -1,0 +1,121 @@
+name: Conditor governance verification
+# Verifies the COMMITTED Conditor/Praxis/Ordo installed state. Never runs
+# `init`, never repairs and never commits: any missing, drifted or
+# unqualified lifecycle state fails this job.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  attestations: read
+
+jobs:
+  verify-installed-state:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require committed lifecycle state
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in conditor.json .conditor/lock.json .echelon/ros.json .echelon/sde.json .echelon/toolchain.json ros.json .sde/MANIFEST.json; do
+            if [ ! -f "$path" ]; then
+              echo "::error file=$path::Required Conditor-managed state is missing"
+              exit 1
+            fi
+          done
+      - name: Install verified Conditor
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/bin" "$RUNNER_TEMP/conditor-release"
+          cd "$RUNNER_TEMP/conditor-release"
+          gh release download v0.5.0 --repo kemiller2002/conditor \
+            --pattern 'conditor-linux-x64' --pattern 'checksums.txt'
+          grep -E 'conditor-linux-x64$' checksums.txt | sha256sum --check -
+          gh attestation verify ./conditor-linux-x64 --repo kemiller2002/conditor
+          install -m 755 ./conditor-linux-x64 "$RUNNER_TEMP/bin/conditor"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Install verified Praxis and Ordo native dependencies
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for spec in 'praxis v3.7.2 praxis-linux-x64.tar.gz' 'ordo v1.5.0 ordo-linux-x64.tar.gz'; do
+            read -r repo version asset <<< "$spec"
+            mkdir -p "$RUNNER_TEMP/$repo"
+            cd "$RUNNER_TEMP/$repo"
+            gh release download "$version" --repo "kemiller2002/$repo" \
+              --pattern "$asset" --pattern 'native-checksums.txt'
+            grep -F "$asset" native-checksums.txt | sha256sum --check -
+            gh attestation verify "./$asset" --repo "kemiller2002/$repo"
+            tar -xzf "$asset"
+            executable=$(find . -type f -name "$repo" | head -n 1)
+            if [ -z "$executable" ]; then
+              echo "::error::Native $repo executable not found in its attested archive"
+              exit 1
+            fi
+            if [ "$repo" = "ordo" ]; then
+              # Mirrors Ordo's own scripts/install-native.sh launcher, which
+              # points SDE_PAYLOAD_DIR at the archive's adjacent dist/ payload.
+              tool_root="$RUNNER_TEMP/ordo-native"
+              mkdir -p "$tool_root"
+              cp -a "$(dirname "$executable")"/. "$tool_root/"
+              printf '#!/bin/sh\nSDE_PAYLOAD_DIR="%s/dist" exec "%s/ordo" "$@"\n' "$tool_root" "$tool_root" > "$RUNNER_TEMP/bin/ordo"
+              chmod +x "$RUNNER_TEMP/bin/ordo"
+            else
+              install -m 755 "$executable" "$RUNNER_TEMP/bin/$repo"
+              sidecar="$(dirname "$executable")/$repo-bin"
+              if [ -f "$sidecar" ]; then
+                install -m 755 "$sidecar" "$RUNNER_TEMP/bin/$repo-bin"
+              fi
+            fi
+          done
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Confirm exact tool versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(praxis --version)" = "praxis 3.7.2"
+          test "$(ordo --version)" = "1.5.0"
+      - name: Verify committed installed state (read-only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/governance"
+          # verify runs every component's own verify contract.
+          conditor verify --target . --manifest ./conditor.json
+          # doctor and status also compare conditor.json with .conditor/lock.json and
+          # the resolved component identities; verify alone does not check the lock.
+          conditor doctor --json --target . --manifest ./conditor.json > "$RUNNER_TEMP/governance/doctor.json"
+          conditor status --json --target . --manifest ./conditor.json > "$RUNNER_TEMP/governance/status.json"
+          node -e 'for (const f of process.argv.slice(1)) { const r = JSON.parse(require("fs").readFileSync(f, "utf8")); if (r.healthy !== true) { console.error(f + " reports unhealthy"); process.exit(1); } }' \
+            "$RUNNER_TEMP/governance/doctor.json" "$RUNNER_TEMP/governance/status.json"
+          praxis verify --strict
+          ordo verify --integrity-only --json > "$RUNNER_TEMP/governance/ordo-verify.json"
+          node -e 'const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); if (r.passed !== true || r.installedVersion !== "1.5.0") process.exit(1);' \
+            "$RUNNER_TEMP/governance/ordo-verify.json"
+      - name: Fail if verification modified the tree
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git status --short --untracked-files=all
+          git diff --exit-code
+          untracked=$(git ls-files --others --exclude-standard)
+          if [ -n "$untracked" ]; then
+            echo "::error::Verification produced untracked files"
+            echo "$untracked"
+            exit 1
+          fi
+      - name: Governance contract tests
+        run: node --test tests/governance.test.mjs

@@ -1,0 +1,56 @@
+[
+  {
+    "author_agent": "claude-code (claude-opus-5-5)",
+    "confidence": "medium-high",
+    "created": "2026-10-08",
+    "id": "DF-GOV-2026-C0E6",
+    "owners": [
+      "repository-governance"
+    ],
+    "path": "research/decisions/DF-GOV-2026-C0E6--conditor-lifecycle-installation-and-ci-verification.md",
+    "provenance": {
+      "contributions": {
+        "EXE-20261008T125753191Z-b0366397": {
+          "actor": {
+            "id": "claude-code",
+            "kind": "agent",
+            "model": "claude-opus-5-5",
+            "provider": "anthropic",
+            "runtime": "claude-code"
+          },
+          "at": "2026-10-08T13:08:35.000Z",
+          "evidence": [
+            ".conditor/lock.json",
+            ".github/workflows/conditor-governance.yml"
+          ],
+          "operations": [
+            "created"
+          ],
+          "reason": "Records the Conditor installation and CI verification decision for VIT-P0-GOV-001"
+        }
+      }
+    },
+    "related_documents": [
+      "conditor.json",
+      ".conditor/lock.json",
+      "docs/GOVERNANCE.md",
+      ".github/workflows/conditor-governance.yml",
+      "docs/agent-scripts/CLAUDE-VITIUM-P0.md"
+    ],
+    "status": "review",
+    "superseded_by": [],
+    "supersedes": [],
+    "supporting_evidence": [],
+    "tags": [
+      "governance",
+      "conditor",
+      "praxis",
+      "ordo",
+      "ci",
+      "p0"
+    ],
+    "title": "Conditor lifecycle installation and committed-state CI verification for Vitium",
+    "updated": "2026-10-08",
+    "version": "1.0.0"
+  }
+]
