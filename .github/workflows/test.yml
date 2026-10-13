@@ -41,6 +41,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ui-conformance-${{ github.sha }}
-          path: tests/ui-conformance/.output/
+          path: tests/ui-conformance/output/
           if-no-files-found: warn
           retention-days: 30

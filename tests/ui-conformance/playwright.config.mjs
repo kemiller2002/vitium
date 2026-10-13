@@ -12,7 +12,7 @@ const PORT = Number(process.env.VITIUM_UI_PORT ?? 4180);
 const ROOT = new URL("../../", import.meta.url).pathname;
 // Override only to measure another build of the site (e.g. a baseline checkout).
 const SITE_ROOT = process.env.VITIUM_UI_SITE_ROOT ?? "site";
-const OUTPUT = new URL("./.output/", import.meta.url).pathname;
+const OUTPUT = new URL("./output/", import.meta.url).pathname;
 
 const resolveExecutable = env => {
   if (env.VITIUM_CHROMIUM_EXECUTABLE) return env.VITIUM_CHROMIUM_EXECUTABLE;

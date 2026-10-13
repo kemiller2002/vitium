@@ -373,6 +373,14 @@ test.describe("alignment groups (ULI-L01, ULI-L02, ULI-L07, ULI-L10)", () => {
   });
 });
 
+// ULI-L05 "no offscreen critical action": the action must be fully showable.
+// Scroll it to the viewport centre rather than flush to an edge: edge-aligned
+// scrolling (scrollIntoViewIfNeeded) lands on an integer scroll offset, so an
+// element at a fractional y (font metrics differ between machines) can stay
+// clipped by a fraction of a pixel at the edge although nothing hides it.
+// Centering removes that edge artifact; the ratio stays exactly 1.
+const revealCentered = locator => locator.evaluate(node => node.scrollIntoView({ block: "center", inline: "nearest" }));
+
 test.describe("responsive overflow and state geometry (ULI-L05, ULI-L06, ULI-L08, ULI-L09)", () => {
   for (const width of [...VIEWPORT_WIDTHS, ZOOM_200_WIDTH]) {
     test(`no clipping or horizontal scroll across states at ${width}px`, async ({ page }) => {
@@ -391,7 +399,7 @@ test.describe("responsive overflow and state geometry (ULI-L05, ULI-L06, ULI-L08
       });
       await control.review(page).click();
       await expect(control.feedback(page)).toBeVisible();
-      await control.review(page).scrollIntoViewIfNeeded();
+      await revealCentered(control.review(page));
       await expect(control.review(page)).toBeInViewport({ ratio: 1 }); // critical action fully reachable, not clipped offscreen
       await expectNoOverflow(page, `error state ${width}px`);
 
@@ -399,9 +407,10 @@ test.describe("responsive overflow and state geometry (ULI-L05, ULI-L06, ULI-L08
       await control.review(page).click();
       await expect(control.reviewHeading(page)).toBeVisible();
       await expectNoOverflow(page, `review state ${width}px`);
-      await control.github(page).scrollIntoViewIfNeeded();
-      await expect(control.github(page)).toBeInViewport({ ratio: 1 });
-      await expect(control.edit(page)).toBeInViewport({ ratio: 1 });
+      for (const action of [control.github(page), control.edit(page)]) {
+        await revealCentered(action);
+        await expect(action).toBeInViewport({ ratio: 1 });
+      }
     });
   }
 

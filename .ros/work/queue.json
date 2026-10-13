@@ -50,6 +50,29 @@
       },
       "source": "github",
       "sourceReference": "https://github.com/kemiller2002/vitium/issues/20"
+    },
+    {
+      "id": "VIT-UI-CONF-002",
+      "title": "Repin UI conformance evidence to merged visual-engineering main 8da8fbc (vitium#20)",
+      "description": "VE PR #46 merged; repin evidence record, docs and helper header from branch commit 6468cdf7 to main 8da8fbc; cite ULI-L01..L13 in helper header.",
+      "tags": [
+        "ui-conformance"
+      ],
+      "priority": "medium",
+      "status": "ready",
+      "attachments": [],
+      "createdAt": "2026-10-13T17:48:35Z",
+      "updatedAt": "2026-10-13T17:48:35Z",
+      "createdBy": "unknown",
+      "createdByActor": {
+        "kind": "agent",
+        "id": "anthropic/claude-code",
+        "provider": "anthropic",
+        "model": "unknown",
+        "runtime": "claude-code"
+      },
+      "source": "github",
+      "sourceReference": "https://github.com/kemiller2002/vitium/pull/21"
     }
   ]
 }

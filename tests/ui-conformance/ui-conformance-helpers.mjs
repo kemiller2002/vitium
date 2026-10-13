@@ -5,13 +5,14 @@
 // observed 2026-10-13). Vitium keeps the same exported names and semantics so
 // this module can be swapped for the published Forma helper without changing
 // specs. Do not add Vitium-specific behavior here; put that in
-// vitium-ui-probes.mjs. Contract: visual-engineering UI-LAYOUT-INTERACTION@1.0.0.
+// vitium-ui-probes.mjs. Contract: visual-engineering UI-LAYOUT-INTERACTION@1.0.0,
+// pinned at kemiller2002/visual-engineering main 8da8fbcdfa4344cc2ec248102e8a2741f9e95c08.
 
 import { expect } from "@playwright/test";
 
 // Reference Playwright conformance helpers for the canonical contract
 // kemiller2002/visual-engineering framework/standards/UI-LAYOUT-INTERACTION.md
-// (rule IDs ULI-L01..L12, ULI-A01..A10). Forma cites that contract; it does not
+// (rule IDs ULI-L01..L13, ULI-A01..A10). Forma cites that contract; it does not
 // redefine it. Tests must declare meaningful peers and expected outcomes: these
 // helpers never guess UI intent and never report PASS without an observation.
 //

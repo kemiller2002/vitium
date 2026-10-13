@@ -53,6 +53,7 @@
         "npm run ui:conformance at 4e14fc9: 39 passed, 0 failed, 0 skipped, 0 flaky (Chromium; Playwright 1.63.0)",
         "Same suite against origin/main 97a6666 site/: 28 passed, 11 failed (ULI-L01 x4, ULI-L02 x4, ULI-A01/A04 inert Edit, ULI-A07 opaque network error, ULI-A01/A09 inert no-script submit)",
         "npm test: 105 passed, 0 failed",
+        "CI run 38441529850 (head 8522bd3) failed 1 of 39: Continue to GitHub at 390px reached viewport ratio 0.9931 after edge-aligned scrollIntoViewIfNeeded (sub-pixel edge clipping with runner font metrics). Fixed by scrolling the action to the viewport centre; ratio 1 is still required. Results directory renamed from .output to output so actions/upload-artifact uploads it.",
         "Rule status: PASS ULI-L01 L02 L03 L05(LTR) L06 L07 L08 L09 L10 A01-A10; FAIL ULI-L04 L13 (pre-existing debt); NOT_APPLICABLE ULI-L11 L12"
       ],
       "unknownScope": [
@@ -64,5 +65,5 @@
     }
   ],
   "exceptions": [],
-  "notes": "Standard pinned at kemiller2002/visual-engineering 6468cdf7 (framework/standards/UI-LAYOUT-INTERACTION.md, branch feat/universal-ui-conformance-2026-10; not yet on main). Surface status is fail only for pre-existing debt: ULI-L04/L13, app-local spacing uses literal px rather than Forma tokens or primitives (only the field composition repaired here uses tokens). Owner Vitium; remediation is the Forma 0.4.1 migration tracked in docs/GOVERNANCE.md. No Forma- or Folio-originated defect was found: Forma 0.3.0 all.css defines none of the classes the site composes."
+  "notes": "Standard pinned at kemiller2002/visual-engineering main 8da8fbcdfa4344cc2ec248102e8a2741f9e95c08 (merge of VE PR #46; framework/standards/UI-LAYOUT-INTERACTION.md and framework/contracts/ui-conformance.schema.json are byte-identical to the pre-merge commit 6468cdf7 measured earlier). Surface status is fail only for pre-existing debt: ULI-L04/L13, app-local spacing uses literal px rather than Forma tokens or primitives (only the field composition repaired here uses tokens). Owner Vitium; remediation is the Forma 0.4.1 migration tracked in docs/GOVERNANCE.md. No Forma- or Folio-originated defect was found: Forma 0.3.0 all.css defines none of the classes the site composes."
 }

@@ -92,6 +92,6 @@ Execute and verify Conditor installation from the manifest, follow the scaffold 
 
 ## UI layout and interaction conformance (2026-10-13, VIT-UI-CONF-001, #20)
 
-- Classification: `site-ui`. One surface: the static public reporting page `site/index.html` (served from `./site` by `pages.yml`). Standard: visual-engineering `UI-LAYOUT-INTERACTION@1.0.0`.
+- Classification: `site-ui`. One surface: the static public reporting page `site/index.html` (served from `./site` by `pages.yml`). Standard: visual-engineering `UI-LAYOUT-INTERACTION@1.0.0`, pinned at visual-engineering main `8da8fbc`.
 - `npm run ui:conformance` (Playwright 1.63.0, Chromium) is a blocking job in `test.yml`. Against `origin/main` 97a6666 it failed 11 of 39 tests; after the repairs (classification-row alignment, single control height token, Edit disabled during a private send, honest timeout/network messages, no inert no-script form) it passes 39 of 39 locally.
 - Evidence record: `docs/ui-conformance/site.conformance.json`. Outstanding: ULI-L04/L13 (literal px spacing, no Forma primitives) until the Forma 0.4.1 migration; RTL, text-size preference, Firefox/WebKit, the deployed hostname and the real Turnstile/intake path are **unknown**, not passed.
