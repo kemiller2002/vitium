@@ -4,7 +4,7 @@
   "repository": "vitium",
   "actor": "ros-bootstrap",
   "startedAt": "2026-10-08T12:51:23.048Z",
-  "updatedAt": "2026-10-13T17:48:35Z",
+  "updatedAt": "2026-10-13T17:56:49Z",
   "baselineDirtyPaths": [],
   "workItems": [
     {
@@ -93,13 +93,48 @@
     {
       "id": "VIT-UI-CONF-002",
       "type": "task",
-      "state": "active",
-      "semanticState": "active",
-      "evidence": [],
-      "updatedAt": "2026-10-13T17:48:35Z",
+      "state": "complete",
+      "semanticState": "complete",
+      "evidence": [
+        {
+          "type": "implementation",
+          "path": "docs/ui-conformance/site.conformance.json"
+        },
+        {
+          "type": "implementation",
+          "path": "tests/ui-conformance/ui-conformance-helpers.mjs"
+        },
+        {
+          "type": "tests",
+          "path": "tests/ui-conformance/site.spec.mjs"
+        }
+      ],
+      "updatedAt": "2026-10-13T17:56:49Z",
       "telemetryExecutionIds": [
         "EXE-20261013T174840425Z-cad9e50f"
-      ]
+      ],
+      "latestCheckpoint": {
+        "id": "1be3ef09137a1d67258b1a2f",
+        "recordedAt": "2026-10-13T17:55:38Z",
+        "executionId": "EXE-20261013T174840425Z-cad9e50f",
+        "repository": "vitium",
+        "branch": "feat/ui-conformance-2026-10",
+        "commit": "8ff6466d8ee5618536e951eacbddf3f5e9264f69",
+        "remote": {
+          "name": "origin",
+          "url": "https://github.com/kemiller2002/vitium"
+        },
+        "remoteBranch": "feat/ui-conformance-2026-10",
+        "remoteCommit": "8ff6466d8ee5618536e951eacbddf3f5e9264f69",
+        "summary": "Repin to VE main 8da8fbc and CI scroll-edge fix pushed at 8ff6466; local npm test 105/105, ui:conformance 39/39 and 117/117 with --repeat-each=3.",
+        "nextAction": "Await PR #21 check runs on 8ff6466; complete VIT-UI-CONF-002 with CI evidence.",
+        "verification": {
+          "status": "verified",
+          "mechanism": "git-remote-observation"
+        }
+      },
+      "completedAt": "2026-10-13T17:56:49Z",
+      "conclusion": "Repinned to VE main 8da8fbc; helper cites L01..L13. CI flake root-caused (edge-aligned scroll sub-pixel clipping) and fixed without loosening ratio 1. PR #21 at 8ff6466: all 7 check runs success, ui-conformance 39/39 (run 38442597515), artifact uploaded."
     }
   ]
 }

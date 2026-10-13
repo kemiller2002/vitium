@@ -59,10 +59,10 @@
         "ui-conformance"
       ],
       "priority": "medium",
-      "status": "ready",
+      "status": "complete",
       "attachments": [],
       "createdAt": "2026-10-13T17:48:35Z",
-      "updatedAt": "2026-10-13T17:48:35Z",
+      "updatedAt": "2026-10-13T17:56:49Z",
       "createdBy": "unknown",
       "createdByActor": {
         "kind": "agent",
