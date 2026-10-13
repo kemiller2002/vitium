@@ -1,0 +1,69 @@
+{
+  "standardVersion": "1.0.0",
+  "repository": "kemiller2002/vitium",
+  "revision": "4e14fc966aa92ab9ec9d0583168a58c65fe319fc",
+  "classification": "site-ui",
+  "surfaces": [
+    {
+      "id": "public-reporting-site",
+      "path": "site/index.html (served at / ; GitHub Pages artifact of ./site via .github/workflows/pages.yml; canonical https://vitium.echelonfoundry.com/, deployment unverified)",
+      "kind": "product",
+      "status": "fail",
+      "viewportWidths": [320, 390, 640, 768, 960, 1280],
+      "alignmentGroups": [
+        {
+          "id": "classification-row-controls",
+          "relation": "top-edge",
+          "toleranceCssPx": 1,
+          "targets": [
+            { "role": "combobox", "name": "Which application?" },
+            { "role": "combobox", "name": "How much does it affect you?" }
+          ],
+          "rationale": "ULI-L01: the two required classification selects share one visual row whenever the form is two columns (> 580 CSS px). At <= 580 px they stack and the group is NOT_APPLICABLE; the suite asserts the stacked composition. Baseline origin/main 97a6666 FAILED with a 20.1 CSS px stagger at 903-1015 px and with any longer label.",
+          "evidence": [
+            "tests/ui-conformance/site.spec.mjs: classification row at 768/960/1280px (PASS), 320/390px (NOT_APPLICABLE, stacked asserted)",
+            "tests/ui-conformance/site.spec.mjs: long translated label at 768/960/1280px (PASS)"
+          ]
+        },
+        {
+          "id": "review-actions-row",
+          "relation": "top-edge",
+          "toleranceCssPx": 1,
+          "targets": [
+            { "role": "button", "name": "← Edit report" },
+            { "role": "link", "name": "Continue to GitHub" }
+          ],
+          "rationale": "ULI-L07/L10: the review step's two actions share a row above 580 px (Edit first) and stack with a shared left edge at or below 580 px; equal heights within 1 CSS px are asserted at every width.",
+          "evidence": ["tests/ui-conformance/site.spec.mjs: review actions align and share geometry at 320/390/768/1280px (PASS)"]
+        }
+      ],
+      "actions": [
+        { "id": "skip-link", "control": { "role": "link", "name": "Skip to reporting form" }, "intent": "Bypass the introduction", "expectedOutcome": "URL hash #report; next Tab focuses the first form control", "status": "pass", "evidence": ["site.spec.mjs: skip link moves the keyboard to the reporting form"] },
+        { "id": "home", "control": { "role": "link", "name": "Vitium reporting home" }, "intent": "Return to the reporting start", "expectedOutcome": "Navigates to ./ and the Report a defect heading is shown", "status": "pass", "evidence": ["site.spec.mjs: wordmark returns to the reporting home"] },
+        { "id": "existing-reports", "control": { "role": "link", "name": "View existing reports" }, "intent": "Browse public reports", "expectedOutcome": "Opens https://github.com/kemiller2002/vitium/issues in a new tab (external page stubbed; no external operation claimed)", "status": "pass", "evidence": ["site.spec.mjs: View existing reports opens the public GitHub issue list in a new tab"] },
+        { "id": "noscript-fallback", "control": { "role": "link", "name": "report directly through GitHub" }, "intent": "Report without scripting", "expectedOutcome": "Visible only without scripting; href https://github.com/kemiller2002/vitium/issues/new; the inert guided form is not shown", "status": "pass", "evidence": ["site.spec.mjs: without scripting only the honest GitHub fallback is offered"] },
+        { "id": "details", "control": { "role": "disclosure", "name": "Additional details" }, "intent": "Reveal optional fields (native <details>/<summary>)", "expectedOutcome": "Steps and Page URL fields become visible", "status": "pass", "evidence": ["site.spec.mjs: the whole workflow is operable by keyboard"] },
+        { "id": "review", "control": { "role": "button", "name": "Review my report" }, "intent": "Validate and preview the report", "expectedOutcome": "Valid: review heading visible, focus on review, step 2 of 2, normalized preview and prefilled GitHub href. Invalid: native validation or a focused alert; no review", "status": "pass", "evidence": ["site.spec.mjs: GitHub handoff workflow (5 tests)"], "resetStrategy": "Edit report returns to the form with the draft intact" },
+        { "id": "edit", "control": { "role": "button", "name": "← Edit report" }, "intent": "Return to the form", "expectedOutcome": "Form visible with values preserved, focus on the summary; disabled while a private send is in flight", "status": "pass", "evidence": ["site.spec.mjs: Edit returns to the form ...", "site.spec.mjs: a failed send never shows success ..."] },
+        { "id": "continue-github", "control": { "role": "link", "name": "Continue to GitHub" }, "intent": "Hand the report to GitHub for the reporter to submit", "expectedOutcome": "New tab at github.com/kemiller2002/vitium/issues/new with title and body prefilled; Vitium keeps stating the report is not yet submitted", "status": "pass", "evidence": ["site.spec.mjs: Review shows the normalized report and Continue opens a prefilled, unsubmitted GitHub issue"] },
+        { "id": "send-private", "control": { "role": "button", "name": "Send private report" }, "intent": "Feature-gated private intake candidate (disabled in shipped public-config.mjs)", "expectedOutcome": "Hidden while gated. With the candidate enabled under test: Sending… and Edit disabled in flight; failure shows the error with no success; retry reuses the Idempotency-Key; success only with a VIT- reference", "status": "pass", "evidence": ["site.spec.mjs: feature-gated private intake candidate (3 tests)"] },
+        { "id": "report-another", "control": { "role": "button", "name": "Report another problem" }, "intent": "Start a new report after a confirmed private receipt", "expectedOutcome": "Form reset, focus on application select, step 1 of 2", "status": "pass", "evidence": ["site.spec.mjs: a failed send never shows success ..."] }
+      ],
+      "evidence": [
+        "npm run ui:conformance at 4e14fc9: 39 passed, 0 failed, 0 skipped, 0 flaky (Chromium; Playwright 1.63.0)",
+        "Same suite against origin/main 97a6666 site/: 28 passed, 11 failed (ULI-L01 x4, ULI-L02 x4, ULI-A01/A04 inert Edit, ULI-A07 opaque network error, ULI-A01/A09 inert no-script submit)",
+        "npm test: 105 passed, 0 failed",
+        "CI run 38441529850 (head 8522bd3) failed 1 of 39: Continue to GitHub at 390px reached viewport ratio 0.9931 after edge-aligned scrollIntoViewIfNeeded (sub-pixel edge clipping with runner font metrics). Fixed by scrolling the action to the viewport centre; ratio 1 is still required. Results directory renamed from .output to output so actions/upload-artifact uploads it.",
+        "Rule status: PASS ULI-L01 L02 L03 L05(LTR) L06 L07 L08 L09 L10 A01-A10; FAIL ULI-L04 L13 (pre-existing debt); NOT_APPLICABLE ULI-L11 L12"
+      ],
+      "unknownScope": [
+        "ULI-L05 right-to-left text and user text-size preference without zoom (font sizes are fixed px)",
+        "Firefox and WebKit rendering (suite runs Chromium only)",
+        "Deployed https://vitium.echelonfoundry.com/ (Pages, DNS and TLS are unverified; suite serves ./site locally)",
+        "Real Cloudflare Turnstile widget and live intake API (private path is gated off and exercised only with labelled stubs)"
+      ]
+    }
+  ],
+  "exceptions": [],
+  "notes": "Standard pinned at kemiller2002/visual-engineering main 8da8fbcdfa4344cc2ec248102e8a2741f9e95c08 (merge of VE PR #46; framework/standards/UI-LAYOUT-INTERACTION.md and framework/contracts/ui-conformance.schema.json are byte-identical to the pre-merge commit 6468cdf7 measured earlier). Surface status is fail only for pre-existing debt: ULI-L04/L13, app-local spacing uses literal px rather than Forma tokens or primitives (only the field composition repaired here uses tokens). Owner Vitium; remediation is the Forma 0.4.1 migration tracked in docs/GOVERNANCE.md. No Forma- or Folio-originated defect was found: Forma 0.3.0 all.css defines none of the classes the site composes."
+}

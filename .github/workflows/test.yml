@@ -15,4 +15,32 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: npm
+      - run: npm ci
       - run: npm test
+
+  # visual-engineering UI-LAYOUT-INTERACTION@1.0.0 browser conformance for the
+  # public reporting site (vitium#20). Blocking: every test is a declared
+  # contract; no skips or snapshot baselines stand in for evidence.
+  ui-conformance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run ui:conformance
+        env:
+          CI: 'true'
+      - name: Upload conformance results, traces and failure screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-conformance-${{ github.sha }}
+          path: tests/ui-conformance/output/
+          if-no-files-found: warn
+          retention-days: 30

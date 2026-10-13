@@ -26,6 +26,53 @@
       },
       "source": "mission",
       "sourceReference": "VIT-P0-2026-10-08"
+    },
+    {
+      "id": "VIT-UI-CONF-001",
+      "title": "Adopt UI-LAYOUT-INTERACTION@1.0.0 conformance for the Vitium public reporting site (vitium#20)",
+      "description": "Echelon rollout wave 2 (visual-engineering#47, vitium#20): classify UI, inventory actions, declare alignment groups, repair inert/dishonest actions and layout defects, add Playwright ui:conformance suite and CI.",
+      "tags": [
+        "ui-conformance",
+        "visual-engineering"
+      ],
+      "priority": "high",
+      "status": "complete",
+      "attachments": [],
+      "createdAt": "2026-10-13T17:29:28Z",
+      "updatedAt": "2026-10-13T17:46:27Z",
+      "createdBy": "unknown",
+      "createdByActor": {
+        "kind": "agent",
+        "id": "anthropic/claude-code",
+        "provider": "anthropic",
+        "model": "unknown",
+        "runtime": "claude-code"
+      },
+      "source": "github",
+      "sourceReference": "https://github.com/kemiller2002/vitium/issues/20"
+    },
+    {
+      "id": "VIT-UI-CONF-002",
+      "title": "Repin UI conformance evidence to merged visual-engineering main 8da8fbc (vitium#20)",
+      "description": "VE PR #46 merged; repin evidence record, docs and helper header from branch commit 6468cdf7 to main 8da8fbc; cite ULI-L01..L13 in helper header.",
+      "tags": [
+        "ui-conformance"
+      ],
+      "priority": "medium",
+      "status": "complete",
+      "attachments": [],
+      "createdAt": "2026-10-13T17:48:35Z",
+      "updatedAt": "2026-10-13T17:56:49Z",
+      "createdBy": "unknown",
+      "createdByActor": {
+        "kind": "agent",
+        "id": "anthropic/claude-code",
+        "provider": "anthropic",
+        "model": "unknown",
+        "runtime": "claude-code"
+      },
+      "source": "github",
+      "sourceReference": "https://github.com/kemiller2002/vitium/pull/21"
     }
   ]
 }
