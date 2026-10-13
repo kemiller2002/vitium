@@ -27,6 +27,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: npm
+      - run: npm ci
       - name: Contract and adversarial tests
         run: npm test
       - name: Validate service module syntax

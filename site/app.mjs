@@ -8,6 +8,8 @@ const progress = document.getElementById("progress");
 const submitLink = document.getElementById("submit-link");
 const submitPrivate = document.getElementById("submit-private");
 const success = document.getElementById("private-success");
+const editButton = document.getElementById("edit");
+const submitPrivateLabel = document.getElementById("submit-private-label");
 
 const privateConfigured = publicIntake.enabled === true &&
   publicIntake.endpoint === "https://intake.vitium.echelonfoundry.com/api/v1/reports" &&
@@ -24,6 +26,17 @@ function showError(message) {
   feedback.textContent = message;
   feedback.hidden = false;
   feedback.focus();
+}
+// A timeout or dropped connection leaves receipt unknown: say so, and rely on
+// the unchanged Idempotency-Key so a retry replays rather than duplicates.
+function sendFailureMessage(error) {
+  if (error?.name === "AbortError") {
+    return "The service did not confirm receipt in time, so your report may not have been received. Retry to confirm; a retry reuses this request and will not create a duplicate.";
+  }
+  if (error instanceof TypeError) {
+    return "The report could not reach the service. Check your connection and retry; your report has not been confirmed.";
+  }
+  return error instanceof Error ? error.message : "The report could not be sent. Please retry.";
 }
 function clearError() { feedback.textContent = ""; feedback.hidden = true; }
 function setPreview(id, value) { document.getElementById("preview-" + id).textContent = value; }
@@ -104,7 +117,7 @@ form.addEventListener("submit", async event => {
     showError(error instanceof Error?error.message:"We couldn't prepare your report. Please try again.");
   }
 });
-document.getElementById("edit").addEventListener("click",()=>{
+editButton.addEventListener("click",()=>{
   if (sending) return;
   clearError();
   review.hidden=true;
@@ -123,8 +136,11 @@ submitPrivate.addEventListener("click",async()=>{
     return;
   }
   sending=true;
+  // While a send is in flight neither action can do anything, so both are
+  // disabled rather than left enabled but inert (ULI-A01/A04).
   submitPrivate.disabled=true;
-  submitPrivate.textContent="Sending…";
+  editButton.disabled=true;
+  submitPrivateLabel.textContent="Sending…";
   const controller=new AbortController();
   const timeout=setTimeout(()=>controller.abort(),15000);
   try {
@@ -153,12 +169,13 @@ submitPrivate.addEventListener("click",async()=>{
     requestId=null;
     success.focus();
   } catch(error) {
-    showError(error instanceof Error?error.message:"The report could not be sent. Please retry.");
+    showError(sendFailureMessage(error));
   } finally {
     clearTimeout(timeout);
     sending=false;
     submitPrivate.disabled=false;
-    submitPrivate.textContent="Send private report →";
+    editButton.disabled=false;
+    submitPrivateLabel.textContent="Send private report";
     resetChallenge(); // A one-time challenge token cannot be reused after failure.
   }
 });

@@ -41,13 +41,13 @@
     </aside>
     <section class="report-shell" id="report" aria-labelledby="form-title">
       <div class="report-head">
-        <span class="overline" id="progress">Step 1 of 2 · Describe the problem</span>
+        <span class="overline requires-script" id="progress">Step 1 of 2 · Describe the problem</span>
         <h2 id="form-title">Report a defect</h2>
-        <p>Only the fields marked <strong>*</strong> are required.</p>
+        <p class="requires-script">Only the fields marked <strong>*</strong> are required.</p>
       </div>
       <noscript><p class="alert">JavaScript is needed for the guided form. You can <a href="https://github.com/kemiller2002/vitium/issues/new">report directly through GitHub</a> instead.</p></noscript>
       <div class="alert" id="feedback" role="alert" tabindex="-1" hidden></div>
-      <form id="defect-form" method="post" autocomplete="on">
+      <form id="defect-form" class="requires-script" method="post" autocomplete="on">
         <div class="form-grid">
           <div class="field">
             <label for="product">Which application? <span aria-hidden="true">*</span></label>
@@ -128,7 +128,7 @@
         <div class="review-actions">
           <button type="button" class="secondary-button" id="edit">← Edit report</button>
           <a class="primary-button" id="submit-link" data-testid="github-submit" href="https://github.com/kemiller2002/vitium/issues/new" target="_blank" rel="noopener noreferrer">Continue to GitHub <span aria-hidden="true">↗</span></a>
-          <button type="button" class="primary-button" id="submit-private" data-testid="private-submit" hidden>Send private report <span aria-hidden="true">→</span></button>
+          <button type="button" class="primary-button" id="submit-private" data-testid="private-submit" hidden><span id="submit-private-label">Send private report</span> <span aria-hidden="true">→</span></button>
         </div>
       </section>
       <section id="private-success" class="review" aria-labelledby="success-title" tabindex="-1" hidden>
@@ -139,7 +139,7 @@
         <p class="hint">This receipt does not provide access to private status information. No fix date or reply is guaranteed.</p>
         <button type="button" class="secondary-button" id="report-another">Report another problem</button>
       </section>
-      <div class="report-foot" id="github-foot">No account needed to fill out this form. <strong>A GitHub account is currently required to submit.</strong></div>
+      <div class="report-foot requires-script" id="github-foot">No account needed to fill out this form. <strong>A GitHub account is currently required to submit.</strong></div>
       <div class="report-foot" id="private-foot" hidden>Private submission does not require a GitHub account. Never include credentials or sensitive personal data.</div>
     </section>
   </main>

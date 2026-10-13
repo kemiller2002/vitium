@@ -26,6 +26,30 @@
       },
       "source": "mission",
       "sourceReference": "VIT-P0-2026-10-08"
+    },
+    {
+      "id": "VIT-UI-CONF-001",
+      "title": "Adopt UI-LAYOUT-INTERACTION@1.0.0 conformance for the Vitium public reporting site (vitium#20)",
+      "description": "Echelon rollout wave 2 (visual-engineering#47, vitium#20): classify UI, inventory actions, declare alignment groups, repair inert/dishonest actions and layout defects, add Playwright ui:conformance suite and CI.",
+      "tags": [
+        "ui-conformance",
+        "visual-engineering"
+      ],
+      "priority": "high",
+      "status": "ready",
+      "attachments": [],
+      "createdAt": "2026-10-13T17:29:28Z",
+      "updatedAt": "2026-10-13T17:29:33Z",
+      "createdBy": "unknown",
+      "createdByActor": {
+        "kind": "agent",
+        "id": "anthropic/claude-code",
+        "provider": "anthropic",
+        "model": "unknown",
+        "runtime": "claude-code"
+      },
+      "source": "github",
+      "sourceReference": "https://github.com/kemiller2002/vitium/issues/20"
     }
   ]
 }

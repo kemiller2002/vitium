@@ -8,6 +8,13 @@
   --vt-pale: #f2f8f6;
   --vt-paper: #ffffff;
   --vt-page: #f6f9f7;
+  /* Field composition rhythm (ULI-L04/L13): one source for label/control/field spacing. */
+  --vt-space-label: 8px;
+  --vt-space-field: 19px;
+  --vt-space-field-columns: 18px;
+  /* Shared single-line control block size (ULI-L02): selects ignore line-height, so
+     text inputs and selects only match when the composition sets one size. */
+  --vt-control-height: 48px;
 }
 *, *::before, *::after { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -45,12 +52,19 @@ button, a, input, select, textarea, summary { -webkit-tap-highlight-color: trans
 .report-head { border-bottom: 1px solid var(--vt-line); padding-bottom: 22px; margin-bottom: 27px; }
 .report-head h2 { font-size: 29px; letter-spacing: -.04em; margin: 9px 0 5px; }
 .report-head p { margin: 0; color: var(--vt-muted); font-size: 13px; }
-.form-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 18px; }
-.field { min-width: 0; margin: 0 0 19px; }
-.field label { display: block; margin-bottom: 8px; font-size: 13px; font-weight: 750; }
+.form-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); column-gap: var(--vt-space-field-columns); row-gap: 0; }
+/* Declared peer row (ULI-L01): each field spans a label track and a control
+   track shared through subgrid, so a label that wraps at one width (or a
+   longer translated label) moves both peer controls together instead of
+   staggering them. Parent composition owns the alignment (ULI-L03). */
+.form-grid > .field { display: grid; grid-row: span 2; grid-template-rows: subgrid; row-gap: 0; align-content: start; }
+.form-grid > .field > label { align-self: end; }
+.field { min-width: 0; margin: 0 0 var(--vt-space-field); }
+.field label { display: block; margin-bottom: var(--vt-space-label); font-size: 13px; font-weight: 750; }
 .field label span { color: #a0552b; }
 .field :is(input,textarea,select) { display: block; width: 100%; min-width: 0; padding: 11px 12px; border: 1px solid #becfcb; border-radius: 8px; background: white; color: var(--vt-ink); line-height: 1.45; }
 .field :is(input,textarea,select):focus { border-color: var(--vt-accent); }
+.field :is(input,select) { block-size: var(--vt-control-height); }
 .field textarea { resize: vertical; min-height: 88px; }
 .field :is(input,textarea)::placeholder { color: #778a89; }
 .hint { font-size: 11px; color: var(--vt-muted); margin: 7px 0 0; }
@@ -96,10 +110,14 @@ button, a, input, select, textarea, summary { -webkit-tap-highlight-color: trans
   .guidance ol { grid-template-columns: 1fr; }
   .guidance li { padding: 0 0 8px 42px; }
   .guidance li::before { top: 2px; }
-  .form-grid { grid-template-columns: 1fr; gap: 0; }
+  .form-grid { grid-template-columns: 1fr; }
   .report-shell { padding: 22px 17px; }
   .review-actions { flex-direction: column; }
   .footer { flex-direction: column; }
 }
+/* Without scripting the guided form cannot validate or hand off (its POST is
+   refused by the page's form-action policy), so only the <noscript> GitHub
+   fallback is offered (ULI-A01/A09). */
+@media (scripting: none) { .requires-script { display: none !important; } }
 @media (prefers-reduced-motion: no-preference) { .primary-button, .secondary-button { transition: background-color .12s ease; } }
 @media (forced-colors: active) { .status-dot { border: 1px solid CanvasText; } .primary-button { border: 1px solid ButtonText; } }
