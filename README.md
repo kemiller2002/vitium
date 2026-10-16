@@ -26,7 +26,7 @@ The canonical publishing address is **https://vitium.echelonfoundry.com/**. Host
 
 Two F# preview libraries now live in `src/`: `EchelonFoundry.Vitium.Contracts` and `EchelonFoundry.Vitium.Client`. They compile into versioned NuGet artifacts via [the package CI workflow](.github/workflows/nuget-ci.yml). [Package setup, local build, trusted publishing and Praxis integration instructions](docs/NUGET-PACKAGES.md) explain how to use them.
 
-**Not yet published or operational:** GitHub Actions builds and packs candidate artifacts but does not publish to NuGet.org. The machine reporting API does not exist as a deployed service. MIT licensing is now approved and recorded in the repository and both NuGet package projects. The guarded manual publication workflow uses the configured `Kevin.m.miller` Trusted Publishing identity; publication still requires a protected GitHub `nuget-release` environment, a verified immutable release tag, and an actual successful OIDC publish run.
+**Not yet published or operational:** GitHub Actions builds and packs candidate artifacts but does not publish to NuGet.org. The machine reporting API does not exist as a deployed service. PolyForm Noncommercial 1.0.0 licensing is now recorded in the repository and both NuGet package projects; previously distributed versions retain their original licenses. The guarded manual publication workflow uses the configured `Kevin.m.miller` Trusted Publishing identity; publication still requires a protected GitHub `nuget-release` environment, a verified immutable release tag, and an actual successful OIDC publish run.
 
 ## Engineering governance
 
@@ -65,3 +65,9 @@ Open http://localhost:8000 and select **Report a defect**.
 **Public, GitHub-free intake is NOT yet implemented.** It requires a server-side submission boundary, rate limiting, spam controls, moderation, and a GitHub App with minimum scoped credentials. Never put repository or application secrets in GitHub Pages assets.
 
 See [reporting architecture](docs/REPORTING.md) and [defect schema](schemas/defect.schema.json).
+
+## License
+
+Source available under PolyForm Noncommercial 1.0.0 for permitted noncommercial uses. Commercial use requires a separate license from Echelon Foundry. Previously distributed versions remain subject to the licenses under which they were released.
+
+Commercial licensing information is forthcoming.

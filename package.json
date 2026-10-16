@@ -14,5 +14,6 @@
   "devDependencies": {
     "@echelon-foundry/design-system": "0.3.0",
     "@playwright/test": "1.63.0"
-  }
+  },
+  "license": "PolyForm-Noncommercial-1.0.0"
 }
